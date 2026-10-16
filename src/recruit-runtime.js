@@ -26,7 +26,12 @@
           return { name: text(mc.getAt(i + 1, 3)), grade: Number.isFinite(value) && value >= 0
             ? runtime.callFunction("角色技艺资质分级", value) : NaN };
         });
-        candidates.push({ id, name: clean(save.getAt(id, 1, 3)), locked: state === -1, work });
+        // Match the recruitment card: (base aptitude + bonus) / 10.
+        const stats = Object.fromEntries(["str", "agi", "int"].map((stat, i) => {
+          const base = save.getAt(id, 10 + i, 3), bonus = save.getAt(id, 13 + i, 3);
+          return [stat, Number.isFinite(base) && Number.isFinite(bonus) ? (base + bonus) / 10 : NaN];
+        }));
+        candidates.push({ id, name: clean(save.getAt(id, 1, 3)), locked: state === -1, work, stats });
       }
       // Native recruitment readiness is a static event-sheet variable, not a
       // runtime.globalVars property. Its SID is shared by both supported builds.

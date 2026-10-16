@@ -2,7 +2,7 @@
   "use strict";
   const grades = ["E", "D", "C", "B", "A", "S", "SS"];
 
-  // Each criterion evaluates one candidate. Future talent/stat criteria can
+  // Each criterion evaluates one candidate. Future talent criteria can
   // join this table without changing the rolling loop or game controls.
   const recruitCriteria = {
     "work-grade": {
@@ -13,6 +13,14 @@
         }
         const matches = candidate.work.filter(w => w.grade >= rule.minimum);
         return matches.length ? matches.map(w => `${w.name} ${grades[w.grade - 1]}`) : null;
+      },
+    },
+    "stat": {
+      validate: rule => ["str", "agi", "int"].includes(rule.stat) && Number.isFinite(rule.above) && rule.above >= 0,
+      match(candidate, rule) {
+        const value = candidate.stats?.[rule.stat];
+        if (!Number.isFinite(value) || value < 0) throw new Error(`Could not read ${rule.stat.toUpperCase()}. Search stopped.`);
+        return value > rule.above ? [`${rule.stat.toUpperCase()} ${value}`] : null;
       },
     },
   };
@@ -26,7 +34,7 @@
     });
     return candidate => {
       const reasons = checks.map(check => check(candidate));
-      return reasons.every(Boolean) ? reasons.flat() : null;
+      return reasons.some(Boolean) ? reasons.filter(Boolean).flat() : null;
     };
   }
 
@@ -36,7 +44,7 @@
       this.running = false;
       this.rolls = 0;
       this.spent = 0;
-      this.message = "Choose a minimum work grade, then start rolling.";
+      this.message = "Choose work-grade or stat targets, then start rolling.";
       this.lastTick = -Infinity;
     }
     start({ method, criteria } = {}) {

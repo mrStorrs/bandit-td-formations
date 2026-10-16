@@ -74,6 +74,7 @@
         const gradeLabel = make("label", "Minimum grade ", row);
         this.recruitGrade = make("select", "", gradeLabel);
         this.recruitGrade.id = "cjs-recruit-grade";
+        make("option", "Off", this.recruitGrade).value = "0";
         for (const [i, name] of state.grades.entries()) {
           const option = make("option", name, this.recruitGrade); option.value = String(i + 1);
         }
@@ -85,30 +86,53 @@
         this.recruitButton.id = "cjs-recruit-toggle";
         this.recruitButton.type = "button";
         this.recruitButton.style.cssText = "background:#c0a35b;color:#10191d;border:0;border-radius:4px;padding:7px 12px;cursor:pointer;font:inherit";
+        const statRow = make("div", "", panel);
+        statRow.style.cssText = "display:flex;gap:12px;flex-wrap:wrap;margin-top:10px";
+        this.recruitStats = {};
+        for (const stat of ["str", "agi", "int"]) {
+          const label = make("label", `${stat.toUpperCase()} over `, statRow);
+          const input = this.recruitStats[stat] = make("input", "", label);
+          input.id = `cjs-recruit-${stat}`;
+          input.type = "number"; input.min = "0"; input.step = "any";
+          input.placeholder = "Off";
+          input.style.cssText = "width:72px;font:inherit";
+        }
         this.recruitInfo = make("div", "", panel);
         this.recruitInfo.style.cssText = "margin-top:8px;line-height:1.4";
         this.recruitInfo.setAttribute("role", "status");
-        make("div", "Any work category at this grade or better. Matches are locked for you to hire.", panel).style.cssText = "margin-top:5px;color:#c5ced1;font-size:12px";
-        this.recruitOptions = { minimum: 5, method: 1 };
+        make("div", "Stop on ANY target: work grade or better, OR a displayed stat above its number. Blank stat fields are off. Matches are locked for you to hire.", panel).style.cssText = "margin-top:5px;color:#c5ced1;font-size:12px";
+        this.recruitOptions = { minimum: 5, method: 1, stats: { str: null, agi: null, int: null } };
         try {
           const saved = JSON.parse(localStorage.getItem("cjs-formations:recruit-options:v1"));
-          if (Number.isInteger(saved?.minimum) && saved.minimum >= 1 && saved.minimum <= state.grades.length) this.recruitOptions.minimum = saved.minimum;
+          if (Number.isInteger(saved?.minimum) && saved.minimum >= 0 && saved.minimum <= state.grades.length) this.recruitOptions.minimum = saved.minimum;
           if (Number.isInteger(saved?.method) && saved.method >= 1 && saved.method <= 5) this.recruitOptions.method = saved.method;
+          for (const stat of Object.keys(this.recruitStats)) {
+            if (Number.isFinite(saved?.stats?.[stat]) && saved.stats[stat] >= 0) this.recruitOptions.stats[stat] = saved.stats[stat];
+          }
         } catch { /* A search still works when browser storage is unavailable. */ }
         this.recruitGrade.value = String(this.recruitOptions.minimum);
+        for (const [stat, input] of Object.entries(this.recruitStats)) input.value = this.recruitOptions.stats[stat] === null ? "" : String(this.recruitOptions.stats[stat]);
         const saveOptions = () => {
-          this.recruitOptions = { minimum: Number(this.recruitGrade.value), method: Number(this.recruitMethod.value) };
+          const invalid = Object.values(this.recruitStats).find(input => !input.checkValidity());
+          if (invalid) { invalid.reportValidity(); return false; }
+          this.recruitOptions = { minimum: Number(this.recruitGrade.value), method: Number(this.recruitMethod.value),
+            stats: Object.fromEntries(Object.entries(this.recruitStats).map(([stat, input]) => [stat, input.value === "" ? null : Number(input.value)])) };
           try { localStorage.setItem("cjs-formations:recruit-options:v1", JSON.stringify(this.recruitOptions)); } catch { /* Session settings remain usable. */ }
+          return true;
         };
         this.recruitGrade.addEventListener("change", saveOptions);
         this.recruitMethod.addEventListener("change", saveOptions);
+        for (const input of Object.values(this.recruitStats)) input.addEventListener("change", saveOptions);
         this.recruitButton.addEventListener("click", () => {
           if (this.recruitState.running) this.PostToRuntime("recruit-stop", {});
           else {
-            saveOptions();
+            if (!saveOptions()) return;
+            const criteria = this.recruitOptions.minimum ? [{ type: "work-grade", minimum: this.recruitOptions.minimum }] : [];
+            for (const [stat, above] of Object.entries(this.recruitOptions.stats)) {
+              if (above !== null) criteria.push({ type: "stat", stat, above });
+            }
             this.PostToRuntime("cancel", {});
-            this.PostToRuntime("recruit-start", { method: this.recruitOptions.method,
-              criteria: [{ type: "work-grade", minimum: this.recruitOptions.minimum }] });
+            this.PostToRuntime("recruit-start", { method: this.recruitOptions.method, criteria });
           }
         });
         for (const event of ["pointerdown", "pointerup", "pointermove", "pointerrawupdate", "pointercancel", "mousedown", "mouseup", "mousemove", "click", "dblclick", "touchstart", "touchend", "touchmove", "touchcancel", "keydown", "keyup", "wheel"]) {
@@ -130,6 +154,7 @@
         if (state.methods.some(m => m.id === this.recruitOptions.method)) this.recruitMethod.value = String(this.recruitOptions.method);
       }
       this.recruitGrade.disabled = this.recruitMethod.disabled = state.running;
+      for (const input of Object.values(this.recruitStats)) input.disabled = state.running;
       this.recruitButton.disabled = !state.running && !state.methods.length;
       this.recruitButton.textContent = state.running ? "Stop" : "Start rolling";
       this.recruitInfo.textContent = `${state.message} · ${state.rolls} rolls · ${state.spent.toLocaleString()} copper spent` +

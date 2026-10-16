@@ -264,8 +264,32 @@ function recruitFixture() {
     return originalCall(name, ...args);
   };
   return Object.assign(f, { groups, panels, methods,
-    start: () => f.handlers["recruit-start"]({ method: 1, criteria: [{ type: "work-grade", minimum: 5 }] }) });
+    start: (criteria = [{ type: "work-grade", minimum: 5 }]) => f.handlers["recruit-start"]({ method: 1, criteria }) });
 }
+test("recruit adapter matches the displayed STR/AGI/INT including bonuses and tenths, with work-grade OR", async () => {
+  for (const [index, stat] of ["str", "agi", "int"].entries()) {
+    const f = recruitFixture();
+    // Raw values are tenths: 199 base + 2 bonus displays as 20.1.
+    f.save.setAt(199, 2, 10 + index, 3); f.save.setAt(2, 2, 13 + index, 3);
+    f.save.setAt(200, 3, 10 + index, 3);
+    f.start([{ type: "work-grade", minimum: 4 }, { type: "stat", stat, above: 20 }]);
+    await f.tick(); await f.tick();
+    assert.equal(f.save.getAt(2, 0, 3), -1, "bonus raises slot 2 above the stat threshold");
+    assert.equal(f.save.getAt(3, 0, 3), 3, "equality does not qualify");
+    assert.equal(f.save.getAt(1, 2, 0), 9000);
+    assert.equal(f.calls.filter(c => c[0] === "主动寻访").length, 0);
+    assert.match(f.messages.findLast(m => m[0] === "recruit-status")[1].message, new RegExp(`${stat.toUpperCase()} 20.1`));
+  }
+});
+test("recruit adapter refuses malformed stat data before paying and restores event groups", async () => {
+  for (const field of [10, 13]) {
+    const f = recruitFixture(); f.save.setAt("200", 2, field, 3);
+    f.start([{ type: "stat", stat: "str", above: 20 }]); await f.tick(); await f.tick();
+    assert.equal(f.calls.filter(c => c[0] === "主动寻访").length, 0);
+    assert.ok([...f.groups.values()].every(g => g.IsGroupActive()));
+    assert.match(f.messages.findLast(m => m[0] === "recruit-status")[1].message, /Could not read STR/);
+  }
+});
 test("recruit adapter uses native grades, costs and refresh, locks matches, and restores native automation", async () => {
   const f = recruitFixture(); f.save.setAt(-1, 1, 0, 3);
   await f.tick();

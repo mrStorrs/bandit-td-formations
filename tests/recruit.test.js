@@ -9,6 +9,7 @@ vm.runInContext(fs.readFileSync(`${__dirname}/../src/recruit.js`, "utf8"), sandb
 const { RecruitSearch, compileRecruitCriteria, recruitCriteria } = sandbox.BanditFormations;
 const criteria = [{ type: "work-grade", minimum: 5 }];
 const candidate = (id, grade = 1) => ({ id, name: `Recruit ${id}`, locked: false,
+  stats: { str: 10, agi: 10, int: 10 },
   work: Array.from({ length: 9 }, (_, i) => ({ name: `Work ${i}`, grade: i === 8 ? grade : 1 })) });
 
 function fixture() {
@@ -38,16 +39,69 @@ test("any of the nine work grades meets the target, including better grades", ()
   }
   assert.equal(match(candidate(1, 4)), null);
 });
-test("future criteria combine on the same candidate, without changing the loop", () => {
+test("future criteria join the OR targets and compiled rules do not change with later edits", () => {
   recruitCriteria.talent = { validate: r => r.id === 10, match: (c, r) => c.talents?.includes(r.id) ? ["Talent 10"] : null };
   try {
     const rules = [...criteria, { type: "talent", id: 10 }], match = compileRecruitCriteria(rules);
-    assert.equal(match(candidate(1, 7)), null);
-    assert.equal(match({ ...candidate(2, 4), talents: [10] }), null);
+    assert.equal(match(candidate(1, 7)).length, 1);
+    assert.equal(match({ ...candidate(2, 4), talents: [10] }).length, 1);
+    assert.equal(match(candidate(1, 4)), null);
     assert.equal(match({ ...candidate(3, 5), talents: [10] }).length, 2);
     rules[0].minimum = 7;
     assert.ok(match({ ...candidate(3, 5), talents: [10] }), "compiled rules are independent of later edits");
   } finally { delete recruitCriteria.talent; criteria[0].minimum = 5; }
+});
+test("B-or-better work OR any selected stat strictly above its own threshold matches", () => {
+  const match = compileRecruitCriteria([{ type: "work-grade", minimum: 4 },
+    ...["str", "agi", "int"].map((stat, i) => ({ type: "stat", stat, above: 20 + i }))]);
+  const c = candidate(1, 3); c.stats = { str: 20, agi: 21, int: 22 };
+  assert.equal(match(c), null, "equality is not over the stat threshold");
+  for (const stat of ["str", "agi", "int"]) {
+    c.stats[stat] += 0.1;
+    assert.match(match(c).join(), new RegExp(`${stat.toUpperCase()} ${c.stats[stat]}`));
+    c.stats[stat] -= 0.1;
+  }
+  for (const grade of [4, 5, 6, 7]) {
+    c.work[0].grade = grade;
+    assert.equal(match(c).length, 1, "a work match does not require a stat match");
+  }
+  c.stats = { str: 20.1, agi: 21.1, int: 22.1 };
+  assert.equal(match(c).length, 4, "reports every matching reason");
+});
+test("stats can be used alone, zero is a valid threshold, and unselected stats do not match", () => {
+  const match = compileRecruitCriteria([{ type: "stat", stat: "agi", above: 0 }]);
+  const c = candidate(1, 7); c.stats = { str: 999, agi: 0, int: 999 };
+  assert.equal(match(c), null);
+  c.stats.agi = 0.1; assert.equal(match(c).join(), "AGI 0.1");
+});
+test("invalid stat filters and unreadable enabled stats fail closed even with a matching work grade", () => {
+  for (const rule of [{ stat: "luck", above: 10 }, { stat: "toString", above: 10 },
+    ...[-1, NaN, Infinity, "10", null, undefined].map(above => ({ stat: "str", above }))]) {
+    assert.throws(() => compileRecruitCriteria([{ type: "stat", ...rule }]), /Invalid recruitment filter/);
+  }
+  const match = compileRecruitCriteria([...criteria, { type: "stat", stat: "str", above: 20 }]);
+  for (const stats of [undefined, {}, { str: NaN }, { str: Infinity }, { str: -1 }, { str: "30" }]) {
+    assert.throws(() => match({ ...candidate(1, 7), stats }), /Could not read STR/);
+  }
+});
+test("a roll locks separate grade-only and stat-only matches and stops before paying again", () => {
+  const f = fixture(), statMatch = candidate(2, 1);
+  statMatch.stats.int = 25.1;
+  f.queue.push([candidate(1, 4), statMatch, candidate(3)]);
+  f.start({ criteria: [{ type: "work-grade", minimum: 4 }, { type: "stat", stat: "int", above: 25 }] });
+  f.tick(); f.tick();
+  assert.deepEqual(f.locks, [1, 2]); assert.deepEqual(f.rolls, [1]);
+  assert.equal(f.search.spent, 3000); assert.equal(f.active, true);
+  assert.match(f.search.message, /Work 8 B/); assert.match(f.search.message, /INT 25.1/);
+});
+test("an existing stat-only match locks without spending, and malformed stats never start rolling", () => {
+  for (const value of [30, NaN]) {
+    const f = fixture(); f.current.candidates[1].stats.str = value;
+    f.start({ criteria: [...criteria, { type: "stat", stat: "str", above: 20 }] }); f.tick();
+    assert.equal(f.search.running, false); assert.equal(f.current.money, 9000);
+    assert.deepEqual(f.rolls, []); assert.deepEqual(f.locks, Number.isNaN(value) ? [] : [2]);
+    assert.equal(f.active, true);
+  }
 });
 test("invalid or unknown filters and unreadable grades fail closed", () => {
   for (const rules of [null, [], [{ type: "unknown" }], [{ type: "toString" }], [{ type: "work-grade", minimum: 0 }], [{ type: "work-grade", minimum: 8 }], [{ type: "work-grade", minimum: "5" }]]) {

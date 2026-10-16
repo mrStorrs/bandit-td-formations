@@ -15,9 +15,9 @@ A character/building formation, combat, and recruitment mod for Bandit Simulator
 - **Ink Forest loop is ON by default. Press `F6` to toggle it:** use formation 1
   while waiting, switch to formation 2 when Summon is ready, summon the spirit
   beast, then return to formation 1 after a win and repeat.
-- **Auto recruit panel on the recruitment screen:** choose a minimum work grade
-  and recruitment method, then start rolling. Stop and lock the recruits when
-  any work category meets the target.
+- **Auto recruit panel on the recruitment screen:** choose a minimum work grade,
+  optional STR/AGI/INT thresholds, and a recruitment method, then start rolling.
+  Stop and lock recruits when **any** selected target matches.
 - A message confirms saving or restoring. An empty slot leaves characters alone.
 - Formations persist locally across restarts and are separate for each campaign
   save identifier and current map. They are not included in Steam Cloud saves.
@@ -109,7 +109,8 @@ loop until you retry.
 
 Open the game's recruitment screen. The **Auto recruit** panel appears in the
 bottom-right corner. Select a **Minimum grade** (`E`, `D`, `C`, `B`, `A`, `S`, or
-`SS`) and an unlocked recruitment **Method**, then click **Start rolling**.
+`SS`) and/or enter **STR over**, **AGI over**, and **INT over** thresholds.
+Choose an unlocked recruitment **Method**, then click **Start rolling**.
 The method selector shows the normal copper cost for each roll. Paid refreshes
 must already be unlocked in the game; the mod keeps the game's costs, odds,
 recruitment tiers, and pity system.
@@ -125,9 +126,19 @@ in any one category. It checks work aptitude grades, rather than character
 rarity or the current work skill level. Higher targets may need higher
 recruitment tiers; selecting a target does not improve the game's roll odds.
 
+All enabled targets use **OR**. For example, grade `B` with STR, AGI, and INT
+each set to `20` accepts a recruit with **any B-or-better work grade OR STR > 20
+OR AGI > 20 OR INT > 20**. Each stat can have its own threshold. Stats use the
+values displayed on the recruitment card, including bonuses; decimal thresholds
+are supported. A stat equal to the threshold does not match.
+
+Leave a stat field blank to ignore it. Set **Minimum grade** to **Off** to search
+only for stats. At least one target must be enabled before rolling can start.
+Existing grade settings are preserved; the new stat fields start blank.
+
 The search checks all three existing candidates before spending, then rolls at
 most twice per second. On a match, it immediately stops, locks every matching
-candidate with the game's normal padlock, and names their matching categories.
+candidate with the game's normal padlock, and reports their matching grades/stats.
 **Hire the recruits yourself when ready.** Existing locks remain intact. Matching
 locks survive timed refreshes and are stored in the normal game save. Unlock or
 hire a matching candidate before searching again for the same target.
@@ -135,7 +146,7 @@ hire a matching candidate before searching again for the same target.
 Click **Stop** at any time. The search also stops when copper runs out, all three
 slots are locked, the recruitment screen closes, the campaign/map changes,
 another game action blocks recruitment, or the game loses focus. It never starts
-automatically. Grade and method preferences are remembered locally across game
+automatically. Grade, stat, and method preferences are remembered locally across game
 restarts. The panel reports rolls and copper spent for the current search.
 
 During a search, the game's timed recruitment refresh, built-in auto-recruit,
@@ -144,8 +155,8 @@ states return when the search ends; saved auto-recruit settings stay unchanged.
 This keeps native auto-recruit from purchasing a candidate before the filters
 can inspect it. A match is locked before these systems resume.
 
-Talent and stat filters are not included yet. The matching code accepts typed
-criteria, so they can be added without rewriting the rolling controls.
+Talent filters are not included yet. The matching code accepts typed criteria
+combined with OR, so more targets can be added without rewriting the rolling controls.
 
 ## Install
 
@@ -167,7 +178,7 @@ python3 manage.py install --game-dir "/path/to/Steam/steamapps/common/塔防山�
 
 On Windows, use `py -3` in place of `python3` if appropriate. Restart the game
 after installing. Look for the “Formations ready” message on startup.
-The startup message includes the installed version number (currently 1.5.0).
+The startup message includes the installed version number (currently 1.6.0).
 
 The installer backs up the input archive in `cjs-formations-backups/` beside the
 game, verifies the result, then replaces `package.nw` atomically. It does not
@@ -256,6 +267,16 @@ when a character blocked a destination. After reloading the game copy, the saved
 layout still restored and skipped two missing buildings. Building formations
 still need a manual Steam/NW.js check.
 
+Version 1.6.0 passes 103 JavaScript tests and four installer tests. Recruitment
+tests cover OR matching, independent stat thresholds, exact boundaries, bonuses,
+decimal values, disabled targets, invalid inputs, preference storage, and locks
+before another roll. The recruitment card's STR/AGI/INT calculations were checked
+against both supported game builds. In copied build 25975458, mouse/keyboard
+checks confirmed separate stat-only and grade-only matches, bonus-inclusive
+displayed values, invalid-input handling, and thresholds persisting after reload.
+A native paid roll spent exactly 3,000 copper, locked all its STR matches, and
+stopped before another roll. This update still needs a manual Steam/NW.js check.
+
 To check the controls in-game:
 
 1. Arrange your characters, choose their jobs and priority work targets, then
@@ -281,6 +302,10 @@ To check the controls in-game:
    occupied tiles, including a swap with an empty buffer area available.
    Restart and recall again to check persistence. Keep character slots 1/2
    separate and verify blocked destinations stop the whole building restore.
+10. In recruitment, select grade `B` and set the stat thresholds you want.
+    Check that either a B-or-better work grade or any stat above its threshold
+    stops rolling and locks the recruit. Try grade **Off** with only one stat
+    enabled, then restart and check that the settings are remembered.
 
 ## Development
 

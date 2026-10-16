@@ -21,6 +21,8 @@ function fixture() {
     setAttribute(name, value) { this[name] = value; },
     appendChild(child) { this.children.push(child); },
     replaceChildren() { this.children = []; },
+    checkValidity() { return !this.validity?.badInput && (this.value === "" || (Number.isFinite(Number(this.value)) && Number(this.value) >= Number(this.min))); },
+    reportValidity() { this.validityReported = true; return this.checkValidity(); },
     contains(node) { return this === node || this.children.some(c => c.contains(node)); } });
   document.body = document.createElement("body");
   document.activeElement = { tagName: "CANVAS" };
@@ -147,6 +149,43 @@ test("recruit controls protect keyboard focus and stop on focus loss", () => {
   assert.deepEqual(f.messages.at(-1), ["recruit-stop", {}]);
   assert.equal(f.dom.recruitPanel.dispatch("pointerdown").stopped, true);
   assert.equal(f.dom.recruitPanel.dispatch("pointermove").stopped, true);
+});
+test("recruit controls remember separate stat thresholds, support stats alone, and freeze targets while rolling", () => {
+  const f = fixture();
+  f.stored.set("cjs-formations:recruit-options:v1", JSON.stringify({ minimum: 4, method: 1, stats: { str: 20.5, agi: 0, int: null } }));
+  f.handlers["recruit-status"](recruitState);
+  assert.equal(f.dom.recruitStats.str.value, "20.5"); assert.equal(f.dom.recruitStats.agi.value, "0");
+  assert.equal(f.dom.recruitStats.int.value, ""); assert.equal(f.messages.length, 0);
+  f.dom.recruitStats.int.value = "30"; f.dom.recruitButton.dispatch("click");
+  assert.deepEqual(JSON.parse(JSON.stringify(f.messages.at(-1))), ["recruit-start", { method: 1, criteria: [
+    { type: "work-grade", minimum: 4 }, { type: "stat", stat: "str", above: 20.5 },
+    { type: "stat", stat: "agi", above: 0 }, { type: "stat", stat: "int", above: 30 },
+  ] }]);
+  assert.deepEqual(JSON.parse(f.stored.get("cjs-formations:recruit-options:v1")).stats, { str: 20.5, agi: 0, int: 30 });
+  f.handlers["recruit-status"]({ ...recruitState, running: true });
+  assert.ok(Object.values(f.dom.recruitStats).every(input => input.disabled));
+  f.handlers["recruit-status"](recruitState);
+  assert.ok(Object.values(f.dom.recruitStats).every(input => !input.disabled));
+  f.dom.recruitGrade.value = "0"; f.dom.recruitStats.agi.value = ""; f.dom.recruitStats.int.value = "";
+  f.dom.recruitButton.dispatch("click");
+  assert.deepEqual(JSON.parse(JSON.stringify(f.messages.at(-1))), ["recruit-start", { method: 1,
+    criteria: [{ type: "stat", stat: "str", above: 20.5 }] }]);
+  f.document.activeElement = f.dom.recruitStats.str;
+  f.window.dispatch("keydown", { code: "Digit1" }); assert.equal(f.messages.at(-1)[0], "cancel");
+});
+test("invalid stat inputs cannot start or overwrite preferences, and invalid saved targets are ignored", () => {
+  const f = fixture();
+  const saved = JSON.stringify({ minimum: 0, method: 1, stats: { str: -1, agi: "20", int: null } });
+  f.stored.set("cjs-formations:recruit-options:v1", saved);
+  f.handlers["recruit-status"](recruitState);
+  assert.equal(f.dom.recruitGrade.value, "0");
+  assert.ok(Object.values(f.dom.recruitStats).every(input => input.value === ""));
+  for (const [value, badInput] of [["-1", false], ["", true], ["Infinity", false]]) {
+    f.dom.recruitStats.str.value = value; f.dom.recruitStats.str.validity = { badInput };
+    f.dom.recruitStats.str.dispatch("change"); f.dom.recruitButton.dispatch("click");
+    assert.equal(f.messages.length, 0); assert.equal(f.stored.get("cjs-formations:recruit-options:v1"), saved);
+    assert.equal(f.dom.recruitStats.str.validityReported, true);
+  }
 });
 test("closed recruitment screens hide the panel and locked refresh methods disable Start", () => {
   const f = fixture(); f.handlers["recruit-status"]({ ...recruitState, methods: [] });
