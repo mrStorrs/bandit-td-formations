@@ -40,6 +40,18 @@ test("C overrides the native menu shortcut and toggles once per press, never on 
   f.window.dispatch("keydown", { code: "KeyC" });
   assert.deepEqual(f.messages, [["combat", {}], ["combat", {}]]);
 });
+test("F6 toggles the forest loop once per press and consumes browser/native shortcuts", () => {
+  const f = fixture();
+  assert.equal(f.window.dispatch("keydown", { code: "F6" }).prevented, true);
+  f.window.dispatch("keydown", { code: "F6", repeat: true });
+  f.window.dispatch("keyup", { code: "F6" });
+  assert.deepEqual(f.messages, [["forest", {}]]); assert.deepEqual(f.native, []);
+  f.window.dispatch("keydown", { code: "F6", ctrlKey: true });
+  assert.deepEqual(f.messages.at(-1), ["cancel", {}]);
+  f.document.activeElement = { tagName: "INPUT" };
+  f.window.dispatch("keydown", { code: "F6" });
+  assert.deepEqual(f.messages.at(-1), ["cancel", {}]);
+});
 test("typing, modifiers, and IME composition do not toggle combat or consume the key", () => {
   for (const fields of [{ ctrlKey: true }, { altKey: true }, { shiftKey: true }, { metaKey: true }, { isComposing: true }]) {
     const f = fixture(); const event = f.window.dispatch("keydown", { code: "KeyC", ...fields });

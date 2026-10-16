@@ -56,8 +56,8 @@
   }
 
   class Hotkeys {
-    constructor({ context, storage, apply, notify, now = () => performance.now(), holdMs = 1000 }) {
-      Object.assign(this, { context, storage, apply, notify, now, holdMs });
+    constructor({ context, storage, apply, notify, onSave = () => {}, now = () => performance.now(), holdMs = 1000 }) {
+      Object.assign(this, { context, storage, apply, notify, onSave, now, holdMs });
       this.pending = null;
       this.busy = false;
     }
@@ -95,7 +95,10 @@
         if (save) {
           const data = snapshot(context);
           await this.storage.setItem(key, data);
-          if (this.context()?.token === pending.token) this.notify(`Formation ${pending.slot} saved (${data.characters.length} characters).`);
+          if (this.context()?.token === pending.token) {
+            this.onSave(pending.slot, context);
+            this.notify(`Formation ${pending.slot} saved (${data.characters.length} characters).`);
+          }
         } else {
           const data = await this.storage.getItem(key);
           const latest = this.context();

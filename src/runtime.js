@@ -6,7 +6,7 @@
   self.C3_CreateRuntime = (...args) => (engine = createRuntime(...args));
 
   runOnStartup(runtime => {
-    const { Hotkeys, CombatToggle, tileKey } = globalThis.BanditFormations;
+    const { Hotkeys, CombatToggle, ForestLoop, tileKey } = globalThis.BanditFormations;
     const first = name => runtime.objects[name]?.getFirstInstance();
     const all = name => runtime.objects[name]?.getAllInstances() || [];
     const notify = text => engine.PostComponentMessageToDOM(component, "notify", { text });
@@ -83,8 +83,62 @@
       }
     }
 
-    const hotkeys = new Hotkeys({ context, storage: runtime.storage, apply, notify });
+    let victories = 0, victoryHooked = false;
+    function forestContext() {
+      const g = runtime.globalVars, save = first("save"), cores = all("角色核心");
+      if (!engine.GetMainRunningLayout() || runtime.layout.name !== "主界面" ||
+          g["当前地图编号"] !== 28 || !save || !cores.length) return null;
+      const saveId = save.getAt(0, 1, 0);
+      if (!Number.isSafeInteger(saveId) || saveId < 10000000) return null;
+      const current = context();
+      const blocked = !current || g["游戏暂停"] || !g["战斗开关"] || runtime.timeScale === 0 ||
+        g["挑战城市开关"] || g["占领城市开关"] ||
+        ["转场云", "世界地图", "提示信息", "对话选择框"].some(name => all(name).length) ||
+        all("黑幕").some(instance => instance.isVisible);
+      const threshold = blocked ? Infinity : runtime.callFunction("威胁度上限");
+      return { ...current, saveId, mapId: 28, token: `${saveId}:28:${cores[0].uid}`, blocked,
+        active: !!g["挑战灵兽开关"], victories,
+        ready: Number.isFinite(threshold) && threshold > 0 && Number(save.getAt(28, 10, 0)) >= threshold };
+    }
+    function suspendNativeAuto() {
+      const manager = engine.GetEventSheetManager();
+      const group = manager.GetEventGroupByName("自动开启灵兽挑战");
+      const victory = manager.GetFunctionBlockByName("灵兽胜利")?.GetEventBlock();
+      if (!group || typeof victory?._RunAndBlock !== "function") {
+        throw new Error("Ink Forest summon hooks are unavailable in this game build.");
+      }
+      if (!victoryHooked) {
+        // Both native event calls and script calls enter this block. Observe the
+        // actual victory function so timeouts/aborted fights never count as wins.
+        const run = victory._RunAndBlock;
+        victory._RunAndBlock = function (...args) {
+          const result = run.apply(this, args);
+          if (runtime.globalVars["当前地图编号"] === 28) victories++;
+          return result;
+        };
+        victoryHooked = true;
+      }
+      const active = group.IsGroupActive();
+      group.SetGroupActive(false);
+      return () => group.SetGroupActive(active);
+    }
+    const hotkeys = new Hotkeys({ context, storage: runtime.storage, apply, notify,
+      onSave: (slot, current) => { if (current.mapId === 28 && slot <= 2) forest.formationSaved(); } });
     const combat = new CombatToggle({ context, storage: runtime.storage, apply: applyModes, notify });
+    const forest = new ForestLoop({ context: forestContext, storage: runtime.storage, apply, notify,
+      available: () => !hotkeys.pending && !hotkeys.busy && !combat.busy,
+      status: text => engine.PostComponentMessageToDOM(component, "forest-status", { text }),
+      suspendAuto: suspendNativeAuto,
+      summon: current => {
+        const latest = forestContext();
+        if (!latest || latest.token !== current.token || latest.blocked || !latest.ready || latest.active) {
+          throw new Error("Summon is no longer ready. Toggle F6 off/on to retry.");
+        }
+        runtime.callFunction("开始灵兽挑战", 28);
+        if (!runtime.globalVars["挑战灵兽开关"]) throw new Error("The game refused the summon. Toggle F6 off/on to retry.");
+      },
+    });
+    engine.AddDOMComponentMessageHandler(component, "forest", () => { hotkeys.cancel(); forest.toggle(); });
     engine.AddDOMComponentMessageHandler(component, "combat", () => {
       hotkeys.cancel();
       if (!hotkeys.busy) return combat.toggle();
@@ -93,9 +147,9 @@
       if (!combat.busy) return hotkeys.key(phase, slot);
     });
     engine.AddDOMComponentMessageHandler(component, "cancel", () => hotkeys.cancel());
-    runtime.addEventListener("tick", () => hotkeys.tick());
-    runtime.addEventListener("beforelayoutstart", () => hotkeys.cancel());
-    engine.PostComponentMessageToDOM(component, "ready", { version: "1.1.1" });
-    console.info("[Bandit TD Formations] v1.1.1 ready: hold 1–4 to save, tap to restore; C toggles combat.");
+    runtime.addEventListener("tick", () => hotkeys.tick() || forest.tick());
+    runtime.addEventListener("beforelayoutstart", () => { hotkeys.cancel(); forest.leave(); });
+    engine.PostComponentMessageToDOM(component, "ready", { version: "1.2.0" });
+    console.info("[Bandit TD Formations] v1.2.0 ready: hold 1–4 to save, tap to restore; C toggles combat; Ink Forest loop on, F6 toggles.");
   });
 })();

@@ -8,6 +8,9 @@ A formation and combat hotkey mod for Bandit Simulator TD (Steam app 4267800).
 - **Press `C`:** remember all placed characters' modes and switch them to combat.
   **Press `C` again:** restore each character's previous mode, including their
   work target when it still exists on the same map. Character positions stay put.
+- **Ink Forest loop is ON by default. Press `F6` to toggle it:** use formation 1
+  while waiting, switch to formation 2 when Summon is ready, summon the spirit
+  beast, then return to formation 1 after a win and repeat.
 - A message confirms saving or restoring. An empty slot leaves characters alone.
 - Formations persist locally across restarts and are separate for each campaign
   save identifier and current map. They are not included in Steam Cloud saves.
@@ -33,6 +36,33 @@ who is not moving, the restore stops before moving anyone. Swapping occupied
 character tiles is supported. Positions are restored using the game's own
 movement function, including its normal work-target updates.
 
+## Ink Forest loop
+
+Save formation **1** as your waiting arrangement and formation **2** as your
+summon-fighting arrangement **on Ink Forest**. The loop starts automatically
+when both are available. It moves characters before calling the game's normal
+summon function and waits for the game's actual victory event before returning
+to formation 1. It changes positions only; character jobs still follow the
+normal formation movement behavior.
+
+The loop only runs on Ink Forest. It pauses while the game is paused, battle is
+off, a menu or map transition is open, or characters are being dragged. Returning
+to Ink Forest resumes it if enabled. A status message in the bottom-left corner
+shows what it is doing. `F6` switches it off or on without changing positions;
+the choice lasts until the game closes, and each launch defaults to **ON**.
+Turn it off while rearranging formations if needed.
+
+The game's own auto-summon is temporarily suspended while the loop controls the
+fight, so it cannot summon before formation 2 is applied. Its saved setting is
+left intact, and its normal operation resumes when the loop stops or you leave
+Ink Forest. An already-running summon uses formation 2 without summoning again.
+
+Both formations must include all currently placed characters. Missing presets,
+changed character identities, or blocked destinations pause the loop and show
+the reason. Saving formation 1 or 2 retries automatically; `F6` off/on also
+retries. A timed-out or cancelled summon returns to formation 1 and pauses the
+loop until you retry.
+
 ## Install
 
 Requires Python 3.10 or later. No Python packages, mod loader, or Node installation
@@ -53,7 +83,7 @@ python3 manage.py install --game-dir "/path/to/Steam/steamapps/common/塔防山�
 
 On Windows, use `py -3` in place of `python3` if appropriate. Restart the game
 after installing. Look for the “Formations ready” message on startup.
-Version 1.1.1 also includes its version number in that message.
+The startup message includes the installed version number (currently 1.2.0).
 
 The installer backs up the input archive in `cjs-formations-backups/` beside the
 game, verifies the result, then replaces `package.nw` atomically. It does not
@@ -75,6 +105,8 @@ Supported Steam builds are **25948794** and **25975458**, inspected on
 of relevant file hashes to a supported build and refuses unknown builds,
 mixed versions, or conflicting modifications. Support for a new build requires
 checking its movement and save APIs, not merely updating the hashes.
+The summon, victory, threat threshold, and native auto-summon event groups were
+also checked on both supported builds for the Ink Forest loop.
 
 Steam updates and “Verify integrity of game files” can replace `package.nw`
 and remove the mod. If `C` opens the character menu again, or the startup
@@ -86,7 +118,10 @@ combat undo live outside `package.nw` and survive its replacement.
 Automated verification covers hold timing, four slots, repeat and focus handling,
 save/map changes, invalid presets, missing characters, occupancy cycles, building
 slots, combat/undo with mixed jobs, work targets, native shortcut interception,
-storage failures, the runtime adapter, and install/reinstall/uninstall.
+storage failures, the runtime adapter, and install/reinstall/uninstall. Ink
+Forest tests cover default-on behavior, F6, repeated summon/victory cycles,
+native auto-summon coordination, invalid presets, map changes during storage
+reads, pause/menu guards, roster changes, and failed challenges.
 
 In an isolated VM, a headless browser running a copied game/save also verified
 startup and `C` switching ten characters with mixed modes to combat and back,
@@ -94,6 +129,12 @@ without moving them or opening the native character menu. This used browser
 export mode and does not replace testing gameplay in Steam/NW.js. The formation
 hotkeys have been manually confirmed working in Steam. The new combat toggle
 still needs that manual check.
+
+The copied build 25975458 also completed three Ink Forest summon cycles with ten
+characters, using the game's summon, damage, and victory functions. It verified
+formation 2 was applied before every summon, formation 1 returned after each
+win, native auto-summon preferences were preserved, F6 stopped/resumed the loop,
+and a failed challenge paused it. Ink Forest still needs a manual Steam check.
 
 To check the controls in-game:
 
@@ -104,6 +145,11 @@ To check the controls in-game:
 5. Give characters different modes (such as mining, automatic, and combat).
    Press `C` once: all should show combat without moving. Press it again: each
    should return to their previous mode and eligible work target.
+6. On Ink Forest, save the waiting arrangement in slot 1 and the fighting
+   arrangement in slot 2. With battle running, check that the loop waits in 1,
+   moves to 2 before summoning, and returns to 1 after victory. Let it repeat.
+7. Press `F6` to stop the loop, then again to resume. Leave Ink Forest and check
+   that it does not move characters or summon on the other map.
 
 ## Development
 
@@ -125,7 +171,9 @@ python3 manage.py build --package /path/to/package.nw --output /path/to/new-pack
 
 `src/formations.js` handles snapshots, validation, and tap/hold timing.
 `src/combat.js` handles persistent combat undo and character matching.
-`src/runtime.js` adapts the game's character/tile APIs and native movement/mode functions.
+`src/forest.js` handles the Ink Forest cycle and formation validation.
+`src/runtime.js` adapts character/tile APIs, native movement/mode/summon functions,
+the victory callback, and the native auto-summon event group.
 `src/dom.js` handles keyboard focus and confirmation messages. The installer
 appends these scripts to the game's existing runtime and DOM bundles. Presets
 use Construct's `runtime.storage` under the `cjs-formations:v1:` namespace.
