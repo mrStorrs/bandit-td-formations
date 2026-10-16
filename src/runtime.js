@@ -6,7 +6,7 @@
   self.C3_CreateRuntime = (...args) => (engine = createRuntime(...args));
 
   runOnStartup(runtime => {
-    const { Hotkeys, tileKey } = globalThis.BanditFormations;
+    const { Hotkeys, CombatToggle, tileKey } = globalThis.BanditFormations;
     const first = name => runtime.objects[name]?.getFirstInstance();
     const all = name => runtime.objects[name]?.getAllInstances() || [];
     const notify = text => engine.PostComponentMessageToDOM(component, "notify", { text });
@@ -24,6 +24,7 @@
         return {
           id, identity: JSON.stringify([save.getAt(id, 1, 2), save.getAt(id, 5, 2), save.getAt(id, 51, 2)]),
           x: v["X坐标"], y: v["Y坐标"], core,
+          mode: v["设定状态"], priorityX: save.getAt(id, 57, 2), priorityY: save.getAt(id, 58, 2),
         };
       });
       const buildings = first("jz");
@@ -67,12 +68,34 @@
       for (const move of moves) runtime.callFunction("角色自动逻辑", move.id);
     }
 
+    function applyModes({ changes }, current) {
+      for (const { id, mode, priorityX, priorityY, from } of changes) {
+        runtime.callFunction("改变角色状态", id, mode);
+        if (current.save.getAt(id, 9, 2) !== mode || from.core.instVars["设定状态"] !== mode) {
+          throw new Error("The game refused a mode change. Press C to restore previous modes.");
+        }
+        // Native mode switching clears these four fields. Restore the saved
+        // target before its delayed AI refresh, just as the work-target UI does.
+        from.core.instVars["优先工作目标X"] = priorityX;
+        from.core.instVars["优先工作目标Y"] = priorityY;
+        current.save.setAt(priorityX, id, 57, 2);
+        current.save.setAt(priorityY, id, 58, 2);
+      }
+    }
+
     const hotkeys = new Hotkeys({ context, storage: runtime.storage, apply, notify });
-    engine.AddDOMComponentMessageHandler(component, "key", ({ phase, slot }) => hotkeys.key(phase, slot));
+    const combat = new CombatToggle({ context, storage: runtime.storage, apply: applyModes, notify });
+    engine.AddDOMComponentMessageHandler(component, "combat", () => {
+      hotkeys.cancel();
+      if (!hotkeys.busy) return combat.toggle();
+    });
+    engine.AddDOMComponentMessageHandler(component, "key", ({ phase, slot }) => {
+      if (!combat.busy) return hotkeys.key(phase, slot);
+    });
     engine.AddDOMComponentMessageHandler(component, "cancel", () => hotkeys.cancel());
     runtime.addEventListener("tick", () => hotkeys.tick());
     runtime.addEventListener("beforelayoutstart", () => hotkeys.cancel());
     engine.PostComponentMessageToDOM(component, "ready", {});
-    console.info("[Bandit TD Formations] v1.0.0 ready: hold 1–4 to save, tap to restore.");
+    console.info("[Bandit TD Formations] v1.1.0 ready: hold 1–4 to save, tap to restore; C toggles combat.");
   });
 })();

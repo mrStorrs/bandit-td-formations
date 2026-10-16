@@ -8,7 +8,7 @@
       this.AddRuntimeMessageHandlers([
         ["ready", () => {
           this.ready = true;
-          this.notify("Formations ready · Hold 1–4 to save, tap to restore.");
+          this.notify("Formations ready · Hold 1–4 to save, tap to restore · C toggles combat.");
         }],
         ["notify", ({ text }) => this.notify(text)],
       ]);
@@ -23,16 +23,22 @@
         if (!this.ready) return;
         if (e.ctrlKey || e.altKey || e.metaKey || e.shiftKey || e.isComposing || editable(document.activeElement)) { cancel(); return; }
         const match = /^Digit([1-4])$/.exec(e.code);
-        if (!match || e.repeat || this.held.has(e.code)) return;
+        if (!match && e.code !== "KeyC") return;
+        // C is also the native character-menu shortcut. Capture it before the
+        // engine's bubbling keyboard listener so one press has one effect.
+        if (e.code === "KeyC") { e.preventDefault(); e.stopImmediatePropagation(); }
+        if (e.repeat || this.held.has(e.code)) return;
         this.held.add(e.code);
         if (this.held.size > 1) { this.PostToRuntime("cancel", {}); return; }
-        this.PostToRuntime("key", { phase: "down", slot: Number(match[1]) });
-      });
+        if (e.code === "KeyC") this.PostToRuntime("combat", {});
+        else this.PostToRuntime("key", { phase: "down", slot: Number(match[1]) });
+      }, true);
       window.addEventListener("keyup", e => {
         if (!this.ready || !this.held.delete(e.code)) return;
+        if (e.code === "KeyC") { e.preventDefault(); e.stopImmediatePropagation(); return; }
         if (editable(document.activeElement) || e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) { cancel(); return; }
         this.PostToRuntime("key", { phase: "up", slot: Number(e.code.slice(-1)) });
-      });
+      }, true);
       window.addEventListener("blur", cancel);
       document.addEventListener("visibilitychange", () => { if (document.hidden) cancel(); });
       document.addEventListener("focusin", e => { if (editable(e.target)) cancel(); });

@@ -9,10 +9,12 @@ function fixture() {
   const events = {}, handlers = {}, messages = [], calls = [], stored = new Map(), cells = new Map();
   const save = { getAt: (...args) => cells.get(args.join()) ?? 0, setAt: (value, ...args) => cells.set(args.join(), value) };
   save.setAt(12345678, 0, 1, 0);
-  const cores = [1, 2].map(id => ({ uid: id + 100, instVars: { 角色序号: id, X坐标: id, Y坐标: 0, 特殊状态: "" }, behaviors: { DragDrop: { isDragging: false } } }));
+  const cores = [1, 2].map(id => ({ uid: id + 100, instVars: { 角色序号: id, X坐标: id, Y坐标: 0, 特殊状态: "",
+    设定状态: id === 1 ? "采矿" : "自动", 优先工作目标X: id === 1 ? 3 : 0, 优先工作目标Y: 0 }, behaviors: { DragDrop: { isDragging: false } } }));
   for (const c of cores) {
     const id = c.instVars.角色序号;
     save.setAt(`hero-${id}`, id, 1, 2); save.setAt(id, id, 7, 2); save.setAt(0, id, 8, 2);
+    save.setAt(c.instVars.设定状态, id, 9, 2); save.setAt(c.instVars.优先工作目标X, id, 57, 2);
   }
   const tiles = [1, 2, 3].map(x => ({ instVars: { X坐标: x, Y坐标: 0, 角色许可: true, 占用开关: x < 3, 建筑序号: 0, 建筑编号: 0 } }));
   const objects = { save: [save], 角色核心: cores, 地面: tiles, jz: [{ getAt: () => 1 }] };
@@ -23,6 +25,12 @@ function fixture() {
     addEventListener: (name, callback) => { events[name] = callback; },
     callFunction(name, ...args) {
       calls.push([name, ...args]);
+      if (name === "改变角色状态") {
+        const [id, mode] = args, c = cores.find(c => c.instVars.角色序号 === id);
+        Object.assign(c.instVars, { 设定状态: mode, 优先工作目标X: 0, 优先工作目标Y: 0 });
+        save.setAt(mode, id, 9, 2); save.setAt(0, id, 57, 2); save.setAt(0, id, 58, 2);
+        return;
+      }
       if (name !== "角色位置移动") return;
       const [id, x, y] = args, c = cores.find(c => c.instVars.角色序号 === id);
       const source = tiles.find(t => t.instVars.X坐标 === c.instVars.X坐标);
@@ -41,7 +49,7 @@ function fixture() {
     runOnStartup: f => { sandbox.start = f; }, C3_CreateRuntime: () => engine };
   sandbox.self = sandbox;
   vm.createContext(sandbox);
-  for (const file of ["formations.js", "runtime.js"]) vm.runInContext(fs.readFileSync(`${__dirname}/../src/${file}`, "utf8"), sandbox);
+  for (const file of ["formations.js", "combat.js", "runtime.js"]) vm.runInContext(fs.readFileSync(`${__dirname}/../src/${file}`, "utf8"), sandbox);
   sandbox.C3_CreateRuntime(); sandbox.start(runtime);
   return { runtime, engine, save, cores, tiles, events, handlers, messages, calls, stored,
     async hold(slot) { handlers.key({ phase: "down", slot }); clock += 1000; await events.tick(); await handlers.key({ phase: "up", slot }); },
@@ -60,6 +68,40 @@ test("runtime bridge saves and restores through the native move function and rep
   assert.deepEqual(f.calls.filter(c => c[0] === "角色位置移动"), [
     ["角色位置移动", 1, 1, 0, "主地图", false], ["角色位置移动", 2, 2, 0, "主地图", false],
   ]);
+});
+
+test("combat uses the native mode function, restores work targets, and does not move characters", async () => {
+  const f = fixture();
+  await f.handlers.combat();
+  assert.deepEqual(f.cores.map(c => c.instVars.设定状态), ["战斗", "战斗"]);
+  assert.equal(f.save.getAt(1, 9, 2), "战斗");
+  await f.handlers.combat();
+  assert.deepEqual(f.cores.map(c => c.instVars.设定状态), ["采矿", "自动"]);
+  assert.equal(f.save.getAt(1, 9, 2), "采矿");
+  assert.equal(f.cores[0].instVars.优先工作目标X, 3);
+  assert.equal(f.save.getAt(1, 57, 2), 3);
+  assert.deepEqual(f.cores.map(c => c.instVars.X坐标), [1, 2]);
+  assert.deepEqual(f.calls, [["改变角色状态", 1, "战斗"], ["改变角色状态", 2, "战斗"],
+    ["改变角色状态", 1, "采矿"], ["改变角色状态", 2, "自动"]]);
+});
+test("combat is blocked by menus, loading, dragging, and the tower challenge", async () => {
+  for (const block of [f => { f.runtime.globalVars.分页界面 = "menu"; },
+    f => { f.runtime.globalVars.爬塔挑战开关 = true; }, f => { f.runtime.layout = null; },
+    f => { f.cores[0].behaviors.DragDrop.isDragging = true; }]) {
+    const f = fixture(); block(f); await f.handlers.combat();
+    assert.equal(f.calls.length, 0); assert.equal(f.stored.size, 0);
+  }
+});
+test("combat and formation storage operations cannot overlap", async () => {
+  const f = fixture(); let resolve;
+  f.runtime.storage.getItem = () => new Promise(r => { resolve = r; });
+  const combat = f.handlers.combat();
+  await f.hold(1); assert.equal(f.stored.size, 0);
+  resolve(null); await combat;
+  const formation = f.tap(1);
+  await f.handlers.combat();
+  assert.equal(f.calls.length, 2);
+  resolve(null); await formation;
 });
 test("building slots retain their occupant and breakthrough state after swapping", async () => {
   const f = fixture();

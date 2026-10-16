@@ -10,7 +10,7 @@ import tempfile
 import zipfile
 
 ROOT = Path(__file__).resolve().parent
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 MANIFEST = "cjs-formations.json"
 BEGIN = b"\n/* CJS_FORMATIONS_BEGIN */\n"
 END = b"\n/* CJS_FORMATIONS_END */\n"
@@ -66,7 +66,7 @@ def write_package(source, output, uninstall=False):
         replacements = {name: originals[name] for name in ("scripts/main.js", "scripts/c3runtime.js")}
         manifest = {"format": 1, "version": VERSION, "blocks": {}}
         if not uninstall:
-            sources = {"scripts/main.js": ["dom.js"], "scripts/c3runtime.js": ["formations.js", "runtime.js"]}
+            sources = {"scripts/main.js": ["dom.js"], "scripts/c3runtime.js": ["formations.js", "combat.js", "runtime.js"]}
             for name, files in sources.items():
                 block = BEGIN + b"\n".join((ROOT / "src" / f).read_bytes() for f in files) + END
                 manifest["blocks"][name] = digest(block)
