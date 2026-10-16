@@ -10,19 +10,32 @@ import tempfile
 import zipfile
 
 ROOT = Path(__file__).resolve().parent
-VERSION = "1.1.0"
+VERSION = "1.1.1"
 MANIFEST = "cjs-formations.json"
 BEGIN = b"\n/* CJS_FORMATIONS_BEGIN */\n"
 END = b"\n/* CJS_FORMATIONS_END */\n"
-SUPPORTED = {
-    "data.json": "bfb3baa8f9d346f1fb3e83c9f98bc0230f3a89448181feda1e9e0ec3d627232f",
-    "scripts/main.js": "a7660e495d5dcbed209f1fdc5092e82483474f6150c43bf38cfebb0029541da5",
-    "scripts/c3runtime.js": "169f0cae5285fbd2d5dd5d4c810f304e68ba0f6467620f1cbfa6a229fd37689a",
+GAME_FILES = ("data.json", "scripts/main.js", "scripts/c3runtime.js")
+SUPPORTED_BUILDS = {
+    "25948794": {
+        "data.json": "bfb3baa8f9d346f1fb3e83c9f98bc0230f3a89448181feda1e9e0ec3d627232f",
+        "scripts/main.js": "a7660e495d5dcbed209f1fdc5092e82483474f6150c43bf38cfebb0029541da5",
+        "scripts/c3runtime.js": "169f0cae5285fbd2d5dd5d4c810f304e68ba0f6467620f1cbfa6a229fd37689a",
+    },
+    "25975458": {
+        "data.json": "145234bcea89130263135b8336b6b078de32ee6e12bb17e510110cbddd133555",
+        "scripts/main.js": "a7660e495d5dcbed209f1fdc5092e82483474f6150c43bf38cfebb0029541da5",
+        "scripts/c3runtime.js": "ff3accd9d83dde09da5675293fc0969ef1994c834945d25b5de4d9b3db7b5237",
+    },
 }
 
 
 def digest(data):
     return hashlib.sha256(data).hexdigest()
+
+
+def supported_build(originals):
+    hashes = {name: digest(originals[name]) for name in GAME_FILES}
+    return next((build for build, expected in SUPPORTED_BUILDS.items() if hashes == expected), None)
 
 
 def file_digest(path):
@@ -36,7 +49,7 @@ def file_digest(path):
 def original_scripts(archive):
     if len(archive.namelist()) != len(set(archive.namelist())):
         raise ValueError("Duplicate archive entries; refusing to modify this package.")
-    originals = {name: archive.read(name) for name in SUPPORTED}
+    originals = {name: archive.read(name) for name in GAME_FILES}
     manifest = json.loads(archive.read(MANIFEST)) if MANIFEST in archive.namelist() else None
     if manifest:
         if manifest.get("format") != 1:
@@ -59,12 +72,11 @@ def write_package(source, output, uninstall=False):
         originals, installed = original_scripts(archive)
         if uninstall and not installed:
             raise ValueError("The mod is not installed.")
-        if not uninstall:
-            for name, expected in SUPPORTED.items():
-                if digest(originals[name]) != expected:
-                    raise ValueError(f"Unsupported game build or another modification: {name}. No files changed.")
+        build = supported_build(originals)
+        if not uninstall and not build:
+            raise ValueError("Unsupported game build or another modification. No files changed. A compatibility update is required.")
         replacements = {name: originals[name] for name in ("scripts/main.js", "scripts/c3runtime.js")}
-        manifest = {"format": 1, "version": VERSION, "blocks": {}}
+        manifest = {"format": 1, "version": VERSION, "game_build": build, "blocks": {}}
         if not uninstall:
             sources = {"scripts/main.js": ["dom.js"], "scripts/c3runtime.js": ["formations.js", "combat.js", "runtime.js"]}
             for name, files in sources.items():
@@ -156,7 +168,12 @@ def main():
             with zipfile.ZipFile(game_dir / "package.nw") as archive:
                 originals, installed = original_scripts(archive)
             print(f"Installed: {installed['version']}" if installed else "Not installed")
-            print("Supported game build" if all(digest(originals[n]) == h for n, h in SUPPORTED.items()) else "Untested game build")
+            build = supported_build(originals)
+            print(f"Supported game build: {build}" if build else "Untested game build")
+            if not installed:
+                print("Steam updates and file verification can remove the mod.")
+                print("Run the install command again, then restart the game." if build else
+                      "This game build needs a compatibility update before reinstalling.")
         else:
             install(game_dir, args.command == "uninstall")
     except (OSError, ValueError, KeyError, zipfile.BadZipFile) as error:

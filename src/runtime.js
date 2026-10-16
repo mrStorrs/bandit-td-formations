@@ -95,7 +95,7 @@
     engine.AddDOMComponentMessageHandler(component, "cancel", () => hotkeys.cancel());
     runtime.addEventListener("tick", () => hotkeys.tick());
     runtime.addEventListener("beforelayoutstart", () => hotkeys.cancel());
-    engine.PostComponentMessageToDOM(component, "ready", {});
-    console.info("[Bandit TD Formations] v1.1.0 ready: hold 1–4 to save, tap to restore; C toggles combat.");
+    engine.PostComponentMessageToDOM(component, "ready", { version: "1.1.1" });
+    console.info("[Bandit TD Formations] v1.1.1 ready: hold 1–4 to save, tap to restore; C toggles combat.");
   });
 })();

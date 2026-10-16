@@ -53,6 +53,7 @@ python3 manage.py install --game-dir "/path/to/Steam/steamapps/common/塔防山�
 
 On Windows, use `py -3` in place of `python3` if appropriate. Restart the game
 after installing. Look for the “Formations ready” message on startup.
+Version 1.1.1 also includes its version number in that message.
 
 The installer backs up the input archive in `cjs-formations-backups/` beside the
 game, verifies the result, then replaces `package.nw` atomically. It does not
@@ -69,11 +70,18 @@ saved formations in the game's local storage so reinstalling can use them.
 
 ## Compatibility and verification
 
-The currently supported package is Steam build **25948794**, inspected on
-2026-10-14. The installer checks hashes of the relevant game files and refuses
-unknown builds or conflicting modifications. Game updates may remove the mod;
-check compatibility before reinstalling. Support for a new build requires
+Supported Steam builds are **25948794** and **25975458**, inspected on
+2026-10-14 and 2026-10-15 respectively. The installer matches the complete set
+of relevant file hashes to a supported build and refuses unknown builds,
+mixed versions, or conflicting modifications. Support for a new build requires
 checking its movement and save APIs, not merely updating the hashes.
+
+Steam updates and “Verify integrity of game files” can replace `package.nw`
+and remove the mod. If `C` opens the character menu again, or the startup
+message is missing, run `python3 manage.py status`. For a supported build,
+run `python3 manage.py install` again, then fully exit and relaunch the game.
+An unsupported build needs a compatibility update first. Saved formations and
+combat undo live outside `package.nw` and survive its replacement.
 
 Automated verification covers hold timing, four slots, repeat and focus handling,
 save/map changes, invalid presets, missing characters, occupancy cycles, building

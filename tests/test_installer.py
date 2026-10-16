@@ -1,5 +1,6 @@
 """Synthetic archives only: no copyrighted game data is checked in."""
 import importlib.util
+import json
 from pathlib import Path
 import tempfile
 import unittest
@@ -17,12 +18,14 @@ class InstallerTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
         self.package = self.root / "package.nw"
-        self.files = {name: f"original {name}\n".encode() for name in manage.SUPPORTED}
+        self.files = {name: f"original {name}\n".encode() for name in manage.GAME_FILES}
         self.files["asset.bin"] = bytes(range(256))
         with zipfile.ZipFile(self.package, "w") as z:
             for name, body in self.files.items():
                 z.writestr(name, body)
-        self.support = patch.object(manage, "SUPPORTED", {n: manage.digest(self.files[n]) for n in manage.SUPPORTED})
+        self.support = patch.object(manage, "SUPPORTED_BUILDS", {
+            "first-build": {n: manage.digest(self.files[n]) for n in manage.GAME_FILES},
+        })
         self.support.start()
         self.addCleanup(self.support.stop)
 
@@ -40,7 +43,7 @@ class InstallerTests(unittest.TestCase):
 
     def test_unknown_build_and_existing_lock_leave_input_unchanged(self):
         before = self.package.read_bytes()
-        with patch.dict(manage.SUPPORTED, {"data.json": "wrong"}):
+        with patch.dict(manage.SUPPORTED_BUILDS, {}, clear=True):
             with self.assertRaisesRegex(ValueError, "Unsupported"):
                 manage.install(self.root)
         self.assertEqual(self.package.read_bytes(), before)
@@ -61,6 +64,30 @@ class InstallerTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "checksum"):
             manage.install(self.root, uninstall=True)
         self.assertEqual(self.package.read_bytes(), before)
+
+    def test_reinstall_after_game_update_preserves_new_build_and_rejects_mixed_files(self):
+        manage.install(self.root)
+        updated = {name: b"updated " + body for name, body in self.files.items()}
+        # Simulate Steam replacing the whole archive, including removing the mod.
+        with zipfile.ZipFile(self.package, "w") as z:
+            for name, body in updated.items(): z.writestr(name, body)
+        with patch.dict(manage.SUPPORTED_BUILDS, {
+            "second-build": {n: manage.digest(updated[n]) for n in manage.GAME_FILES},
+        }):
+            manage.install(self.root)
+            with zipfile.ZipFile(self.package) as z:
+                originals, manifest = manage.original_scripts(z)
+                self.assertEqual(manifest["game_build"], "second-build")
+                self.assertEqual(originals, {n: updated[n] for n in manage.GAME_FILES})
+                self.assertEqual(z.read("asset.bin"), updated["asset.bin"])
+                self.assertEqual(json.loads(z.read(manage.MANIFEST))["version"], manage.VERSION)
+            updated["data.json"] = self.files["data.json"]
+            with zipfile.ZipFile(self.package, "w") as z:
+                for name, body in updated.items(): z.writestr(name, body)
+            before = self.package.read_bytes()
+            with self.assertRaisesRegex(ValueError, "Unsupported"):
+                manage.install(self.root)
+            self.assertEqual(self.package.read_bytes(), before)
 
 
 if __name__ == "__main__":

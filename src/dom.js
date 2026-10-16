@@ -6,9 +6,9 @@
       this.ready = false;
       this.held = new Set();
       this.AddRuntimeMessageHandlers([
-        ["ready", () => {
+        ["ready", ({ version }) => {
           this.ready = true;
-          this.notify("Formations ready · Hold 1–4 to save, tap to restore · C toggles combat.");
+          this.notify(`Formations ready · v${version} · Hold 1–4 to save, tap to restore · C toggles combat.`);
         }],
         ["notify", ({ text }) => this.notify(text)],
       ]);

@@ -26,7 +26,7 @@ function fixture() {
   }, RuntimeInterface: { AddDOMHandlerClass(klass) { sandbox.klass = klass; } } };
   sandbox.self = sandbox; vm.createContext(sandbox);
   vm.runInContext(fs.readFileSync(`${__dirname}/../src/dom.js`, "utf8"), sandbox);
-  const dom = new sandbox.klass(); dom.notify = () => {}; dom.Attach(); handlers.ready();
+  const dom = new sandbox.klass(); dom.notify = () => {}; dom.Attach(); handlers.ready({ version: "1.1.1" });
   return { window, document, messages, native };
 }
 
