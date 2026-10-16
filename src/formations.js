@@ -6,24 +6,25 @@
   function snapshot(context) {
     if (!context.characters.length) throw new Error("No characters to save.");
     const data = {
-      version: 1,
+      version: 2,
       saveId: context.saveId,
       mapId: context.mapId,
-      characters: context.characters.map(({ id, identity, x, y }) => ({ id, identity, x, y })),
+      characters: context.characters.map(({ id, identity, x, y, mode, priorityX, priorityY }) =>
+        ({ id, identity, x, y, mode, priorityX, priorityY })),
     };
     planRestore(data, context);
     return data;
   }
 
   function planRestore(saved, current) {
-    if (!saved || saved.version !== 1 || !Array.isArray(saved.characters) ||
+    if (!saved || ![1, 2].includes(saved.version) || !Array.isArray(saved.characters) ||
         saved.characters.length > 1000 || saved.saveId !== current.saveId || saved.mapId !== current.mapId) {
       throw new Error("This formation does not match the current save and map.");
     }
     const characters = new Map(current.characters.map(c => [c.id, c]));
     const tiles = new Map(current.tiles.map(t => [tileKey(t), t]));
     const occupants = new Map(current.characters.map(c => [tileKey(c), c.id]));
-    const ids = new Set(), destinations = new Set(), moves = [];
+    const ids = new Set(), destinations = new Set(), moves = [], changes = [];
     let skipped = 0;
     for (const entry of saved.characters) {
       if (!entry || !Number.isSafeInteger(entry.id) || entry.id <= 0 ||
@@ -31,10 +32,19 @@
           !Number.isSafeInteger(entry.y) || ids.has(entry.id) || destinations.has(tileKey(entry))) {
         throw new Error("The saved formation is invalid. Hold the key to replace it.");
       }
+      if (saved.version === 2 && (typeof entry.mode !== "string" || !entry.mode.length || entry.mode.length > 100 ||
+          !Number.isSafeInteger(entry.priorityX) || !Number.isSafeInteger(entry.priorityY))) {
+        throw new Error("The saved formation has invalid jobs. Hold the key to replace it.");
+      }
       ids.add(entry.id);
       destinations.add(tileKey(entry));
       const character = characters.get(entry.id);
       if (!character || character.identity !== entry.identity) { skipped++; continue; }
+      if (saved.version === 2) {
+        const targetExists = tiles.has(tileKey({ x: entry.priorityX, y: entry.priorityY }));
+        changes.push({ id: entry.id, from: character, mode: entry.mode,
+          priorityX: targetExists ? entry.priorityX : 0, priorityY: targetExists ? entry.priorityY : 0 });
+      }
       if (tileKey(character) === tileKey(entry)) continue;
       const tile = tiles.get(tileKey(entry));
       if (!tile || !tile.allowed) throw new Error("A saved tile is no longer available. No characters moved.");
@@ -52,7 +62,7 @@
         throw new Error("A saved building slot is occupied. No characters moved.");
       }
     }
-    return { moves, skipped };
+    return { moves, changes, skipped };
   }
 
   class Hotkeys {
@@ -97,7 +107,7 @@
           await this.storage.setItem(key, data);
           if (this.context()?.token === pending.token) {
             this.onSave(pending.slot, context);
-            this.notify(`Formation ${pending.slot} saved (${data.characters.length} characters).`);
+            this.notify(`Formation ${pending.slot} saved (${data.characters.length} characters, positions + jobs).`);
           }
         } else {
           const data = await this.storage.getItem(key);
@@ -106,7 +116,8 @@
           if (data == null) { this.notify(`Slot ${pending.slot} is empty. Hold ${pending.slot} for 1 second to save.`); return; }
           const plan = planRestore(data, latest);
           this.apply(plan, latest);
-          this.notify(`Formation ${pending.slot} restored (${plan.moves.length} moved${plan.skipped ? `, ${plan.skipped} unavailable or renamed` : ""}).`);
+          this.notify(`Formation ${pending.slot} restored (${plan.moves.length} moved, ${plan.changes.length} jobs${plan.skipped ? `, ${plan.skipped} unavailable or renamed` : ""}).` +
+            (data.version === 1 ? ` Hold ${pending.slot} again to save jobs.` : ""));
         }
       } catch (error) {
         console.error("[Bandit TD Formations]", error);

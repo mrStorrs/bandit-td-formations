@@ -40,7 +40,7 @@
       return { saveId, mapId, token: `${saveId}:${mapId}:${cores[0].uid}`, characters, tiles, save };
     }
 
-    function apply({ moves }, current) {
+    function apply({ moves, changes }, current) {
       const tiles = new Map(current.tiles.map(t => [tileKey(t), t]));
       // The native move function clears each source tile. Reconcile occupancy
       // after the synchronous batch so swaps do not leave occupied tiles free.
@@ -65,6 +65,9 @@
           tile.instance.instVars["占用开关"] = !!occupant;
         }
       }
+      // Moving clears work priorities. Apply the saved jobs after all moves,
+      // including characters already standing on their destination tiles.
+      applyModes({ changes }, current);
       for (const move of moves) runtime.callFunction("角色自动逻辑", move.id);
     }
 
@@ -72,7 +75,7 @@
       for (const { id, mode, priorityX, priorityY, from } of changes) {
         runtime.callFunction("改变角色状态", id, mode);
         if (current.save.getAt(id, 9, 2) !== mode || from.core.instVars["设定状态"] !== mode) {
-          throw new Error("The game refused a mode change. Press C to restore previous modes.");
+          throw new Error("The game refused a job change. Restore was interrupted.");
         }
         // Native mode switching clears these four fields. Restore the saved
         // target before its delayed AI refresh, just as the work-target UI does.
@@ -149,7 +152,7 @@
     engine.AddDOMComponentMessageHandler(component, "cancel", () => hotkeys.cancel());
     runtime.addEventListener("tick", () => hotkeys.tick() || forest.tick());
     runtime.addEventListener("beforelayoutstart", () => { hotkeys.cancel(); forest.leave(); });
-    engine.PostComponentMessageToDOM(component, "ready", { version: "1.2.0" });
-    console.info("[Bandit TD Formations] v1.2.0 ready: hold 1–4 to save, tap to restore; C toggles combat; Ink Forest loop on, F6 toggles.");
+    engine.PostComponentMessageToDOM(component, "ready", { version: "1.3.0" });
+    console.info("[Bandit TD Formations] v1.3.0 ready: hold 1–4 to save positions and jobs, tap to restore; C toggles combat; Ink Forest loop on, F6 toggles.");
   });
 })();

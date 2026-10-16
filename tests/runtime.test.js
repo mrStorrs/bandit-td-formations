@@ -45,6 +45,10 @@ function fixture() {
       } else source.instVars.占用开关 = false;
       target.instVars.占用开关 = true;
       Object.assign(c.instVars, { X坐标: x, Y坐标: y }); save.setAt(x, id, 7, 2); save.setAt(y, id, 8, 2);
+      if (!args[4]) {
+        Object.assign(c.instVars, { 优先工作目标X: 0, 优先工作目标Y: 0 });
+        save.setAt(0, id, 57, 2); save.setAt(0, id, 58, 2);
+      }
     },
   };
   const engine = { GetMainRunningLayout: () => runtime.layout,
@@ -76,6 +80,56 @@ test("runtime bridge saves and restores through the native move function and rep
   assert.deepEqual(f.calls.filter(c => c[0] === "角色位置移动"), [
     ["角色位置移动", 1, 1, 0, "主地图", false], ["角色位置移动", 2, 2, 0, "主地图", false],
   ]);
+  assert.equal(f.cores[0].instVars.优先工作目标X, 3);
+  assert.equal(f.save.getAt(1, 57, 2), 3);
+  const lastMove = f.calls.findLastIndex(c => c[0] === "角色位置移动");
+  const firstJob = f.calls.findIndex(c => c[0] === "改变角色状态");
+  assert.ok(firstJob > lastMove, "work targets must be applied after native movement clears them");
+});
+
+test("formation recall restores jobs and targets on unchanged positions without overwriting C undo", async () => {
+  const f = fixture(); await f.hold(1);
+  await f.handlers.combat();
+  const undoKey = "cjs-formations:combat:v1:12345678";
+  const undo = JSON.stringify(f.stored.get(undoKey));
+  await f.hold(2); f.calls.length = 0;
+  await f.tap(1);
+  assert.deepEqual(f.cores.map(c => c.instVars.设定状态), ["采矿", "自动"]);
+  assert.equal(f.cores[0].instVars.优先工作目标X, 3);
+  assert.equal(f.save.getAt(1, 57, 2), 3);
+  await f.tap(2);
+  assert.deepEqual(f.cores.map(c => c.instVars.设定状态), ["战斗", "战斗"]);
+  assert.equal(f.cores[0].instVars.优先工作目标X, 0);
+  assert.equal(f.save.getAt(1, 57, 2), 0);
+  assert.equal(f.calls.filter(c => c[0] === "角色位置移动").length, 0);
+  assert.equal(JSON.stringify(f.stored.get(undoKey)), undo);
+  await f.handlers.combat();
+  assert.deepEqual(f.cores.map(c => c.instVars.设定状态), ["采矿", "自动"]);
+  assert.equal(f.cores[0].instVars.优先工作目标X, 3);
+});
+test("legacy formations keep native movement behavior until resaved with jobs", async () => {
+  const f = fixture();
+  const key = "cjs-formations:v1:12345678:1:1";
+  f.stored.set(key, { version: 1, saveId: 12345678, mapId: 1,
+    characters: [{ id: 1, identity: JSON.stringify(["hero-1", 0, 0]), x: 3, y: 0 }] });
+  await f.tap(1);
+  assert.equal(f.cores[0].instVars.X坐标, 3);
+  assert.equal(f.cores[0].instVars.设定状态, "采矿");
+  assert.equal(f.save.getAt(1, 57, 2), 0);
+  assert.equal(f.calls.filter(c => c[0] === "改变角色状态").length, 0);
+  assert.match(f.messages.at(-1)[1].text, /Hold 1 again to save jobs/);
+  await f.hold(1);
+  assert.equal(f.stored.get(key).version, 2);
+  assert.equal(f.stored.get(key).characters[0].mode, "采矿");
+});
+test("a malformed saved job prevents both movement and job changes", async () => {
+  const f = fixture(); await f.hold(1);
+  const saved = f.stored.get("cjs-formations:v1:12345678:1:1");
+  saved.characters[0].x = 3;
+  saved.characters[1].priorityY = "bad";
+  await f.tap(1);
+  assert.equal(f.calls.length, 0);
+  assert.match(f.messages.at(-1)[1].text, /invalid jobs/);
 });
 
 async function forestFixture() {
@@ -83,18 +137,25 @@ async function forestFixture() {
   await f.hold(1);
   f.runtime.callFunction("角色位置移动", 1, 2, 0, "主地图", false);
   f.runtime.callFunction("角色位置移动", 2, 1, 0, "主地图", false);
+  for (const c of f.cores) f.runtime.callFunction("改变角色状态", c.instVars.角色序号, "战斗");
   await f.hold(2); f.calls.length = 0;
   return f;
 }
 test("Ink Forest adapter uses readiness, suppresses native auto, and observes native victory before repeating", async () => {
   const f = await forestFixture(); await f.tick();
   assert.deepEqual(f.cores.map(c => c.instVars.X坐标), [1, 2]);
+  assert.deepEqual(f.cores.map(c => c.instVars.设定状态), ["采矿", "自动"]);
+  assert.equal(f.cores[0].instVars.优先工作目标X, 3);
   assert.equal(f.auto.IsGroupActive(), false);
   f.save.setAt(100, 28, 10, 0); await f.tick();
   assert.deepEqual(f.cores.map(c => c.instVars.X坐标), [2, 1]);
+  assert.deepEqual(f.cores.map(c => c.instVars.设定状态), ["战斗", "战斗"]);
+  assert.equal(f.cores[0].instVars.优先工作目标X, 0);
   assert.deepEqual(f.calls.filter(c => c[0] === "开始灵兽挑战"), [["开始灵兽挑战", 28]]);
   f.victory._RunAndBlock(); await f.tick();
   assert.deepEqual(f.cores.map(c => c.instVars.X坐标), [1, 2]);
+  assert.deepEqual(f.cores.map(c => c.instVars.设定状态), ["采矿", "自动"]);
+  assert.equal(f.save.getAt(1, 57, 2), 3);
   f.save.setAt(100, 28, 10, 0); await f.tick();
   assert.equal(f.calls.filter(c => c[0] === "开始灵兽挑战").length, 2);
   f.handlers.forest(); assert.equal(f.auto.IsGroupActive(), true);

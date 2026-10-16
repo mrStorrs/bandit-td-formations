@@ -9,7 +9,8 @@ function fixture() {
   let clock = 0, nativeAuto = true, available = true;
   let current = { saveId: 12345678, mapId: 28, token: "forest-a", blocked: false,
     active: false, ready: false, victories: 0,
-    characters: [{ id: 1, identity: "one", x: 1, y: 0 }, { id: 2, identity: "two", x: 2, y: 0 }],
+    characters: [{ id: 1, identity: "one", x: 1, y: 0, mode: "采矿", priorityX: 4, priorityY: 0 },
+      { id: 2, identity: "two", x: 2, y: 0, mode: "自动", priorityX: 0, priorityY: 0 }],
     tiles: [1, 2, 3, 4].map(x => ({ x, y: 0, allowed: true, occupied: false })) };
   const first = snapshot(current);
   const second = { ...first, characters: first.characters.map(c => ({ ...c, x: c.x + 2 })) };

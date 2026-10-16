@@ -4,7 +4,8 @@ const assert = require("node:assert/strict");
 require("../src/formations.js");
 const { snapshot, planRestore, Hotkeys } = globalThis.BanditFormations;
 
-const character = (id, x, y = 0) => ({ id, identity: `hero-${id}`, x, y });
+const character = (id, x, y = 0) => ({ id, identity: `hero-${id}`, x, y,
+  mode: id === 1 ? "采矿" : "自动", priorityX: id === 1 ? 4 : 0, priorityY: 0 });
 function world(characters = [character(1, 0), character(2, 1)]) {
   return { saveId: 12345678, mapId: 1, token: "game-1", characters,
     tiles: Array.from({ length: 5 }, (_, x) => ({ x, y: 0, allowed: true, occupied: characters.some(c => c.x === x), building: 0 })) };
@@ -18,10 +19,45 @@ function harness() {
   return { keys, data, notices, applied, storage, setWorld: v => { current = v; }, advance: n => { time += n; } };
 }
 
-test("saving captures independent positions", () => {
+test("saving captures independent positions, jobs, and priority work targets", () => {
   const current = world(), saved = snapshot(current);
-  current.characters[0].x = 4;
-  assert.equal(saved.characters[0].x, 0);
+  Object.assign(current.characters[0], { x: 4, mode: "战斗", priorityX: 0 });
+  assert.equal(saved.version, 2);
+  assert.deepEqual(saved.characters[0], character(1, 0));
+});
+test("jobs restore even when no character needs to move", () => {
+  const current = world(), saved = snapshot(current);
+  Object.assign(current.characters[0], { mode: "战斗", priorityX: 0 });
+  const plan = planRestore(saved, current);
+  assert.equal(plan.moves.length, 0);
+  assert.deepEqual(plan.changes.map(({ id, mode, priorityX, priorityY }) => ({ id, mode, priorityX, priorityY })), [
+    { id: 1, mode: "采矿", priorityX: 4, priorityY: 0 },
+    { id: 2, mode: "自动", priorityX: 0, priorityY: 0 },
+  ]);
+});
+test("old position-only formations stay usable without inventing saved jobs", () => {
+  const current = world();
+  const saved = { version: 1, saveId: current.saveId, mapId: current.mapId,
+    characters: [{ id: 1, identity: "hero-1", x: 3, y: 0 }] };
+  const plan = planRestore(saved, current);
+  assert.equal(plan.moves.length, 1);
+  assert.deepEqual(plan.changes, []);
+});
+test("an unavailable priority tile clears the target and retains the saved job", () => {
+  const current = world(), saved = snapshot(current);
+  current.tiles.pop();
+  const change = planRestore(saved, current).changes[0];
+  assert.equal(change.mode, "采矿");
+  assert.equal(change.priorityX, 0);
+  assert.equal(change.priorityY, 0);
+});
+test("malformed or incomplete job data is rejected before any restore can apply", () => {
+  const current = world(), saved = snapshot(current);
+  for (const invalid of [{ mode: undefined }, { mode: "" }, { mode: 42 }, { mode: "x".repeat(101) },
+    { priorityX: undefined }, { priorityY: null }, { priorityX: NaN }, { priorityY: 0.5 }]) {
+    const bad = structuredClone(saved); Object.assign(bad.characters[1], invalid);
+    assert.throws(() => planRestore(bad, current), /invalid jobs/);
+  }
 });
 test("swaps and cycles are valid while preserving character identities", () => {
   const current = world([character(1, 0), character(2, 1), character(3, 2)]);
@@ -37,6 +73,7 @@ test("missing, renamed, or replaced characters are skipped", () => {
   const plan = planRestore(saved, current);
   assert.equal(plan.skipped, 2);
   assert.deepEqual(plan.moves.map(m => m.id), [1]);
+  assert.deepEqual(plan.changes.map(c => c.id), [1]);
 });
 test("unavailable tiles and malformed presets fail before applying anything", () => {
   const current = world(), saved = snapshot(world([character(1, 4)]));
