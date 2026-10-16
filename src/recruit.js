@@ -46,6 +46,8 @@
       this.spent = 0;
       this.message = "Choose work-grade or stat targets, then start rolling.";
       this.lastTick = -Infinity;
+      this.found = new Set();
+      this.dismissed = new Set();
     }
     start({ method, criteria } = {}) {
       if (this.running) return;
@@ -54,6 +56,8 @@
         if (!current || current.blocked) throw new Error("Open the recruitment screen and finish any pending action first.");
         if (!current.ready) throw new Error("Recruitment is refreshing. Try again in a moment.");
         if (!Number.isInteger(method) || !current.methods.some(m => m.id === method)) throw new Error("That recruitment method is not unlocked.");
+        this.found = new Set(current.candidates.filter(c => this.found.has(c.identity)).map(c => c.identity));
+        this.dismissed = new Set(this.found);
         this.match = match;
         this.method = method;
         this.token = current.token;
@@ -75,10 +79,12 @@
       this.message = message;
     }
     checkMatches(current) {
-      const matches = current.candidates.map(candidate => ({ candidate, reasons: this.match(candidate) })).filter(m => m.reasons);
+      const matches = current.candidates.filter(c => !c.locked && !this.dismissed.has(c.identity))
+        .map(candidate => ({ candidate, reasons: this.match(candidate) })).filter(m => m.reasons);
       if (!matches.length) return false;
       this.lock(matches.map(m => m.candidate), current);
-      this.stop(`Found and locked: ${matches.map(m => `${m.candidate.name} (${m.reasons.join(", ")})`).join("; ")}. Recruit them when ready.`);
+      for (const { candidate } of matches) this.found.add(candidate.identity);
+      this.stop(`Found and locked: ${matches.map(m => `${m.candidate.name} (${m.reasons.join(", ")})`).join("; ")}. Recruit them, or press Start rolling to skip these matches.`);
       this.notify(this.message);
       return true;
     }
@@ -93,15 +99,17 @@
           else if (!this.checkMatches(current) && this.now() >= this.nextRoll) {
             const method = current.methods.find(m => m.id === this.method);
             if (!method) throw new Error("That recruitment method is no longer available.");
-            if (current.candidates.length === 3 && current.candidates.every(c => c.locked)) throw new Error("All three recruits are locked. Unlock a slot before searching.");
+            if (current.candidates.length === 3 && current.candidates.every(c => c.locked && !this.dismissed.has(c.identity))) throw new Error("All three recruits are locked. Unlock a slot before searching.");
             if (!Number.isFinite(method.cost) || method.cost <= 0 || !Number.isFinite(current.money)) throw new Error("Could not read the refresh cost or copper balance.");
             if (current.money < method.cost) throw new Error("Not enough copper for another roll. Search stopped.");
             if (!current.ready) throw new Error("Recruitment is refreshing. Search stopped; try again in a moment.");
-            const after = this.roll(current, this.method);
+            const after = this.roll(current, this.method, current.candidates.filter(c => this.dismissed.has(c.identity)));
             this.rolls++;
             this.spent += method.cost;
             this.nextRoll = this.now() + 500;
             if (!after || after.token !== this.token) throw new Error("Recruitment screen changed during the roll.");
+            this.found.clear();
+            this.dismissed.clear();
             // Inspect synchronously before another tick or native refresh can
             // replace a matching recruit, including on the last affordable roll.
             if (!this.checkMatches(after)) this.message = "Searching…";

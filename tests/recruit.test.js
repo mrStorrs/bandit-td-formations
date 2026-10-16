@@ -8,7 +8,7 @@ vm.createContext(sandbox);
 vm.runInContext(fs.readFileSync(`${__dirname}/../src/recruit.js`, "utf8"), sandbox);
 const { RecruitSearch, compileRecruitCriteria, recruitCriteria } = sandbox.BanditFormations;
 const criteria = [{ type: "work-grade", minimum: 5 }];
-const candidate = (id, grade = 1) => ({ id, name: `Recruit ${id}`, locked: false,
+const candidate = (id, grade = 1, generation = 0) => ({ id, identity: `${id}:${grade}:${generation}`, name: `Recruit ${id}`, locked: false,
   stats: { str: 10, agi: 10, int: 10 },
   work: Array.from({ length: 9 }, (_, i) => ({ name: `Work ${i}`, grade: i === 8 ? grade : 1 })) });
 
@@ -16,14 +16,20 @@ function fixture() {
   let clock = 0, current = { token: "campaign:map:page", ready: true, blocked: false, money: 9000,
     methods: [{ id: 1, cost: 3000 }], candidates: [candidate(1), candidate(2), candidate(3)] };
   let active = true;
-  const rolls = [], locks = [], statuses = [], notices = [], queue = [];
+  const rolls = [], locks = [], unlocks = [], statuses = [], notices = [], queue = [];
   const search = new RecruitSearch({ now: () => clock, context: () => current,
-    roll(c, method) { rolls.push(method); c.money -= 3000; c.candidates = queue.shift() || [candidate(1), candidate(2), candidate(3)]; return c; },
+    roll(c, method, dismissed) {
+      for (const old of c.candidates) if (dismissed.some(d => d.identity === old.identity)) { old.locked = false; unlocks.push(old.id); }
+      rolls.push(method); c.money -= 3000;
+      c.candidates = (queue.shift() || [candidate(1), candidate(2), candidate(3)])
+        .map(next => c.candidates.find(old => old.id === next.id && old.locked) || next);
+      return c;
+    },
     lock(candidates) { for (const c of candidates) { locks.push(c.id); c.locked = true; } },
     suspend() { const original = active; active = false; return () => { active = original; }; },
     status: s => statuses.push(s), notify: s => notices.push(s),
   });
-  return { search, current, rolls, locks, statuses, notices, queue,
+  return { search, current, rolls, locks, unlocks, statuses, notices, queue,
     get active() { return active; }, set active(value) { active = value; },
     setCurrent(value) { current = value; },
     start(options = {}) { search.start({ method: 1, criteria, ...options }); },
@@ -112,11 +118,60 @@ test("invalid or unknown filters and unreadable grades fail closed", () => {
   assert.throws(() => match(c), /nine work grades/);
   c.work.pop(); assert.throws(() => match(c), /nine work grades/);
 });
-test("an existing match is locked without spending, including a match already locked", () => {
-  const f = fixture(); f.current.candidates[1] = candidate(2, 6); f.current.candidates[1].locked = true;
+test("an existing unlocked match is locked without spending", () => {
+  const f = fixture(); f.current.candidates[1] = candidate(2, 6);
   f.start(); f.tick();
   assert.equal(f.search.running, false); assert.deepEqual(f.rolls, []);
   assert.deepEqual(f.locks, [2]); assert.equal(f.current.money, 9000); assert.equal(f.active, true);
+});
+test("Start after a match skips it until a paid roll, then stops for the next match even if identical", () => {
+  const f = fixture(); f.current.candidates[1] = candidate(2, 6);
+  f.start(); assert.equal(f.search.running, false); assert.deepEqual(f.locks, [2]);
+  f.start(); assert.equal(f.search.running, true);
+  f.tick(200); f.tick(200);
+  assert.deepEqual(f.rolls, []); assert.deepEqual(f.unlocks, []);
+  assert.equal(f.current.candidates[1].locked, true, "keep the previous match protected before paying");
+  f.queue.push([candidate(1), candidate(2, 6), candidate(3)]);
+  f.tick(200); f.tick();
+  assert.deepEqual(f.rolls, [1]); assert.deepEqual(f.unlocks, [2]); assert.deepEqual(f.locks, [2, 2]);
+  assert.equal(f.search.running, false); assert.equal(f.search.spent, 3000);
+  f.start(); f.tick(); assert.equal(f.search.running, true); assert.deepEqual(f.rolls, [1, 1]);
+});
+test("Start releases all three previous auto-matches instead of reporting all slots locked", () => {
+  const f = fixture(); f.current.candidates = [candidate(1, 5), candidate(2, 6), candidate(3, 7)];
+  f.start(); f.start(); f.queue.push([candidate(1), candidate(2), candidate(3, 7)]); f.tick();
+  assert.deepEqual(f.unlocks, [1, 2, 3]); assert.deepEqual(f.rolls, [1]);
+  assert.deepEqual(f.current.candidates.map(c => c.locked), [false, false, true]);
+});
+test("manually locked recruits are kept and do not repeatedly stop the search", () => {
+  const f = fixture(), keeper = candidate(1, 7); keeper.locked = true; f.current.candidates[0] = keeper;
+  f.queue.push([candidate(1), candidate(2, 5), candidate(3)]);
+  f.start(); assert.equal(f.search.running, true); f.tick();
+  assert.deepEqual(f.locks, [2]); assert.equal(f.current.candidates[0], keeper);
+  f.start(); f.tick();
+  assert.deepEqual(f.unlocks, [2]); assert.equal(f.current.candidates[0], keeper); assert.equal(keeper.locked, true);
+});
+test("Stop, no funds, interruptions, and invalid options keep declined locks available for a later retry", () => {
+  for (const interrupt of [f => f.search.stop(), f => { f.current.money = 2999; f.tick(); },
+    f => { f.current.blocked = true; f.tick(); }, f => f.search.leave()]) {
+    const f = fixture(); f.current.candidates[1] = candidate(2, 6); f.start();
+    f.start({ criteria: [] }); assert.equal(f.search.running, false);
+    f.start(); interrupt(f);
+    assert.deepEqual(f.unlocks, []); assert.deepEqual(f.rolls, []); assert.equal(f.current.candidates[1].locked, true);
+    f.current.money = 9000; f.current.blocked = false; f.start(); f.tick();
+    assert.deepEqual(f.unlocks, [2]); assert.deepEqual(f.rolls, [1]);
+  }
+});
+test("a new match before the next roll does not lose previously declined matches", () => {
+  const f = fixture(); f.current.candidates[1] = candidate(2, 6); f.start(); f.start();
+  f.current.candidates[2] = candidate(3, 7); f.tick(200);
+  assert.equal(f.search.running, false); assert.deepEqual(f.locks, [2, 3]);
+  f.start(); f.tick(); assert.deepEqual(f.unlocks, [2, 3]); assert.deepEqual(f.rolls, [1]);
+});
+test("replacement recruits are not mistaken for the previously found candidate", () => {
+  const f = fixture(); f.current.candidates[1] = candidate(2, 6); f.start();
+  const replacement = candidate(2, 6, 1); replacement.locked = true; f.current.candidates[1] = replacement;
+  f.start(); f.tick(); assert.deepEqual(f.unlocks, []); assert.equal(replacement.locked, true);
 });
 test("rolls once at a time, locks every match immediately, and never rolls past it", () => {
   const f = fixture();

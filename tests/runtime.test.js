@@ -252,6 +252,7 @@ function recruitFixture() {
     for (let field = 22; field <= 30; field++) f.save.setAt(10, id, field, 3);
   }
   const originalCall = f.runtime.callFunction;
+  let refreshes = 0;
   f.runtime.callFunction = (name, ...args) => {
     if (name === "文本") return args[0];
     if (name === "主动寻访费用") return args[0] * 3000;
@@ -259,7 +260,10 @@ function recruitFixture() {
     if (name === "主动寻访") {
       assert.ok([...groups.values()].every(g => !g.IsGroupActive()), "native auto and manual clicks must be suspended before rolling");
       f.save.setAt(f.save.getAt(1, 2, 0) - args[0] * 3000, 1, 2, 0);
-      if (f.refresh !== false) { f.save.setAt("Match", 2, 1, 3); f.save.setAt(75, 2, 30, 3); }
+      if (f.onRoll) f.onRoll();
+      else if (f.refresh !== false && f.save.getAt(2, 0, 3) > 0) {
+        f.save.setAt(`Match ${++refreshes}`, 2, 1, 3); f.save.setAt(75, 2, 30, 3);
+      }
     }
     return originalCall(name, ...args);
   };
@@ -312,6 +316,46 @@ test("recruit adapter stops when native refresh fails, without spending repeated
   assert.equal(f.calls.filter(c => c[0] === "主动寻访").length, 1);
   assert.ok([...f.groups.values()].every(g => g.IsGroupActive()));
   assert.match(f.messages.findLast(m => m[0] === "recruit-status")[1].message, /did not refresh/);
+});
+test("recruit restart unlocks only the previous match immediately before native refresh and stops on its replacement", async () => {
+  const f = recruitFixture(); f.save.setAt(-1, 1, 0, 3); f.save.setAt(90, 1, 22, 3);
+  f.save.setAt(75, 2, 30, 3);
+  f.start(); assert.equal(f.save.getAt(2, 0, 3), -1);
+  const keeper = f.save.getAt(1, 1, 3);
+  f.start(); await f.tick();
+  assert.equal(f.save.getAt(2, 0, 3), -1, "keep the match locked during the startup delay");
+  await f.tick(); await f.tick(); await f.tick();
+  assert.equal(f.save.getAt(2, 1, 3), "Match 1", "native refresh replaced the unlocked result");
+  assert.equal(f.save.getAt(2, 0, 3), -1, "new qualifying result is locked again");
+  assert.equal(f.save.getAt(1, 0, 3), -1); assert.equal(f.save.getAt(1, 1, 3), keeper);
+  assert.equal(f.calls.filter(c => c[0] === "主动寻访").length, 1); assert.equal(f.save.getAt(1, 2, 0), 6000);
+  f.start(); await f.tick(); await f.tick();
+  assert.equal(f.save.getAt(2, 1, 3), "Match 2"); assert.equal(f.save.getAt(2, 0, 3), -1);
+  assert.ok([...f.groups.values()].every(g => g.IsGroupActive()));
+});
+test("failed native refresh restores unchanged declined locks so Start can retry", async () => {
+  const f = recruitFixture(); f.save.setAt(75, 2, 30, 3); f.start();
+  f.refresh = false; f.start(); await f.tick(); await f.tick();
+  assert.equal(f.save.getAt(2, 0, 3), -1);
+  assert.match(f.messages.findLast(m => m[0] === "recruit-status")[1].message, /did not refresh/);
+  assert.ok([...f.groups.values()].every(g => g.IsGroupActive()));
+  f.refresh = true; f.start(); await f.tick(); await f.tick();
+  assert.equal(f.save.getAt(2, 1, 3), "Match 1"); assert.equal(f.save.getAt(2, 0, 3), -1);
+});
+test("declined identities include campaign and full recruit data, excluding only the lock marker", async () => {
+  for (const change of [f => f.save.setAt(98765432, 0, 1, 0), f => f.save.setAt(20, 2, 57, 3)]) {
+    const f = recruitFixture(); f.save.setAt(75, 2, 30, 3); f.start(); change(f);
+    f.start(); await f.tick(); await f.tick();
+    assert.equal(f.save.getAt(2, 1, 3), "Recruit 2"); assert.equal(f.save.getAt(2, 0, 3), -1);
+  }
+});
+test("native failure after replacing a declined recruit never locks the replacement as the old result", async () => {
+  const f = recruitFixture(); f.save.setAt(75, 2, 30, 3); f.start();
+  f.onRoll = () => { f.save.setAt("Replacement", 2, 1, 3); throw new Error("refresh interrupted"); };
+  f.start(); await f.tick(); await f.tick();
+  assert.equal(f.save.getAt(2, 0, 3), 2);
+  assert.match(f.messages.findLast(m => m[0] === "recruit-status")[1].message, /refresh interrupted/);
+  assert.ok([...f.groups.values()].every(g => g.IsGroupActive()));
 });
 test("recruit adapter restores each group's previous state on layout exit", () => {
   const f = recruitFixture(); f.groups.get("自动招募function").SetGroupActive(false);

@@ -136,12 +136,21 @@ Leave a stat field blank to ignore it. Set **Minimum grade** to **Off** to searc
 only for stats. At least one target must be enabled before rolling can start.
 Existing grade settings are preserved; the new stat fields start blank.
 
-The search checks all three existing candidates before spending, then rolls at
+The search checks existing unlocked candidates before spending, then rolls at
 most twice per second. On a match, it immediately stops, locks every matching
 candidate with the game's normal padlock, and reports their matching grades/stats.
-**Hire the recruits yourself when ready.** Existing locks remain intact. Matching
-locks survive timed refreshes and are stored in the normal game save. Unlock or
-hire a matching candidate before searching again for the same target.
+**Hire the recruits yourself when ready, or click Start rolling again to skip
+the matches and keep searching.** The next search unlocks those same results
+immediately before its first paid roll, then stops and locks the next matches.
+Changing the targets or method before restarting uses the new settings.
+
+Recruits locked manually before a search are kept and ignored by the filters.
+The mod remembers its own matches for the current game session, checking their
+full recruit data so a different recruit in the same slot is not unlocked.
+After a game restart, existing locks are treated as manual locks; unlock any
+you no longer want. Matching locks survive timed refreshes and are stored in the
+normal game save. Stop, insufficient funds, or an interruption before the next
+paid roll leaves the previous matches locked for a later retry.
 
 Click **Stop** at any time. The search also stops when copper runs out, all three
 slots are locked, the recruitment screen closes, the campaign/map changes,
@@ -178,7 +187,7 @@ python3 manage.py install --game-dir "/path/to/Steam/steamapps/common/塔防山�
 
 On Windows, use `py -3` in place of `python3` if appropriate. Restart the game
 after installing. Look for the “Formations ready” message on startup.
-The startup message includes the installed version number (currently 1.6.0).
+The startup message includes the installed version number (currently 1.6.1).
 
 The installer backs up the input archive in `cjs-formations-backups/` beside the
 game, verifies the result, then replaces `package.nw` atomically. It does not
@@ -277,6 +286,15 @@ displayed values, invalid-input handling, and thresholds persisting after reload
 A native paid roll spent exactly 3,000 copper, locked all its STR matches, and
 stopped before another roll. This update still needs a manual Steam/NW.js check.
 
+Version 1.6.1 passes 113 JavaScript tests and four installer tests. Restart tests
+cover skipping previous matches, all three slots matching, manual locks,
+cancelled/unaffordable retries, replacement identities, and failed refreshes.
+In copied build 25975458, four successive native paid rolls each replaced the
+declined matches and stopped on the next matches. The check preserved a manually
+locked recruit, verified 12,000 total copper spent, retried after insufficient
+funds, and resumed after closing/reopening recruitment. This update still needs
+a manual Steam/NW.js check.
+
 To check the controls in-game:
 
 1. Arrange your characters, choose their jobs and priority work targets, then
@@ -296,7 +314,8 @@ To check the controls in-game:
    that it does not move characters or summon on the other map.
 8. Open recruitment, choose a target grade and affordable method in **Auto
    recruit**, then start. Check that a matching work grade stops rolling and
-   locks the candidate. Hire them manually. Also check the Stop button.
+   locks the candidate. Click **Start rolling** again to skip that result and
+   find the next match. Check that manual locks are kept and Stop still works.
 9. Hold `Shift + 1` to save the building layout. Move buildings normally and
    hold `Shift + 2`, then tap each combination to restore it. Check levels and
    occupied tiles, including a swap with an empty buffer area available.

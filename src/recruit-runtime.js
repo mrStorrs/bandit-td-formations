@@ -4,6 +4,9 @@
     const all = name => runtime.objects[name]?.getAllInstances() || [];
     const first = name => runtime.objects[name]?.getFirstInstance();
     const clean = text => String(text).replace(/\[[^\]]*\]/g, "");
+    // Exclude the lock marker, which changes when a result is held or skipped.
+    const identity = (save, saveId, id) => JSON.stringify([saveId, id,
+      ...Array.from({ length: 57 }, (_, field) => save.getAt(id, field + 1, 3))]);
     const refreshPage = () => runtime.callFunction("刷新招募页面", 8, "招募", "二级页面", 0, 0, 0, 0, 0, 0, 0);
     function context() {
       if (!engine.GetMainRunningLayout() || runtime.layout.name !== "主界面") return null;
@@ -31,7 +34,7 @@
           const base = save.getAt(id, 10 + i, 3), bonus = save.getAt(id, 13 + i, 3);
           return [stat, Number.isFinite(base) && Number.isFinite(bonus) ? (base + bonus) / 10 : NaN];
         }));
-        candidates.push({ id, name: clean(save.getAt(id, 1, 3)), locked: state === -1, work, stats });
+        candidates.push({ id, identity: identity(save, saveId, id), name: clean(save.getAt(id, 1, 3)), locked: state === -1, work, stats });
       }
       // Native recruitment readiness is a static event-sheet variable, not a
       // runtime.globalVars property. Its SID is shared by both supported builds.
@@ -52,16 +55,31 @@
         groups.forEach(group => group.SetGroupActive(false));
         return () => groups.forEach((group, i) => group.SetGroupActive(states[i]));
       },
-      roll(current, method) {
+      roll(current, method, dismissed) {
         const latest = context();
         if (!latest || latest.token !== current.token || latest.blocked || !latest.ready ||
             !latest.methods.some(m => m.id === method && latest.money >= m.cost)) throw new Error("Recruitment is no longer ready. Search stopped.");
         const fingerprint = () => JSON.stringify(Array.from({ length: 3 }, (_, i) =>
           Array.from({ length: 58 }, (_, field) => latest.save.getAt(i + 1, field, 3))));
+        const unlock = latest.candidates.filter(c => c.locked && dismissed.some(d => d.identity === c.identity));
+        // Keep results protected until a paid refresh is ready. Never release
+        // an unrelated lock or a replacement recruit that reused the slot.
+        for (const candidate of unlock) latest.save.setAt(candidate.id, candidate.id, 0, 3);
         const before = fingerprint();
-        runtime.callFunction("主动寻访", method);
-        if (fingerprint() === before) throw new Error("The game did not refresh any recruits. Search stopped.");
-        return context();
+        try {
+          runtime.callFunction("主动寻访", method);
+          if (fingerprint() === before) throw new Error("The game did not refresh any recruits. Search stopped.");
+          return context();
+        } catch (error) {
+          const remaining = context();
+          if (remaining?.token === current.token) {
+            for (const candidate of unlock) {
+              if (remaining.candidates.some(c => c.identity === candidate.identity)) remaining.save.setAt(-1, candidate.id, 0, 3);
+            }
+            if (unlock.length) refreshPage();
+          }
+          throw error;
+        }
       },
       lock(candidates, current) {
         const latest = context();

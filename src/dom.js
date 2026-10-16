@@ -100,7 +100,7 @@
         this.recruitInfo = make("div", "", panel);
         this.recruitInfo.style.cssText = "margin-top:8px;line-height:1.4";
         this.recruitInfo.setAttribute("role", "status");
-        make("div", "Stop on ANY target: work grade or better, OR a displayed stat above its number. Blank stat fields are off. Matches are locked for you to hire.", panel).style.cssText = "margin-top:5px;color:#c5ced1;font-size:12px";
+        make("div", "Stop on ANY target: work grade or better, OR a displayed stat above its number. Blank stat fields are off. Hire a match or Start rolling again to skip it. Manual locks are kept.", panel).style.cssText = "margin-top:5px;color:#c5ced1;font-size:12px";
         this.recruitOptions = { minimum: 5, method: 1, stats: { str: null, agi: null, int: null } };
         try {
           const saved = JSON.parse(localStorage.getItem("cjs-formations:recruit-options:v1"));
