@@ -97,31 +97,44 @@
           input.placeholder = "Off";
           input.style.cssText = "width:72px;font:inherit";
         }
+        const moneyRow = make("div", "", panel);
+        moneyRow.style.cssText = "margin-top:10px";
+        const moneyLabel = make("label", "Minimum copper ", moneyRow);
+        this.recruitMoney = make("input", "", moneyLabel);
+        this.recruitMoney.id = "cjs-recruit-money";
+        this.recruitMoney.type = "number"; this.recruitMoney.min = "0"; this.recruitMoney.step = "any";
+        this.recruitMoney.placeholder = "0";
+        this.recruitMoney.style.cssText = "width:120px;font:inherit";
+        make("span", " Keep this much; blank or 0 = no reserve.", moneyRow).style.cssText = "color:#c5ced1;font-size:12px";
         this.recruitInfo = make("div", "", panel);
         this.recruitInfo.style.cssText = "margin-top:8px;line-height:1.4";
         this.recruitInfo.setAttribute("role", "status");
         make("div", "Stop on ANY target: work grade or better, OR a displayed stat above its number. Blank stat fields are off. Hire a match or Start rolling again to skip it. Manual locks are kept.", panel).style.cssText = "margin-top:5px;color:#c5ced1;font-size:12px";
-        this.recruitOptions = { minimum: 5, method: 1, stats: { str: null, agi: null, int: null } };
+        this.recruitOptions = { minimum: 5, method: 1, minimumMoney: 0, stats: { str: null, agi: null, int: null } };
         try {
           const saved = JSON.parse(localStorage.getItem("cjs-formations:recruit-options:v1"));
           if (Number.isInteger(saved?.minimum) && saved.minimum >= 0 && saved.minimum <= state.grades.length) this.recruitOptions.minimum = saved.minimum;
           if (Number.isInteger(saved?.method) && saved.method >= 1 && saved.method <= 5) this.recruitOptions.method = saved.method;
+          if (Number.isFinite(saved?.minimumMoney) && saved.minimumMoney >= 0) this.recruitOptions.minimumMoney = saved.minimumMoney;
           for (const stat of Object.keys(this.recruitStats)) {
             if (Number.isFinite(saved?.stats?.[stat]) && saved.stats[stat] >= 0) this.recruitOptions.stats[stat] = saved.stats[stat];
           }
         } catch { /* A search still works when browser storage is unavailable. */ }
         this.recruitGrade.value = String(this.recruitOptions.minimum);
+        this.recruitMoney.value = String(this.recruitOptions.minimumMoney);
         for (const [stat, input] of Object.entries(this.recruitStats)) input.value = this.recruitOptions.stats[stat] === null ? "" : String(this.recruitOptions.stats[stat]);
         const saveOptions = () => {
-          const invalid = Object.values(this.recruitStats).find(input => !input.checkValidity());
+          const invalid = [...Object.values(this.recruitStats), this.recruitMoney].find(input => !input.checkValidity());
           if (invalid) { invalid.reportValidity(); return false; }
           this.recruitOptions = { minimum: Number(this.recruitGrade.value), method: Number(this.recruitMethod.value),
+            minimumMoney: Number(this.recruitMoney.value),
             stats: Object.fromEntries(Object.entries(this.recruitStats).map(([stat, input]) => [stat, input.value === "" ? null : Number(input.value)])) };
           try { localStorage.setItem("cjs-formations:recruit-options:v1", JSON.stringify(this.recruitOptions)); } catch { /* Session settings remain usable. */ }
           return true;
         };
         this.recruitGrade.addEventListener("change", saveOptions);
         this.recruitMethod.addEventListener("change", saveOptions);
+        this.recruitMoney.addEventListener("change", saveOptions);
         for (const input of Object.values(this.recruitStats)) input.addEventListener("change", saveOptions);
         this.recruitButton.addEventListener("click", () => {
           if (this.recruitState.running) this.PostToRuntime("recruit-stop", {});
@@ -132,7 +145,7 @@
               if (above !== null) criteria.push({ type: "stat", stat, above });
             }
             this.PostToRuntime("cancel", {});
-            this.PostToRuntime("recruit-start", { method: this.recruitOptions.method, criteria });
+            this.PostToRuntime("recruit-start", { method: this.recruitOptions.method, criteria, minimumMoney: this.recruitOptions.minimumMoney });
           }
         });
         for (const event of ["pointerdown", "pointerup", "pointermove", "pointerrawupdate", "pointercancel", "mousedown", "mouseup", "mousemove", "click", "dblclick", "touchstart", "touchend", "touchmove", "touchcancel", "keydown", "keyup", "wheel"]) {
@@ -153,7 +166,7 @@
         }
         if (state.methods.some(m => m.id === this.recruitOptions.method)) this.recruitMethod.value = String(this.recruitOptions.method);
       }
-      this.recruitGrade.disabled = this.recruitMethod.disabled = state.running;
+      this.recruitGrade.disabled = this.recruitMethod.disabled = this.recruitMoney.disabled = state.running;
       for (const input of Object.values(this.recruitStats)) input.disabled = state.running;
       this.recruitButton.disabled = !state.running && !state.methods.length;
       this.recruitButton.textContent = state.running ? "Stop" : "Start rolling";

@@ -55,10 +55,12 @@
         groups.forEach(group => group.SetGroupActive(false));
         return () => groups.forEach((group, i) => group.SetGroupActive(states[i]));
       },
-      roll(current, method, dismissed) {
-        const latest = context();
+      roll(current, method, dismissed, minimumMoney) {
+        const latest = context(), option = latest?.methods.find(m => m.id === method);
         if (!latest || latest.token !== current.token || latest.blocked || !latest.ready ||
-            !latest.methods.some(m => m.id === method && latest.money >= m.cost)) throw new Error("Recruitment is no longer ready. Search stopped.");
+            !Number.isFinite(option?.cost) || option.cost <= 0 || !Number.isFinite(latest.money) ||
+            latest.money < option.cost) throw new Error("Recruitment is no longer ready. Search stopped.");
+        if (latest.money - option.cost < minimumMoney) throw new Error(`Minimum copper limit: ${minimumMoney.toLocaleString()}. Another roll would go below it. Search stopped.`);
         const fingerprint = () => JSON.stringify(Array.from({ length: 3 }, (_, i) =>
           Array.from({ length: 58 }, (_, field) => latest.save.getAt(i + 1, field, 3))));
         const unlock = latest.candidates.filter(c => c.locked && dismissed.some(d => d.identity === c.identity));

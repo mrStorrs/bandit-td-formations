@@ -16,8 +16,9 @@ A character/building formation, combat, and recruitment mod for Bandit Simulator
   while waiting, switch to formation 2 when Summon is ready, summon the spirit
   beast, then return to formation 1 after a win and repeat.
 - **Auto recruit panel on the recruitment screen:** choose a minimum work grade,
-  optional STR/AGI/INT thresholds, and a recruitment method, then start rolling.
-  Stop and lock recruits when **any** selected target matches.
+  optional STR/AGI/INT thresholds, a minimum copper reserve, and a recruitment
+  method, then start rolling. Stop and lock recruits when **any** selected target
+  matches, or stop before another roll would spend below the reserve.
 - A message confirms saving or restoring. An empty slot leaves characters alone.
 - Formations persist locally across restarts and are separate for each campaign
   save identifier and current map. They are not included in Steam Cloud saves.
@@ -136,6 +137,20 @@ Leave a stat field blank to ignore it. Set **Minimum grade** to **Off** to searc
 only for stats. At least one target must be enabled before rolling can start.
 Existing grade settings are preserved; the new stat fields start blank.
 
+Set **Minimum copper** to the amount you want to keep. Before each paid refresh,
+the search checks the current balance and that method's cost, and stops if the
+roll would leave less than your minimum. A roll that leaves exactly the minimum
+is allowed. For example, with a `10,000` minimum and `3,000` copper rolls, it
+stops at `12,000` instead of spending down to `9,000`. If your balance is already
+below the minimum, it does not pay for a roll.
+
+Blank or `0` means no reserve, which is the default for existing settings.
+The minimum is remembered across restarts. Click **Stop** to edit it while a
+search is running, then **Start rolling** to use the new amount. A budget stop
+leaves previous matching recruits locked; lowering the minimum or earning more
+copper lets Start skip those results on the next paid roll. Existing matches
+and matches on the last allowed roll are still checked and locked.
+
 The search checks existing unlocked candidates before spending, then rolls at
 most twice per second. On a match, it immediately stops, locks every matching
 candidate with the game's normal padlock, and reports their matching grades/stats.
@@ -152,10 +167,11 @@ you no longer want. Matching locks survive timed refreshes and are stored in the
 normal game save. Stop, insufficient funds, or an interruption before the next
 paid roll leaves the previous matches locked for a later retry.
 
-Click **Stop** at any time. The search also stops when copper runs out, all three
-slots are locked, the recruitment screen closes, the campaign/map changes,
-another game action blocks recruitment, or the game loses focus. It never starts
-automatically. Grade, stat, and method preferences are remembered locally across game
+Click **Stop** at any time. The search also stops when copper runs out, the next
+roll would cross the minimum copper limit, all three slots are locked, the
+recruitment screen closes, the campaign/map changes, another game action blocks
+recruitment, or the game loses focus. It never starts automatically. Grade, stat,
+method, and minimum copper preferences are remembered locally across game
 restarts. The panel reports rolls and copper spent for the current search.
 
 During a search, the game's timed recruitment refresh, built-in auto-recruit,
@@ -187,7 +203,7 @@ python3 manage.py install --game-dir "/path/to/Steam/steamapps/common/塔防山�
 
 On Windows, use `py -3` in place of `python3` if appropriate. Restart the game
 after installing. Look for the “Formations ready” message on startup.
-The startup message includes the installed version number (currently 1.6.1).
+The startup message includes the installed version number (currently 1.7.0).
 
 The installer backs up the input archive in `cjs-formations-backups/` beside the
 game, verifies the result, then replaces `package.nw` atomically. It does not
@@ -295,6 +311,17 @@ locked recruit, verified 12,000 total copper spent, retried after insufficient
 funds, and resumed after closing/reopening recruitment. This update still needs
 a manual Steam/NW.js check.
 
+Version 1.7.0 passes 123 JavaScript tests and four installer tests. Minimum-copper
+tests cover exact boundaries, changing balances and costs, invalid settings,
+saved preferences, matches on the last allowed roll, and preserving declined
+locks when a retry exceeds the budget. The native adapter rechecks the balance
+and cost immediately before unlocking previous results or paying.
+In copied build 25975458, mouse/keyboard checks verified stopping above the
+reserve, allowing an exact-boundary roll, rejecting negative input, clearing the
+reserve, and preserving the setting after reload. Five native paid rolls also
+verified matches at the limit, manual locks, and retrying declined matches after
+lowering the minimum. This update still needs a manual Steam/NW.js check.
+
 To check the controls in-game:
 
 1. Arrange your characters, choose their jobs and priority work targets, then
@@ -325,6 +352,10 @@ To check the controls in-game:
     Check that either a B-or-better work grade or any stat above its threshold
     stops rolling and locks the recruit. Try grade **Off** with only one stat
     enabled, then restart and check that the settings are remembered.
+11. Set **Minimum copper** and start rolling. Check that the search stops before
+    another roll would leave less than that amount. Lower the minimum and click
+    Start again to continue; clear it or use `0` to remove the reserve. Restart
+    and check that the minimum is remembered without starting a search.
 
 ## Development
 
@@ -367,15 +398,18 @@ Building presets use `cjs-formations:buildings:v1:<saveId>:<mapId>:<slot>` and
 store building slots, types, and coordinates, without overwriting upgrades.
 Recruitment preferences use DOM local storage at
 `cjs-formations:recruit-options:v1`; the running state is never persisted.
+The `minimumMoney` option is a nonnegative copper reserve (default `0`), separate
+from the matching criteria. It applies to every paid roll regardless of targets.
 
 Recruitment rules have the shape `[{ type: "work-grade", minimum: 5 }]` (`A` and
 better). `compileRecruitCriteria` validates and snapshots the rules. Each entry
 in `recruitCriteria` supplies `validate(rule)` and `match(candidate, rule)`;
-matching returns an array of reasons or `null`. All criteria must match the
-**same candidate**, while the work-grade criterion accepts **any** category.
-To add talent or stat filters, extend the candidate data in the runtime adapter,
-add a criterion handler, and expose its settings in the panel. Unknown criteria
-or unreadable grades stop the search before another roll.
+matching returns an array of reasons or `null`. A candidate qualifies when
+**any** enabled criterion matches; the work-grade criterion accepts **any**
+category. Stat rules use `{ type: "stat", stat: "str", above: 20 }` (also `agi`
+and `int`). To add talent filters, extend the candidate data in the runtime
+adapter, add a criterion handler, and expose its settings in the panel. Unknown
+criteria or unreadable enabled targets stop the search before another roll.
 
 References: [Construct runtime scripting](https://www.construct.net/en/make-games/manuals/construct-3/scripting/scripting-reference/iruntime),
 [Array scripting](https://www.construct.net/en/make-games/manuals/construct-3/scripting/scripting-reference/plugin-interfaces/array).

@@ -49,9 +49,10 @@
       this.found = new Set();
       this.dismissed = new Set();
     }
-    start({ method, criteria } = {}) {
+    start({ method, criteria, minimumMoney = 0 } = {}) {
       if (this.running) return;
       try {
+        if (!Number.isFinite(minimumMoney) || minimumMoney < 0) throw new Error("Invalid minimum copper. Enter zero or a positive amount.");
         const match = compileRecruitCriteria(criteria), current = this.context();
         if (!current || current.blocked) throw new Error("Open the recruitment screen and finish any pending action first.");
         if (!current.ready) throw new Error("Recruitment is refreshing. Try again in a moment.");
@@ -60,6 +61,7 @@
         this.dismissed = new Set(this.found);
         this.match = match;
         this.method = method;
+        this.minimumMoney = minimumMoney;
         this.token = current.token;
         this.rolls = this.spent = 0;
         this.release = this.suspend();
@@ -67,7 +69,7 @@
         // Let native click animations/actions already in flight finish first.
         this.nextRoll = this.now() + 500;
         this.message = "Searching…";
-        this.checkMatches(current);
+        if (!this.checkMatches(current)) this.checkBudget(current);
       } catch (error) { this.stop(error.message); }
       this.publish();
     }
@@ -88,6 +90,16 @@
       this.notify(this.message);
       return true;
     }
+    checkBudget(current) {
+      const method = current.methods.find(m => m.id === this.method);
+      if (!method) throw new Error("That recruitment method is no longer available.");
+      if (!Number.isFinite(method.cost) || method.cost <= 0 || !Number.isFinite(current.money)) throw new Error("Could not read the refresh cost or copper balance.");
+      if (this.minimumMoney > 0 && current.money - method.cost < this.minimumMoney) {
+        throw new Error(`Minimum copper limit: ${this.minimumMoney.toLocaleString()}. Another roll would go below it. Search stopped.`);
+      }
+      if (current.money < method.cost) throw new Error("Not enough copper for another roll. Search stopped.");
+      return method;
+    }
     tick() {
       if (this.now() - this.lastTick < 200) return;
       this.lastTick = this.now();
@@ -96,23 +108,25 @@
         if (this.running) {
           if (!current || current.token !== this.token) this.stop("Recruitment screen changed. Search stopped.");
           else if (current.blocked) this.stop("Another game action interrupted the search. Press Start rolling to retry.");
-          else if (!this.checkMatches(current) && this.now() >= this.nextRoll) {
-            const method = current.methods.find(m => m.id === this.method);
-            if (!method) throw new Error("That recruitment method is no longer available.");
-            if (current.candidates.length === 3 && current.candidates.every(c => c.locked && !this.dismissed.has(c.identity))) throw new Error("All three recruits are locked. Unlock a slot before searching.");
-            if (!Number.isFinite(method.cost) || method.cost <= 0 || !Number.isFinite(current.money)) throw new Error("Could not read the refresh cost or copper balance.");
-            if (current.money < method.cost) throw new Error("Not enough copper for another roll. Search stopped.");
-            if (!current.ready) throw new Error("Recruitment is refreshing. Search stopped; try again in a moment.");
-            const after = this.roll(current, this.method, current.candidates.filter(c => this.dismissed.has(c.identity)));
-            this.rolls++;
-            this.spent += method.cost;
-            this.nextRoll = this.now() + 500;
-            if (!after || after.token !== this.token) throw new Error("Recruitment screen changed during the roll.");
-            this.found.clear();
-            this.dismissed.clear();
-            // Inspect synchronously before another tick or native refresh can
-            // replace a matching recruit, including on the last affordable roll.
-            if (!this.checkMatches(after)) this.message = "Searching…";
+          else if (!this.checkMatches(current)) {
+            const method = this.checkBudget(current);
+            if (this.now() >= this.nextRoll) {
+              if (current.candidates.length === 3 && current.candidates.every(c => c.locked && !this.dismissed.has(c.identity))) throw new Error("All three recruits are locked. Unlock a slot before searching.");
+              if (!current.ready) throw new Error("Recruitment is refreshing. Search stopped; try again in a moment.");
+              const after = this.roll(current, this.method, current.candidates.filter(c => this.dismissed.has(c.identity)), this.minimumMoney);
+              this.rolls++;
+              this.spent += method.cost;
+              this.nextRoll = this.now() + 500;
+              if (!after || after.token !== this.token) throw new Error("Recruitment screen changed during the roll.");
+              this.found.clear();
+              this.dismissed.clear();
+              // Inspect synchronously before another tick or native refresh can
+              // replace a matching recruit, including on the last affordable roll.
+              if (!this.checkMatches(after)) {
+                this.checkBudget(after);
+                this.message = "Searching…";
+              }
+            }
           }
         }
       } catch (error) { this.stop(error.message); }

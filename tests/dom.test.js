@@ -132,7 +132,8 @@ test("recruit controls submit the chosen grade/method and remember settings with
   f.handlers["recruit-status"](recruitState);
   assert.equal(f.dom.recruitGrade.value, "6"); assert.equal(f.messages.length, 0);
   f.dom.recruitGrade.value = "5"; f.dom.recruitButton.dispatch("click");
-  assert.deepEqual(JSON.parse(JSON.stringify(f.messages)), [["cancel", {}], ["recruit-start", { method: 1, criteria: [{ type: "work-grade", minimum: 5 }] }]]);
+  assert.equal(f.dom.recruitMoney.value, "0", "old preferences default to no reserve");
+  assert.deepEqual(JSON.parse(JSON.stringify(f.messages)), [["cancel", {}], ["recruit-start", { method: 1, minimumMoney: 0, criteria: [{ type: "work-grade", minimum: 5 }] }]]);
   assert.equal(JSON.parse(f.stored.get("cjs-formations:recruit-options:v1")).minimum, 5);
   f.handlers["recruit-status"]({ ...recruitState, running: true, rolls: 3, spent: 9000 });
   assert.equal(f.dom.recruitGrade.disabled, true); assert.equal(f.dom.recruitMethod.disabled, true);
@@ -157,7 +158,7 @@ test("recruit controls remember separate stat thresholds, support stats alone, a
   assert.equal(f.dom.recruitStats.str.value, "20.5"); assert.equal(f.dom.recruitStats.agi.value, "0");
   assert.equal(f.dom.recruitStats.int.value, ""); assert.equal(f.messages.length, 0);
   f.dom.recruitStats.int.value = "30"; f.dom.recruitButton.dispatch("click");
-  assert.deepEqual(JSON.parse(JSON.stringify(f.messages.at(-1))), ["recruit-start", { method: 1, criteria: [
+  assert.deepEqual(JSON.parse(JSON.stringify(f.messages.at(-1))), ["recruit-start", { method: 1, minimumMoney: 0, criteria: [
     { type: "work-grade", minimum: 4 }, { type: "stat", stat: "str", above: 20.5 },
     { type: "stat", stat: "agi", above: 0 }, { type: "stat", stat: "int", above: 30 },
   ] }]);
@@ -168,7 +169,7 @@ test("recruit controls remember separate stat thresholds, support stats alone, a
   assert.ok(Object.values(f.dom.recruitStats).every(input => !input.disabled));
   f.dom.recruitGrade.value = "0"; f.dom.recruitStats.agi.value = ""; f.dom.recruitStats.int.value = "";
   f.dom.recruitButton.dispatch("click");
-  assert.deepEqual(JSON.parse(JSON.stringify(f.messages.at(-1))), ["recruit-start", { method: 1,
+  assert.deepEqual(JSON.parse(JSON.stringify(f.messages.at(-1))), ["recruit-start", { method: 1, minimumMoney: 0,
     criteria: [{ type: "stat", stat: "str", above: 20.5 }] }]);
   f.document.activeElement = f.dom.recruitStats.str;
   f.window.dispatch("keydown", { code: "Digit1" }); assert.equal(f.messages.at(-1)[0], "cancel");
@@ -192,4 +193,36 @@ test("closed recruitment screens hide the panel and locked refresh methods disab
   assert.equal(f.dom.recruitButton.disabled, true); assert.match(f.dom.recruitInfo.textContent, /Unlock/);
   f.handlers["recruit-status"]({ ...recruitState, visible: false });
   assert.equal(f.dom.recruitPanel.hidden, true);
+});
+test("minimum copper is restored, editable while stopped, sent with Start, and saved across panels", () => {
+  const key = "cjs-formations:recruit-options:v1", f = fixture();
+  f.stored.set(key, JSON.stringify({ minimum: 4, method: 1, minimumMoney: 10000 }));
+  f.handlers["recruit-status"](recruitState);
+  assert.equal(f.dom.recruitMoney.value, "10000"); assert.equal(f.messages.length, 0);
+  f.dom.recruitMoney.value = "25000"; f.dom.recruitMoney.dispatch("change");
+  assert.equal(JSON.parse(f.stored.get(key)).minimumMoney, 25000);
+  f.dom.recruitButton.dispatch("click"); assert.equal(f.messages.at(-1)[1].minimumMoney, 25000);
+  f.handlers["recruit-status"]({ ...recruitState, running: true }); assert.equal(f.dom.recruitMoney.disabled, true);
+  f.handlers["recruit-status"](recruitState); assert.equal(f.dom.recruitMoney.disabled, false);
+  const reload = fixture(); reload.stored.set(key, f.stored.get(key)); reload.handlers["recruit-status"](recruitState);
+  assert.equal(reload.dom.recruitMoney.value, "25000"); assert.equal(reload.messages.length, 0);
+  f.dom.recruitMoney.value = ""; f.dom.recruitButton.dispatch("click");
+  assert.equal(f.messages.at(-1)[1].minimumMoney, 0); assert.equal(JSON.parse(f.stored.get(key)).minimumMoney, 0);
+  f.document.activeElement = f.dom.recruitMoney;
+  f.window.dispatch("keydown", { code: "Digit1" }); assert.equal(f.messages.at(-1)[0], "cancel");
+});
+test("invalid minimum copper is rejected without overwriting preferences; invalid stored values use zero", () => {
+  const key = "cjs-formations:recruit-options:v1";
+  for (const minimumMoney of [-1, "6000", null]) {
+    const f = fixture(); f.stored.set(key, JSON.stringify({ minimumMoney })); f.handlers["recruit-status"](recruitState);
+    assert.equal(f.dom.recruitMoney.value, "0");
+  }
+  const f = fixture(), saved = JSON.stringify({ minimum: 5, method: 1, minimumMoney: 6000 });
+  f.stored.set(key, saved); f.handlers["recruit-status"](recruitState);
+  for (const [value, badInput] of [["-1", false], ["", true], ["Infinity", false]]) {
+    f.dom.recruitMoney.value = value; f.dom.recruitMoney.validity = { badInput };
+    f.dom.recruitMoney.dispatch("change"); f.dom.recruitButton.dispatch("click");
+    assert.equal(f.messages.length, 0); assert.equal(f.stored.get(key), saved);
+    assert.equal(f.dom.recruitMoney.validityReported, true);
+  }
 });

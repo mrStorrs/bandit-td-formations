@@ -268,8 +268,36 @@ function recruitFixture() {
     return originalCall(name, ...args);
   };
   return Object.assign(f, { groups, panels, methods,
-    start: (criteria = [{ type: "work-grade", minimum: 5 }]) => f.handlers["recruit-start"]({ method: 1, criteria }) });
+    start: (criteria = [{ type: "work-grade", minimum: 5 }], options = {}) => f.handlers["recruit-start"]({ method: 1, criteria, ...options }) });
 }
+test("minimum copper reaches the native adapter and a budget stop keeps previous matches locked", async () => {
+  const f = recruitFixture(); f.save.setAt(75, 2, 30, 3); f.start();
+  f.start(undefined, { minimumMoney: 6001 }); await f.tick(); await f.tick();
+  assert.equal(f.calls.filter(c => c[0] === "主动寻访").length, 0); assert.equal(f.save.getAt(2, 0, 3), -1);
+  assert.equal(f.save.getAt(1, 2, 0), 9000); assert.ok([...f.groups.values()].every(g => g.IsGroupActive()));
+  f.start(undefined, { minimumMoney: 6000 }); await f.tick(); await f.tick();
+  assert.equal(f.calls.filter(c => c[0] === "主动寻访").length, 1); assert.equal(f.save.getAt(1, 2, 0), 6000);
+  assert.equal(f.save.getAt(2, 1, 3), "Match 1"); assert.equal(f.save.getAt(2, 0, 3), -1);
+});
+test("native adapter rechecks money and cost before unlocking declined results or paying", async () => {
+  for (const change of [f => f.save.setAt(8999, 1, 2, 0), f => { f.higherCost = true; }]) {
+    const f = recruitFixture(); f.save.setAt(75, 2, 30, 3); f.start();
+    f.start(undefined, { minimumMoney: 6000 });
+    await f.tick();
+    const call = f.runtime.callFunction, getAt = f.save.getAt;
+    f.runtime.callFunction = (name, ...args) => name === "主动寻访费用" && f.higherCost ? 3001 : call(name, ...args);
+    let reads = 0;
+    // The controller sees an affordable balance; the adapter observes a later change.
+    f.save.getAt = (...args) => {
+      const value = getAt(...args);
+      if (args.join() === "1,2,0" && ++reads === 1) change(f);
+      return value;
+    };
+    await f.tick(); await f.tick();
+    assert.equal(f.calls.filter(c => c[0] === "主动寻访").length, 0);
+    assert.equal(f.save.getAt(2, 0, 3), -1); assert.ok([...f.groups.values()].every(g => g.IsGroupActive()));
+  }
+});
 test("recruit adapter matches the displayed STR/AGI/INT including bonuses and tenths, with work-grade OR", async () => {
   for (const [index, stat] of ["str", "agi", "int"].entries()) {
     const f = recruitFixture();

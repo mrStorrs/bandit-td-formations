@@ -191,6 +191,55 @@ test("the last affordable roll still checks and locks its match before stopping"
   f.start(); f.tick(); assert.deepEqual(f.locks, [1]); assert.equal(f.current.money, 0);
   assert.match(f.search.message, /Found and locked/);
 });
+test("minimum copper stops before a roll would cross the reserve, including immediately at Start", () => {
+  for (const money of [5999, 6000, 8999]) {
+    const f = fixture(); f.current.money = money; f.start({ minimumMoney: 6000 });
+    assert.equal(f.search.running, false); f.tick(); f.tick();
+    assert.deepEqual(f.rolls, []); assert.equal(f.current.money, money); assert.equal(f.active, true);
+    assert.match(f.search.message, /Minimum copper/);
+  }
+});
+test("rolling may land exactly on the minimum, then stops without another payment", () => {
+  const f = fixture(); f.current.money = 15000; f.start({ minimumMoney: 6000 });
+  f.tick(); f.tick(); f.tick();
+  assert.equal(f.current.money, 6000); assert.equal(f.search.running, false); assert.equal(f.active, true);
+  assert.equal(f.search.rolls, 3); assert.equal(f.search.spent, 9000);
+  f.tick(); assert.equal(f.rolls.length, 3); assert.match(f.search.message, /6,000/);
+});
+test("the minimum uses live money and current method cost, even between scheduled rolls", () => {
+  for (const change of [f => { f.current.money = 5000; }, f => { f.current.methods[0].cost = 3001; }]) {
+    const f = fixture(); f.start({ minimumMoney: 6000 }); change(f); f.tick(200);
+    assert.equal(f.search.running, false); assert.deepEqual(f.rolls, []); assert.equal(f.active, true);
+  }
+});
+test("matching recruits are still protected below the minimum and on the last allowed roll", () => {
+  const existing = fixture(); existing.current.money = 1000; existing.current.candidates[0] = candidate(1, 5);
+  existing.start({ minimumMoney: 6000 });
+  assert.deepEqual(existing.locks, [1]); assert.deepEqual(existing.rolls, []);
+  assert.match(existing.search.message, /Found and locked/);
+  const last = fixture(); last.queue.push([candidate(1, 5)]); last.start({ minimumMoney: 6000 }); last.tick();
+  assert.deepEqual(last.locks, [1]); assert.equal(last.current.money, 6000); assert.equal(last.search.running, false);
+  assert.match(last.search.message, /Found and locked/);
+});
+test("a budget stop preserves declined locks; lowering the minimum lets Start skip them", () => {
+  const f = fixture(); f.current.candidates[1] = candidate(2, 6); f.start();
+  f.start({ minimumMoney: 7000 }); f.tick();
+  assert.equal(f.search.running, false); assert.deepEqual(f.unlocks, []); assert.deepEqual(f.rolls, []);
+  assert.equal(f.current.candidates[1].locked, true);
+  f.start({ minimumMoney: 6000 }); f.tick();
+  assert.deepEqual(f.unlocks, [2]); assert.deepEqual(f.rolls, [1]); assert.equal(f.current.money, 6000);
+});
+test("default and zero minimum retain normal affordability; invalid minima cannot start", () => {
+  for (const options of [{}, { minimumMoney: 0 }]) {
+    const f = fixture(); f.current.money = 3000; f.start(options); f.tick();
+    assert.equal(f.current.money, 0); assert.deepEqual(f.rolls, [1]); assert.equal(f.search.running, false);
+  }
+  for (const minimumMoney of [-1, NaN, Infinity, "6000", null]) {
+    const f = fixture(); f.start({ minimumMoney }); f.tick();
+    assert.deepEqual(f.rolls, []); assert.equal(f.active, true); assert.equal(f.search.running, false);
+    assert.match(f.search.message, /Invalid minimum copper/);
+  }
+});
 test("insufficient money, all locked slots, and lost methods never spend", () => {
   for (const change of [f => { f.current.money = 2999; }, f => f.current.candidates.forEach(c => { c.locked = true; }),
     f => { f.current.methods = []; }, f => { f.current.money = NaN; }]) {
