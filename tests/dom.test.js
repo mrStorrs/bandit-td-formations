@@ -85,6 +85,43 @@ test("C overlapping a held formation cancels the hold without toggling combat", 
   assert.deepEqual(f.messages, [["key", { phase: "down", slot: 1 }], ["cancel", {}], ["key", { phase: "up", slot: 1 }]]);
 });
 
+test("Shift + 1–4 routes only to building formations and consumes native shortcuts", () => {
+  const f = fixture();
+  for (let slot = 1; slot <= 4; slot++) {
+    const down = f.window.dispatch("keydown", { code: `Digit${slot}`, shiftKey: true });
+    f.window.dispatch("keydown", { code: `Digit${slot}`, shiftKey: true, repeat: true });
+    const up = f.window.dispatch("keyup", { code: `Digit${slot}`, shiftKey: true });
+    assert.equal(down.prevented, true); assert.equal(up.prevented, true);
+    assert.deepEqual(f.messages.slice(-2), [["building-key", { phase: "down", slot }], ["building-key", { phase: "up", slot }]]);
+  }
+  assert.deepEqual(f.native, []);
+});
+test("releasing Shift first still recalls buildings; adding Shift midway cancels a character hold", () => {
+  const f = fixture();
+  f.window.dispatch("keydown", { code: "Digit1", shiftKey: true });
+  f.window.dispatch("keyup", { code: "ShiftLeft" });
+  f.window.dispatch("keyup", { code: "Digit1" });
+  assert.deepEqual(f.messages, [["building-key", { phase: "down", slot: 1 }], ["building-key", { phase: "up", slot: 1 }]]);
+  f.messages.length = 0;
+  f.window.dispatch("keydown", { code: "Digit1" });
+  f.window.dispatch("keydown", { code: "ShiftLeft", shiftKey: true });
+  f.window.dispatch("keyup", { code: "Digit1", shiftKey: true });
+  assert.deepEqual(f.messages, [["key", { phase: "down", slot: 1 }], ["cancel", {}]]);
+});
+test("building shortcuts respect typing, other modifiers, focus loss, and overlapping numbers", () => {
+  for (const fields of [{ ctrlKey: true }, { altKey: true }, { metaKey: true }, { isComposing: true }]) {
+    const f = fixture(); f.window.dispatch("keydown", { code: "Digit1", shiftKey: true, ...fields });
+    assert.deepEqual(f.messages, [["cancel", {}]]);
+  }
+  const f = fixture(); f.document.activeElement = { tagName: "INPUT" };
+  f.window.dispatch("keydown", { code: "Digit1", shiftKey: true }); assert.deepEqual(f.messages, [["cancel", {}]]);
+  f.document.activeElement = { tagName: "CANVAS" }; f.messages.length = 0;
+  f.window.dispatch("keydown", { code: "Digit1", shiftKey: true }); f.window.dispatch("blur");
+  f.window.dispatch("keyup", { code: "Digit1" }); assert.equal(f.messages.at(-1)[0], "cancel");
+  f.window.dispatch("keydown", { code: "Digit1", shiftKey: true });
+  f.window.dispatch("keydown", { code: "Digit2", shiftKey: true }); assert.equal(f.messages.at(-1)[0], "cancel");
+});
+
 const recruitState = { visible: true, running: false, rolls: 0, spent: 0, message: "Ready",
   grades: ["E", "D", "C", "B", "A", "S", "SS"], methods: [{ id: 1, name: "Visit", cost: 3000 }] };
 test("recruit controls submit the chosen grade/method and remember settings without starting automatically", () => {

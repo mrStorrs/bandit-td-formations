@@ -60,13 +60,104 @@ function fixture() {
     runOnStartup: f => { sandbox.start = f; }, C3_CreateRuntime: () => engine };
   sandbox.self = sandbox;
   vm.createContext(sandbox);
-  for (const file of ["formations.js", "combat.js", "forest.js", "recruit.js", "recruit-runtime.js", "runtime.js"]) vm.runInContext(fs.readFileSync(`${__dirname}/../src/${file}`, "utf8"), sandbox);
+  for (const file of ["formations.js", "buildings.js", "building-runtime.js", "combat.js", "forest.js", "recruit.js", "recruit-runtime.js", "runtime.js"]) vm.runInContext(fs.readFileSync(`${__dirname}/../src/${file}`, "utf8"), sandbox);
   sandbox.C3_CreateRuntime(); sandbox.start(runtime);
   return { runtime, engine, save, cores, tiles, events, handlers, messages, calls, stored, objects, auto, victory,
     async tick() { clock += 250; await events.tick(); },
-    async hold(slot) { handlers.key({ phase: "down", slot }); clock += 1000; await events.tick(); await handlers.key({ phase: "up", slot }); },
-    async tap(slot) { handlers.key({ phase: "down", slot }); await handlers.key({ phase: "up", slot }); } };
+    async hold(slot, channel = "key") { handlers[channel]({ phase: "down", slot }); clock += 1000; await events.tick(); await handlers[channel]({ phase: "up", slot }); },
+    async tap(slot, channel = "key") { handlers[channel]({ phase: "down", slot }); await handlers[channel]({ phase: "up", slot }); } };
 }
+
+function buildingFixture() {
+  const f = fixture(), sprites = [], pendingSprites = [];
+  const visiblePositions = new Map();
+  const positions = [[10, 4, 4], [11, 6, 4]];
+  const fields = (x, y) => ({ X坐标: x, Y坐标: y, 建设许可: true, 区域: "山寨", 建筑序号: 0, 占用开关: false, 设施编号: 0 });
+  for (let y = 3; y <= 10; y++) for (let x = 3; x <= 12; x++) {
+    f.tiles.push({ uid: 1000 + f.tiles.length, instVars: fields(x, y) });
+  }
+  const cover = (x, y) => f.tiles.filter(t => t.instVars.X坐标 >= x && t.instVars.X坐标 <= x + 1 && t.instVars.Y坐标 >= y && t.instVars.Y坐标 <= y + 1);
+  for (const [id, x, y] of positions) {
+    sprites.push({ instVars: { 建筑序号: id, 建筑编号: 2, 用途: "主地图", 有效解锁: true, X坐标: x, Y坐标: y } });
+    visiblePositions.set(id, [x, y]);
+    for (const [field, value] of [[1, 2], [2, x], [3, y], [4, 0], [5, 7]]) f.save.setAt(value, id, field, 1);
+    for (const t of cover(x, y)) Object.assign(t.instVars, { 建筑序号: id, 占用开关: true });
+  }
+  f.runtime.objects.地图建筑 = { getAllInstances: () => sprites };
+  f.runtime.objects.jz = { getFirstInstance: () => ({ getAt: (type, field) => field === 8 ? 2 : field === 25 ? 2 : 0 }) };
+  f.runtime.objects.mc = { getFirstInstance: () => ({ getAt: (id, field) => id === 2 && field === 2 ? "搬迁" : "" }) };
+  f.engine.FlushPendingInstances = () => {
+    for (const [id, x, y] of pendingSprites) {
+      visiblePositions.set(id, [x, y]);
+      Object.assign(sprites.find(b => b.instVars.建筑序号 === id).instVars, { X坐标: x, Y坐标: y });
+    }
+    pendingSprites.length = 0;
+  };
+  const call = f.runtime.callFunction;
+  f.runtime.callFunction = (name, ...args) => {
+    if (name !== "建筑搬迁") return call(name, ...args);
+    f.calls.push([name, ...args]);
+    if (f.refuse) return;
+    const [id, oldX, oldY, x, y] = args;
+    assert.deepEqual(visiblePositions.get(id), [oldX, oldY], "flush native creations before moving a building again");
+    visiblePositions.delete(id); pendingSprites.push([id, x, y]);
+    for (const t of cover(oldX, oldY)) Object.assign(t.instVars, { 建筑序号: 0, 占用开关: false });
+    // Native relocation selects sprites by coordinates, so occupied destinations
+    // are unsafe even when another building will move later in the batch.
+    for (const t of cover(x, y)) assert.equal(t.instVars.建筑序号, 0);
+    f.save.setAt(x, id, 2, 1); f.save.setAt(y, id, 3, 1);
+    for (const t of cover(x, y)) Object.assign(t.instVars, { 建筑序号: id, 占用开关: true });
+  };
+  return { ...f, sprites, positions: () => positions.map(([id]) => [f.save.getAt(id, 2, 1), f.save.getAt(id, 3, 1)]),
+    holdBuildings: slot => f.hold(slot, "building-key"), tapBuildings: slot => f.tap(slot, "building-key"),
+    refuseMoves: () => { f.refuse = true; } };
+}
+
+test("building runtime restores swaps through native relocation and preserves upgrades and character slots", async () => {
+  const f = buildingFixture(); await f.hold(1); await f.holdBuildings(1);
+  const characterSlot = JSON.stringify(f.stored.get("cjs-formations:v1:12345678:1:1"));
+  const key = "cjs-formations:buildings:v1:12345678:1:1", saved = f.stored.get(key);
+  [saved.buildings[0].x, saved.buildings[1].x] = [saved.buildings[1].x, saved.buildings[0].x];
+  f.calls.length = 0; await f.tapBuildings(1);
+  assert.deepEqual(f.positions(), [[6, 4], [4, 4]]);
+  assert.equal(f.calls.filter(c => c[0] === "建筑搬迁").length, 3);
+  assert.ok(f.calls.filter(c => c[0] === "建筑搬迁").every(c => c[6] === 3 && c[7] === 0));
+  assert.equal(f.save.getAt(10, 5, 1), 7); assert.equal(f.save.getAt(11, 5, 1), 7);
+  assert.equal(JSON.stringify(f.stored.get("cjs-formations:v1:12345678:1:1")), characterSlot);
+  assert.equal(f.calls.filter(c => c[0] === "角色位置移动").length, 0);
+  assert.match(f.messages.at(-1)[1].text, /Building formation 1 restored \(2 moved/);
+});
+test("building runtime refuses native occupied slots and verifies that native movement succeeded", async () => {
+  for (const refuse of [false, true]) {
+    const f = buildingFixture(); await f.holdBuildings(1);
+    const saved = f.stored.get("cjs-formations:buildings:v1:12345678:1:1"); saved.buildings[0].y = 8;
+    if (refuse) f.refuseMoves(); else f.save.setAt(1, 10, 7, 1);
+    f.calls.length = 0; await f.tapBuildings(1);
+    assert.deepEqual(f.positions(), [[4, 4], [6, 4]]);
+    assert.equal(f.calls.filter(c => c[0] === "建筑搬迁").length, refuse ? 1 : 0);
+    assert.match(f.messages.at(-1)[1].text, refuse ? /refused/ : /characters/);
+  }
+});
+test("building shortcuts are blocked by menus, transitions, edit modes, and dragging", async () => {
+  for (const block of [f => { f.objects.二级页面背景.push({}); }, f => { f.objects.世界地图.push({}); },
+    f => { f.objects.转场云.push({}); }, f => { f.objects.黑幕.push({ isVisible: true }); },
+    f => { f.runtime.globalVars.拖动模式 = true; }, f => { f.runtime.globalVars.爬塔挑战开关 = true; },
+    f => { f.runtime.objects.设施搬迁拖动点 = { getAllInstances: () => [{}] }; },
+    f => { f.cores[0].behaviors.DragDrop.isDragging = true; }]) {
+    const f = buildingFixture(); block(f); await f.holdBuildings(1);
+    assert.equal(f.stored.size, 0); assert.equal(f.calls.length, 0);
+  }
+});
+test("building storage operations exclude combat and character formations and recheck the map after loading", async () => {
+  const f = buildingFixture(); await f.holdBuildings(1); f.calls.length = 0;
+  let resolve; f.runtime.storage.getItem = () => new Promise(r => { resolve = r; });
+  const pending = f.tapBuildings(1);
+  await f.handlers.combat(); await f.hold(2);
+  assert.equal(f.stored.size, 1); assert.equal(f.calls.length, 0);
+  f.runtime.globalVars.当前地图编号 = 2;
+  resolve(f.stored.get("cjs-formations:buildings:v1:12345678:1:1")); await pending;
+  assert.equal(f.calls.length, 0);
+});
 
 test("runtime bridge saves and restores through the native move function and repairs swap occupancy", async () => {
   const f = fixture(); await f.hold(1);

@@ -4,11 +4,11 @@
     constructor(runtimeInterface) {
       super(runtimeInterface, "cjs-formations");
       this.ready = false;
-      this.held = new Set();
+      this.held = new Map();
       this.AddRuntimeMessageHandlers([
         ["ready", ({ version }) => {
           this.ready = true;
-          this.notify(`Formations ready · v${version} · Hold 1–4 to save, tap to restore · C combat · F6 Ink Forest loop (default ON).`);
+          this.notify(`Formations ready · v${version} · Hold 1–4 to save, tap to restore · Shift + 1–4 buildings · C combat · F6 Ink Forest loop (default ON).`);
         }],
         ["notify", ({ text }) => this.notify(text)],
         ["forest-status", ({ text }) => this.forestStatus(text)],
@@ -23,24 +23,28 @@
       };
       window.addEventListener("keydown", e => {
         if (!this.ready) return;
-        if (e.ctrlKey || e.altKey || e.metaKey || e.shiftKey || e.isComposing || editable(document.activeElement)) { cancel(); return; }
         const match = /^Digit([1-4])$/.exec(e.code);
+        if (e.ctrlKey || e.altKey || e.metaKey || (e.shiftKey && !match) || e.isComposing || editable(document.activeElement)) { cancel(); return; }
         if (!match && e.code !== "KeyC" && e.code !== "F6") return;
         // C is also the native character-menu shortcut. Capture it before the
         // engine's bubbling keyboard listener so one press has one effect.
-        if (e.code === "KeyC" || e.code === "F6") { e.preventDefault(); e.stopImmediatePropagation(); }
+        if (e.code === "KeyC" || e.code === "F6" || e.shiftKey) { e.preventDefault(); e.stopImmediatePropagation(); }
         if (e.repeat || this.held.has(e.code)) return;
-        this.held.add(e.code);
+        const channel = e.shiftKey ? "building-key" : "key";
+        this.held.set(e.code, channel);
         if (this.held.size > 1) { this.PostToRuntime("cancel", {}); return; }
         if (e.code === "KeyC") this.PostToRuntime("combat", {});
         else if (e.code === "F6") this.PostToRuntime("forest", {});
-        else this.PostToRuntime("key", { phase: "down", slot: Number(match[1]) });
+        else this.PostToRuntime(channel, { phase: "down", slot: Number(match[1]) });
       }, true);
       window.addEventListener("keyup", e => {
-        if (!this.ready || !this.held.delete(e.code)) return;
+        if (!this.ready || !this.held.has(e.code)) return;
+        const channel = this.held.get(e.code);
+        this.held.delete(e.code);
         if (e.code === "KeyC" || e.code === "F6") { e.preventDefault(); e.stopImmediatePropagation(); return; }
-        if (editable(document.activeElement) || e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) { cancel(); return; }
-        this.PostToRuntime("key", { phase: "up", slot: Number(e.code.slice(-1)) });
+        if (channel === "building-key") { e.preventDefault(); e.stopImmediatePropagation(); }
+        if (editable(document.activeElement) || e.ctrlKey || e.altKey || e.metaKey || (e.shiftKey && channel !== "building-key") || e.isComposing) { cancel(); return; }
+        this.PostToRuntime(channel, { phase: "up", slot: Number(e.code.slice(-1)) });
       }, true);
       const loseFocus = () => {
         cancel();

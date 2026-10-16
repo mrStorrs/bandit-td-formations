@@ -1,12 +1,14 @@
 # Bandit TD Formations
 
-A formation, combat, and recruitment mod for Bandit Simulator TD (Steam app 4267800).
+A character/building formation, combat, and recruitment mod for Bandit Simulator TD (Steam app 4267800).
 
 - **Hold a top-row number key (`1`–`4`) for one second:** save all currently
   placed characters' positions, job modes, and priority work targets into that
   slot, including workers.
 - **Tap and release the same key:** restore each character's saved tile and job,
   including their priority work target when its tile still exists.
+- **Hold `Shift` + `1`–`4` for one second:** save a building layout in a separate
+  slot. **Tap `Shift` + the number:** restore that building layout.
 - **Press `C`:** remember all placed characters' modes and switch them to combat.
   **Press `C` again:** restore each character's previous mode, including their
   work target when it still exists on the same map. Character positions stay put.
@@ -22,8 +24,10 @@ A formation, combat, and recruitment mod for Bandit Simulator TD (Steam app 4267
 
 Recall happens on release so holding a key to save never recalls the old
 formation first. The number pad keeps its existing controls. Hotkeys are ignored
-while typing, using modifier keys, dragging characters, in menus, or during the
+while typing, using Ctrl/Alt/Meta, dragging characters, in menus, or during the
 Soul Tower movement lock. Losing focus cancels a pending key press.
+Shift is reserved for the building formation shortcuts; it does not toggle `C`
+or `F6`. Releasing Shift before the number still recalls the building slot.
 
 `C` replaces the game's character-menu shortcut; that menu is still available
 by mouse. Holding `C` only toggles once. Characters already in combat return to
@@ -46,6 +50,32 @@ clears them. Jobs also restore for characters already on their saved tiles.
 characters, set their desired jobs and work targets, then hold each slot again
 to include jobs. Recalling a formation does not replace the separate `C` undo;
 the next `C` undo still restores the modes remembered when combat was enabled.
+
+## Building formations
+
+Arrange your buildings, then hold **Shift + 1** until “Building formation 1
+saved” appears. Arrange another layout and hold **Shift + 2**. Tap those same
+combinations to switch layouts. Slots 3 and 4 work the same way. Building slots
+persist separately from character slots, for each campaign and current map.
+
+Snapshots include completed, unlocked buildings with the game's Move command.
+Restores use native relocation and retain current building levels, upgrades,
+and contents. Buildings are matched by their game slot and type; missing or
+different types are skipped, and newly added buildings stay where they are.
+Resave after demolishing/rebuilding, since the game can reuse a slot for the
+same building type.
+
+The entire move sequence is checked first. A character, facility, newer
+building, unavailable tile, or building under construction can block a restore.
+Move characters out of buildings and clear the saved destinations before
+retrying. Swaps use an empty building-sized area temporarily; if there is no
+room, the restore stops before moving anything. The native 1×1, 2×2, and 3×3
+building footprints are supported.
+
+Facility plots such as crops and workstations stay in place, following normal
+building relocation behavior. The game recalculates their range from the moved
+building. Character positions and jobs use their own formation shortcuts.
+The Ink Forest loop waits while a building shortcut is held or being restored.
 
 ## Ink Forest loop
 
@@ -83,6 +113,10 @@ bottom-right corner. Select a **Minimum grade** (`E`, `D`, `C`, `B`, `A`, `S`, o
 The method selector shows the normal copper cost for each roll. Paid refreshes
 must already be unlocked in the game; the mod keeps the game's costs, odds,
 recruitment tiers, and pity system.
+
+If the panel does not respond to clicks in windowed mode, use fullscreen. This
+workaround has been confirmed in the Steam game; the windowed input issue is
+still unresolved.
 
 The target means **that grade or better in any of the nine work categories**:
 logging, mining, planting, forging, crafting, alchemy, building, research, or
@@ -133,7 +167,7 @@ python3 manage.py install --game-dir "/path/to/Steam/steamapps/common/塔防山�
 
 On Windows, use `py -3` in place of `python3` if appropriate. Restart the game
 after installing. Look for the “Formations ready” message on startup.
-The startup message includes the installed version number (currently 1.4.0).
+The startup message includes the installed version number (currently 1.5.0).
 
 The installer backs up the input archive in `cjs-formations-backups/` beside the
 game, verifies the result, then replaces `package.nw` atomically. It does not
@@ -159,6 +193,8 @@ The summon, victory, threat threshold, and native auto-summon event groups were
 also checked on both supported builds for the Ink Forest loop.
 Recruitment generation, work grading, paid refreshes, costs, locks, readiness,
 and auto-recruit event groups were inspected on both builds for version 1.4.0.
+Building relocation, object creation, and facility-range event groups were
+compared on both builds for version 1.5.0 and are unchanged.
 
 Steam updates and “Verify integrity of game files” can replace `package.nw`
 and remove the mod. If `C` opens the character menu again, or the startup
@@ -206,7 +242,19 @@ match before another roll. It verified normal costs, suppression of native
 auto-recruit, survival of locks through a subsequent native refresh, insufficient
 funds, manual Stop, and screen closure. A separate three-roll run spent exactly
 9,000 copper, stopped at zero, and preserved an existing locked candidate.
-Recruitment still needs a manual Steam/NW.js check.
+Recruitment controls have since been manually confirmed working in fullscreen;
+windowed clicks remain an open issue.
+
+Version 1.5.0 passes 94 JavaScript tests and four installer tests. Building tests
+cover footprint bounds, swaps and cycles, empty buffer space, blocked sites,
+missing buildings, separate slots, Shift release order, menu guards, pending
+native object updates, and map changes during storage reads. In the copied game,
+eleven buildings with all three footprint sizes were saved into two layouts and
+restored through the keyboard shortcuts. The check verified positions, levels,
+tile occupancy, no duplicate building objects, and refusal before any moves
+when a character blocked a destination. After reloading the game copy, the saved
+layout still restored and skipped two missing buildings. Building formations
+still need a manual Steam/NW.js check.
 
 To check the controls in-game:
 
@@ -228,6 +276,11 @@ To check the controls in-game:
 8. Open recruitment, choose a target grade and affordable method in **Auto
    recruit**, then start. Check that a matching work grade stops rolling and
    locks the candidate. Hire them manually. Also check the Stop button.
+9. Hold `Shift + 1` to save the building layout. Move buildings normally and
+   hold `Shift + 2`, then tap each combination to restore it. Check levels and
+   occupied tiles, including a swap with an empty buffer area available.
+   Restart and recall again to check persistence. Keep character slots 1/2
+   separate and verify blocked destinations stop the whole building restore.
 
 ## Development
 
@@ -248,6 +301,9 @@ python3 manage.py build --package /path/to/package.nw --output /path/to/new-pack
 ```
 
 `src/formations.js` handles snapshots, validation, and tap/hold timing.
+`src/buildings.js` validates building layouts and plans relocation order and
+temporary swap positions. `src/building-runtime.js` adapts native building
+relocation and flushes pending object creation/destruction between moves.
 `src/combat.js` handles persistent combat undo and character matching.
 `src/forest.js` handles the Ink Forest cycle and formation validation.
 `src/recruit.js` handles candidate matching and the recruitment search loop.
@@ -263,6 +319,8 @@ New snapshots use data format version 2 with positions, modes, and priority
 coordinates; the namespace stays unchanged so version 1 position saves remain
 available until replaced by holding the slot again.
 Combat undo uses the separate `cjs-formations:combat:v1:` namespace.
+Building presets use `cjs-formations:buildings:v1:<saveId>:<mapId>:<slot>` and
+store building slots, types, and coordinates, without overwriting upgrades.
 Recruitment preferences use DOM local storage at
 `cjs-formations:recruit-options:v1`; the running state is never persisted.
 

@@ -65,9 +65,17 @@
     return { moves, changes, skipped };
   }
 
+  const characterFormation = {
+    prefix: "cjs-formations:v1", snapshot, planRestore,
+    savedMessage: (slot, data) => `Formation ${slot} saved (${data.characters.length} characters, positions + jobs).`,
+    emptyMessage: slot => `Slot ${slot} is empty. Hold ${slot} for 1 second to save.`,
+    restoredMessage: (slot, data, plan) => `Formation ${slot} restored (${plan.moves.length} moved, ${plan.changes.length} jobs${plan.skipped ? `, ${plan.skipped} unavailable or renamed` : ""}).` +
+      (data.version === 1 ? ` Hold ${slot} again to save jobs.` : ""),
+  };
+
   class Hotkeys {
-    constructor({ context, storage, apply, notify, onSave = () => {}, now = () => performance.now(), holdMs = 1000 }) {
-      Object.assign(this, { context, storage, apply, notify, onSave, now, holdMs });
+    constructor({ context, storage, apply, notify, formation = characterFormation, onSave = () => {}, now = () => performance.now(), holdMs = 1000 }) {
+      Object.assign(this, { context, storage, apply, notify, formation, onSave, now, holdMs });
       this.pending = null;
       this.busy = false;
     }
@@ -101,23 +109,22 @@
       if (!context || context.token !== pending.token || this.busy) return;
       this.busy = true;
       try {
-        const key = `cjs-formations:v1:${context.saveId}:${context.mapId}:${pending.slot}`;
+        const key = `${this.formation.prefix}:${context.saveId}:${context.mapId}:${pending.slot}`;
         if (save) {
-          const data = snapshot(context);
+          const data = this.formation.snapshot(context);
           await this.storage.setItem(key, data);
           if (this.context()?.token === pending.token) {
             this.onSave(pending.slot, context);
-            this.notify(`Formation ${pending.slot} saved (${data.characters.length} characters, positions + jobs).`);
+            this.notify(this.formation.savedMessage(pending.slot, data));
           }
         } else {
           const data = await this.storage.getItem(key);
           const latest = this.context();
           if (!latest || latest.token !== pending.token) return;
-          if (data == null) { this.notify(`Slot ${pending.slot} is empty. Hold ${pending.slot} for 1 second to save.`); return; }
-          const plan = planRestore(data, latest);
+          if (data == null) { this.notify(this.formation.emptyMessage(pending.slot)); return; }
+          const plan = this.formation.planRestore(data, latest);
           this.apply(plan, latest);
-          this.notify(`Formation ${pending.slot} restored (${plan.moves.length} moved, ${plan.changes.length} jobs${plan.skipped ? `, ${plan.skipped} unavailable or renamed` : ""}).` +
-            (data.version === 1 ? ` Hold ${pending.slot} again to save jobs.` : ""));
+          this.notify(this.formation.restoredMessage(pending.slot, data, plan));
         }
       } catch (error) {
         console.error("[Bandit TD Formations]", error);

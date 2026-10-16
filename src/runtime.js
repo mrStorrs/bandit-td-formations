@@ -128,9 +128,11 @@
     }
     const hotkeys = new Hotkeys({ context, storage: runtime.storage, apply, notify,
       onSave: (slot, current) => { if (current.mapId === 28 && slot <= 2) forest.formationSaved(); } });
+    const buildingHotkeys = globalThis.BanditFormations.attachBuildingFormations(runtime, engine, notify);
+    const cancelKeys = () => { hotkeys.cancel(); buildingHotkeys.cancel(); };
     const combat = new CombatToggle({ context, storage: runtime.storage, apply: applyModes, notify });
     const forest = new ForestLoop({ context: forestContext, storage: runtime.storage, apply, notify,
-      available: () => !hotkeys.pending && !hotkeys.busy && !combat.busy,
+      available: () => !hotkeys.pending && !hotkeys.busy && !buildingHotkeys.pending && !buildingHotkeys.busy && !combat.busy,
       status: text => engine.PostComponentMessageToDOM(component, "forest-status", { text }),
       suspendAuto: suspendNativeAuto,
       summon: current => {
@@ -143,18 +145,23 @@
       },
     });
     const recruitment = globalThis.BanditFormations.attachRecruitment(runtime, engine, notify);
-    engine.AddDOMComponentMessageHandler(component, "forest", () => { hotkeys.cancel(); forest.toggle(); });
+    engine.AddDOMComponentMessageHandler(component, "forest", () => { cancelKeys(); forest.toggle(); });
     engine.AddDOMComponentMessageHandler(component, "combat", () => {
-      hotkeys.cancel();
-      if (!hotkeys.busy) return combat.toggle();
+      cancelKeys();
+      if (!hotkeys.busy && !buildingHotkeys.busy) return combat.toggle();
     });
     engine.AddDOMComponentMessageHandler(component, "key", ({ phase, slot }) => {
-      if (!combat.busy) return hotkeys.key(phase, slot);
+      buildingHotkeys.cancel();
+      if (!combat.busy && !buildingHotkeys.busy) return hotkeys.key(phase, slot);
     });
-    engine.AddDOMComponentMessageHandler(component, "cancel", () => hotkeys.cancel());
-    runtime.addEventListener("tick", () => { recruitment.tick(); return hotkeys.tick() || forest.tick(); });
-    runtime.addEventListener("beforelayoutstart", () => { hotkeys.cancel(); forest.leave(); recruitment.leave(); });
-    engine.PostComponentMessageToDOM(component, "ready", { version: "1.4.0" });
-    console.info("[Bandit TD Formations] v1.4.0 ready: hold 1–4 to save positions and jobs, tap to restore; C toggles combat; Ink Forest loop on, F6 toggles; auto recruit controls on the recruitment screen.");
+    engine.AddDOMComponentMessageHandler(component, "building-key", ({ phase, slot }) => {
+      hotkeys.cancel();
+      if (!combat.busy && !hotkeys.busy) return buildingHotkeys.key(phase, slot);
+    });
+    engine.AddDOMComponentMessageHandler(component, "cancel", cancelKeys);
+    runtime.addEventListener("tick", () => { recruitment.tick(); return hotkeys.tick() || buildingHotkeys.tick() || forest.tick(); });
+    runtime.addEventListener("beforelayoutstart", () => { cancelKeys(); forest.leave(); recruitment.leave(); });
+    engine.PostComponentMessageToDOM(component, "ready", { version: "1.5.0" });
+    console.info("[Bandit TD Formations] v1.5.0 ready: hold 1–4 to save positions and jobs, tap to restore; Shift + 1–4 for buildings; C toggles combat; Ink Forest loop on, F6 toggles; auto recruit controls on the recruitment screen.");
   });
 })();
