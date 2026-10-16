@@ -17,7 +17,7 @@ function fixture() {
     save.setAt(c.instVars.设定状态, id, 9, 2); save.setAt(c.instVars.优先工作目标X, id, 57, 2);
   }
   const tiles = [1, 2, 3].map(x => ({ instVars: { X坐标: x, Y坐标: 0, 角色许可: true, 占用开关: x < 3, 建筑序号: 0, 建筑编号: 0 } }));
-  const objects = { save: [save], 角色核心: cores, 地面: tiles, jz: [{ getAt: () => 1 }], 转场云: [], 世界地图: [], 黑幕: [] };
+  const objects = { save: [save], 角色核心: cores, 地面: tiles, jz: [{ getAt: () => 1 }], 转场云: [], 世界地图: [], 黑幕: [], 二级页面背景: [] };
   let autoActive = true;
   const auto = { IsGroupActive: () => autoActive, SetGroupActive: value => { autoActive = value; } };
   const victory = { _RunAndBlock() { runtime.globalVars.挑战灵兽开关 = false; save.setAt(0, 28, 10, 0); } };
@@ -60,7 +60,7 @@ function fixture() {
     runOnStartup: f => { sandbox.start = f; }, C3_CreateRuntime: () => engine };
   sandbox.self = sandbox;
   vm.createContext(sandbox);
-  for (const file of ["formations.js", "combat.js", "forest.js", "runtime.js"]) vm.runInContext(fs.readFileSync(`${__dirname}/../src/${file}`, "utf8"), sandbox);
+  for (const file of ["formations.js", "combat.js", "forest.js", "recruit.js", "recruit-runtime.js", "runtime.js"]) vm.runInContext(fs.readFileSync(`${__dirname}/../src/${file}`, "utf8"), sandbox);
   sandbox.C3_CreateRuntime(); sandbox.start(runtime);
   return { runtime, engine, save, cores, tiles, events, handlers, messages, calls, stored, objects, auto, victory,
     async tick() { clock += 250; await events.tick(); },
@@ -141,6 +141,79 @@ async function forestFixture() {
   await f.hold(2); f.calls.length = 0;
   return f;
 }
+
+function recruitFixture() {
+  const f = fixture(), groups = new Map();
+  for (const name of ["倒计时刷新2", "自动招募function", "招募功能点击", "招募锁定点击"]) {
+    let active = true;
+    groups.set(name, { IsGroupActive: () => active, SetGroupActive: value => { active = value; } });
+  }
+  f.engine.GetEventSheetManager = () => ({ GetEventGroupByName: name => groups.get(name),
+    GetEventVariableBySID: sid => sid === 172869272533233 ? { GetValue: () => true } : null });
+  const panels = [{ uid: 900, isVisible: true, instVars: { 功能: "招募" } }];
+  const methods = [1, 2, 3].map(id => ({ isVisible: true, instVars: { 功能: "探访", 招募等阶: id, 开关: id < 3 } }));
+  for (const [name, values] of Object.entries({ 二级页面背景: panels, 招募页面按钮: methods, mc: [{ getAt: (id, field) => `${field === 23 ? "Method" : "Work"} ${id}` }] })) {
+    f.runtime.objects[name] = { getAllInstances: () => values, getFirstInstance: () => values[0] };
+  }
+  f.save.setAt(9000, 1, 2, 0); f.save.setAt(100, 1, 17, 0);
+  for (let id = 1; id <= 3; id++) {
+    f.save.setAt(id, id, 0, 3); f.save.setAt(`Recruit ${id}`, id, 1, 3);
+    for (let field = 22; field <= 30; field++) f.save.setAt(10, id, field, 3);
+  }
+  const originalCall = f.runtime.callFunction;
+  f.runtime.callFunction = (name, ...args) => {
+    if (name === "文本") return args[0];
+    if (name === "主动寻访费用") return args[0] * 3000;
+    if (name === "角色技艺资质分级") return Math.min(7, Math.floor(args[0] / 15) + 1);
+    if (name === "主动寻访") {
+      assert.ok([...groups.values()].every(g => !g.IsGroupActive()), "native auto and manual clicks must be suspended before rolling");
+      f.save.setAt(f.save.getAt(1, 2, 0) - args[0] * 3000, 1, 2, 0);
+      if (f.refresh !== false) { f.save.setAt("Match", 2, 1, 3); f.save.setAt(75, 2, 30, 3); }
+    }
+    return originalCall(name, ...args);
+  };
+  return Object.assign(f, { groups, panels, methods,
+    start: () => f.handlers["recruit-start"]({ method: 1, criteria: [{ type: "work-grade", minimum: 5 }] }) });
+}
+test("recruit adapter uses native grades, costs and refresh, locks matches, and restores native automation", async () => {
+  const f = recruitFixture(); f.save.setAt(-1, 1, 0, 3);
+  await f.tick();
+  const state = f.messages.findLast(m => m[0] === "recruit-status")[1];
+  assert.deepEqual(Array.from(state.methods, m => m.id), [1, 2]);
+  f.start(); await f.tick(); await f.tick();
+  assert.equal(f.save.getAt(1, 2, 0), 6000);
+  assert.equal(f.save.getAt(1, 0, 3), -1, "previous locks are retained");
+  assert.equal(f.save.getAt(2, 0, 3), -1, "matching slot is locked using the native save marker");
+  assert.equal(f.save.getAt(3, 0, 3), 3, "unmatched slot stays unlocked");
+  assert.ok([...f.groups.values()].every(g => g.IsGroupActive()));
+  assert.deepEqual(f.calls.filter(c => c[0] === "主动寻访"), [["主动寻访", 1]]);
+  assert.ok(f.calls.some(c => c[0] === "刷新招募页面"));
+  await f.tick(); await f.tick();
+  assert.equal(f.calls.filter(c => c[0] === "主动寻访").length, 1);
+  assert.match(f.messages.findLast(m => m[0] === "recruit-status")[1].message, /Work 9 S/);
+});
+test("recruit adapter stops when native refresh fails, without spending repeatedly", async () => {
+  const f = recruitFixture(); f.refresh = false; f.start(); await f.tick(); await f.tick(); await f.tick();
+  assert.equal(f.calls.filter(c => c[0] === "主动寻访").length, 1);
+  assert.ok([...f.groups.values()].every(g => g.IsGroupActive()));
+  assert.match(f.messages.findLast(m => m[0] === "recruit-status")[1].message, /did not refresh/);
+});
+test("recruit adapter restores each group's previous state on layout exit", () => {
+  const f = recruitFixture(); f.groups.get("自动招募function").SetGroupActive(false);
+  f.start(); f.events.beforelayoutstart();
+  assert.equal(f.groups.get("自动招募function").IsGroupActive(), false);
+  assert.equal(f.groups.get("倒计时刷新2").IsGroupActive(), true);
+  assert.equal(f.calls.filter(c => c[0] === "主动寻访").length, 0);
+});
+test("recruit adapter ignores closed screens and rejects locked methods, dialogs, and malformed grades", async () => {
+  for (const change of [f => { f.panels.length = 0; }, f => { f.methods[0].instVars.开关 = false; },
+    f => { f.runtime.objects.对话选择框 = { getAllInstances: () => [{}] }; },
+    f => f.save.setAt("invalid", 2, 25, 3)]) {
+    const f = recruitFixture(); change(f); f.start(); await f.tick(); await f.tick();
+    assert.equal(f.calls.filter(c => c[0] === "主动寻访").length, 0);
+    assert.ok([...f.groups.values()].every(g => g.IsGroupActive()));
+  }
+});
 test("Ink Forest adapter uses readiness, suppresses native auto, and observes native victory before repeating", async () => {
   const f = await forestFixture(); await f.tick();
   assert.deepEqual(f.cores.map(c => c.instVars.X坐标), [1, 2]);
@@ -164,6 +237,7 @@ test("Ink Forest never acts on another map, during transitions, pause, battle of
   for (const block of [f => { f.runtime.globalVars.当前地图编号 = 29; },
     f => { f.runtime.globalVars.游戏暂停 = true; }, f => { f.runtime.globalVars.战斗开关 = false; },
     f => { f.runtime.globalVars.分页界面 = "menu"; }, f => { f.objects.转场云.push({}); },
+    f => { f.objects.二级页面背景.push({ instVars: { 功能: "招募" } }); },
     f => { f.objects.世界地图.push({}); }, f => { f.objects.黑幕.push({ isVisible: true }); },
     f => { f.cores[0].behaviors.DragDrop.isDragging = true; }]) {
     const f = await forestFixture(); f.save.setAt(100, 28, 10, 0); block(f);
@@ -206,6 +280,7 @@ test("combat uses the native mode function, restores work targets, and does not 
 });
 test("combat is blocked by menus, loading, dragging, and the tower challenge", async () => {
   for (const block of [f => { f.runtime.globalVars.分页界面 = "menu"; },
+    f => { f.objects.二级页面背景.push({ instVars: { 功能: "招募" } }); },
     f => { f.runtime.globalVars.爬塔挑战开关 = true; }, f => { f.runtime.layout = null; },
     f => { f.cores[0].behaviors.DragDrop.isDragging = true; }]) {
     const f = fixture(); block(f); await f.handlers.combat();
@@ -238,6 +313,7 @@ test("building slots retain their occupant and breakthrough state after swapping
 });
 test("menus, loading, dragging, tower challenge, and a changed map cannot recall", async () => {
   for (const block of [f => { f.runtime.globalVars.分页界面 = "menu"; },
+    f => { f.objects.二级页面背景.push({ instVars: { 功能: "招募" } }); },
     f => { f.runtime.globalVars.爬塔挑战开关 = true; }, f => { f.runtime.layout = null; },
     f => { f.cores[0].behaviors.DragDrop.isDragging = true; }, f => { f.runtime.globalVars.当前地图编号 = 2; }]) {
     const f = fixture(); await f.hold(1); block(f); await f.tap(1);

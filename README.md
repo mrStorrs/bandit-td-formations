@@ -1,6 +1,6 @@
 # Bandit TD Formations
 
-A formation and combat hotkey mod for Bandit Simulator TD (Steam app 4267800).
+A formation, combat, and recruitment mod for Bandit Simulator TD (Steam app 4267800).
 
 - **Hold a top-row number key (`1`–`4`) for one second:** save all currently
   placed characters' positions, job modes, and priority work targets into that
@@ -13,6 +13,9 @@ A formation and combat hotkey mod for Bandit Simulator TD (Steam app 4267800).
 - **Ink Forest loop is ON by default. Press `F6` to toggle it:** use formation 1
   while waiting, switch to formation 2 when Summon is ready, summon the spirit
   beast, then return to formation 1 after a win and repeat.
+- **Auto recruit panel on the recruitment screen:** choose a minimum work grade
+  and recruitment method, then start rolling. Stop and lock the recruits when
+  any work category meets the target.
 - A message confirms saving or restoring. An empty slot leaves characters alone.
 - Formations persist locally across restarts and are separate for each campaign
   save identifier and current map. They are not included in Steam Cloud saves.
@@ -72,6 +75,44 @@ the reason. Saving formation 1 or 2 retries automatically; `F6` off/on also
 retries. A timed-out or cancelled summon returns to formation 1 and pauses the
 loop until you retry.
 
+## Auto recruit
+
+Open the game's recruitment screen. The **Auto recruit** panel appears in the
+bottom-right corner. Select a **Minimum grade** (`E`, `D`, `C`, `B`, `A`, `S`, or
+`SS`) and an unlocked recruitment **Method**, then click **Start rolling**.
+The method selector shows the normal copper cost for each roll. Paid refreshes
+must already be unlocked in the game; the mod keeps the game's costs, odds,
+recruitment tiers, and pity system.
+
+The target means **that grade or better in any of the nine work categories**:
+logging, mining, planting, forging, crafting, alchemy, building, research, or
+training. For example, a target of `A` accepts a recruit with `A`, `S`, or `SS`
+in any one category. It checks work aptitude grades, rather than character
+rarity or the current work skill level. Higher targets may need higher
+recruitment tiers; selecting a target does not improve the game's roll odds.
+
+The search checks all three existing candidates before spending, then rolls at
+most twice per second. On a match, it immediately stops, locks every matching
+candidate with the game's normal padlock, and names their matching categories.
+**Hire the recruits yourself when ready.** Existing locks remain intact. Matching
+locks survive timed refreshes and are stored in the normal game save. Unlock or
+hire a matching candidate before searching again for the same target.
+
+Click **Stop** at any time. The search also stops when copper runs out, all three
+slots are locked, the recruitment screen closes, the campaign/map changes,
+another game action blocks recruitment, or the game loses focus. It never starts
+automatically. Grade and method preferences are remembered locally across game
+restarts. The panel reports rolls and copper spent for the current search.
+
+During a search, the game's timed recruitment refresh, built-in auto-recruit,
+and native recruit/refresh/lock clicks are temporarily suspended. Their previous
+states return when the search ends; saved auto-recruit settings stay unchanged.
+This keeps native auto-recruit from purchasing a candidate before the filters
+can inspect it. A match is locked before these systems resume.
+
+Talent and stat filters are not included yet. The matching code accepts typed
+criteria, so they can be added without rewriting the rolling controls.
+
 ## Install
 
 Requires Python 3.10 or later. No Python packages, mod loader, or Node installation
@@ -92,7 +133,7 @@ python3 manage.py install --game-dir "/path/to/Steam/steamapps/common/塔防山�
 
 On Windows, use `py -3` in place of `python3` if appropriate. Restart the game
 after installing. Look for the “Formations ready” message on startup.
-The startup message includes the installed version number (currently 1.3.0).
+The startup message includes the installed version number (currently 1.4.0).
 
 The installer backs up the input archive in `cjs-formations-backups/` beside the
 game, verifies the result, then replaces `package.nw` atomically. It does not
@@ -116,6 +157,8 @@ mixed versions, or conflicting modifications. Support for a new build requires
 checking its movement and save APIs, not merely updating the hashes.
 The summon, victory, threat threshold, and native auto-summon event groups were
 also checked on both supported builds for the Ink Forest loop.
+Recruitment generation, work grading, paid refreshes, costs, locks, readiness,
+and auto-recruit event groups were inspected on both builds for version 1.4.0.
 
 Steam updates and “Verify integrity of game files” can replace `package.nw`
 and remove the mod. If `C` opens the character menu again, or the startup
@@ -154,6 +197,17 @@ the game's delayed AI refresh. Three summon/victory cycles restored both the
 waiting work targets and fighting combat modes, with jobs applied before summon.
 This job-saving update still needs a manual Steam/NW.js check.
 
+Version 1.4.0 passes 75 JavaScript tests and four installer tests. Recruitment
+tests cover grade thresholds, all nine categories, future filter composition,
+existing matches, immediate stopping, locks, costs, interruptions, invalid data,
+native event-group restoration, panel controls, and preference storage.
+In the copied build 25975458, a real paid roll found and locked a work-grade
+match before another roll. It verified normal costs, suppression of native
+auto-recruit, survival of locks through a subsequent native refresh, insufficient
+funds, manual Stop, and screen closure. A separate three-roll run spent exactly
+9,000 copper, stopped at zero, and preserved an existing locked candidate.
+Recruitment still needs a manual Steam/NW.js check.
+
 To check the controls in-game:
 
 1. Arrange your characters, choose their jobs and priority work targets, then
@@ -171,6 +225,9 @@ To check the controls in-game:
    returns to 1 with its saved jobs after victory. Let it repeat.
 7. Press `F6` to stop the loop, then again to resume. Leave Ink Forest and check
    that it does not move characters or summon on the other map.
+8. Open recruitment, choose a target grade and affordable method in **Auto
+   recruit**, then start. Check that a matching work grade stops rolling and
+   locks the candidate. Hire them manually. Also check the Stop button.
 
 ## Development
 
@@ -193,15 +250,30 @@ python3 manage.py build --package /path/to/package.nw --output /path/to/new-pack
 `src/formations.js` handles snapshots, validation, and tap/hold timing.
 `src/combat.js` handles persistent combat undo and character matching.
 `src/forest.js` handles the Ink Forest cycle and formation validation.
+`src/recruit.js` handles candidate matching and the recruitment search loop.
+`src/recruit-runtime.js` reads recruitment data and adapts native paid refreshes,
+locks, and event groups.
 `src/runtime.js` adapts character/tile APIs, native movement/mode/summon functions,
 the victory callback, and the native auto-summon event group.
-`src/dom.js` handles keyboard focus and confirmation messages. The installer
-appends these scripts to the game's existing runtime and DOM bundles. Presets
+`src/dom.js` handles keyboard focus, confirmation messages, and recruitment
+controls. The installer appends these scripts to the game's existing runtime
+and DOM bundles. Presets
 use Construct's `runtime.storage` under the `cjs-formations:v1:` namespace.
 New snapshots use data format version 2 with positions, modes, and priority
 coordinates; the namespace stays unchanged so version 1 position saves remain
 available until replaced by holding the slot again.
 Combat undo uses the separate `cjs-formations:combat:v1:` namespace.
+Recruitment preferences use DOM local storage at
+`cjs-formations:recruit-options:v1`; the running state is never persisted.
+
+Recruitment rules have the shape `[{ type: "work-grade", minimum: 5 }]` (`A` and
+better). `compileRecruitCriteria` validates and snapshots the rules. Each entry
+in `recruitCriteria` supplies `validate(rule)` and `match(candidate, rule)`;
+matching returns an array of reasons or `null`. All criteria must match the
+**same candidate**, while the work-grade criterion accepts **any** category.
+To add talent or stat filters, extend the candidate data in the runtime adapter,
+add a criterion handler, and expose its settings in the panel. Unknown criteria
+or unreadable grades stop the search before another roll.
 
 References: [Construct runtime scripting](https://www.construct.net/en/make-games/manuals/construct-3/scripting/scripting-reference/iruntime),
 [Array scripting](https://www.construct.net/en/make-games/manuals/construct-3/scripting/scripting-reference/plugin-interfaces/array).

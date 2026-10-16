@@ -14,6 +14,7 @@
     function context() {
       const g = runtime.globalVars;
       if (!engine.GetMainRunningLayout() || runtime.layout.name !== "主界面" || g["分页界面"] || g["爬塔挑战开关"] ||
+          all("二级页面背景").length ||
           all("角色拖动点").length || all("建造拖动点").length || all("搬迁拖动点").length) return null;
       const save = first("save"), cores = all("角色核心");
       if (!save || !cores.length || cores.some(c => c.behaviors.DragDrop?.isDragging)) return null;
@@ -141,6 +142,7 @@
         if (!runtime.globalVars["挑战灵兽开关"]) throw new Error("The game refused the summon. Toggle F6 off/on to retry.");
       },
     });
+    const recruitment = globalThis.BanditFormations.attachRecruitment(runtime, engine, notify);
     engine.AddDOMComponentMessageHandler(component, "forest", () => { hotkeys.cancel(); forest.toggle(); });
     engine.AddDOMComponentMessageHandler(component, "combat", () => {
       hotkeys.cancel();
@@ -150,9 +152,9 @@
       if (!combat.busy) return hotkeys.key(phase, slot);
     });
     engine.AddDOMComponentMessageHandler(component, "cancel", () => hotkeys.cancel());
-    runtime.addEventListener("tick", () => hotkeys.tick() || forest.tick());
-    runtime.addEventListener("beforelayoutstart", () => { hotkeys.cancel(); forest.leave(); });
-    engine.PostComponentMessageToDOM(component, "ready", { version: "1.3.0" });
-    console.info("[Bandit TD Formations] v1.3.0 ready: hold 1–4 to save positions and jobs, tap to restore; C toggles combat; Ink Forest loop on, F6 toggles.");
+    runtime.addEventListener("tick", () => { recruitment.tick(); return hotkeys.tick() || forest.tick(); });
+    runtime.addEventListener("beforelayoutstart", () => { hotkeys.cancel(); forest.leave(); recruitment.leave(); });
+    engine.PostComponentMessageToDOM(component, "ready", { version: "1.4.0" });
+    console.info("[Bandit TD Formations] v1.4.0 ready: hold 1–4 to save positions and jobs, tap to restore; C toggles combat; Ink Forest loop on, F6 toggles; auto recruit controls on the recruitment screen.");
   });
 })();

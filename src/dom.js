@@ -12,10 +12,11 @@
         }],
         ["notify", ({ text }) => this.notify(text)],
         ["forest-status", ({ text }) => this.forestStatus(text)],
+        ["recruit-status", state => this.recruitStatus(state)],
       ]);
     }
     Attach() {
-      const editable = element => element?.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(element?.tagName);
+      const editable = element => element?.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(element?.tagName) || this.recruitPanel?.contains(element);
       const cancel = () => {
         this.held.clear();
         if (this.ready) this.PostToRuntime("cancel", {});
@@ -41,9 +42,94 @@
         if (editable(document.activeElement) || e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) { cancel(); return; }
         this.PostToRuntime("key", { phase: "up", slot: Number(e.code.slice(-1)) });
       }, true);
-      window.addEventListener("blur", cancel);
-      document.addEventListener("visibilitychange", () => { if (document.hidden) cancel(); });
+      const loseFocus = () => {
+        cancel();
+        if (this.recruitState?.running) this.PostToRuntime("recruit-stop", {});
+      };
+      window.addEventListener("blur", loseFocus);
+      document.addEventListener("visibilitychange", () => { if (document.hidden) loseFocus(); });
       document.addEventListener("focusin", e => { if (editable(e.target)) cancel(); });
+    }
+    recruitStatus(state) {
+      this.recruitState = state;
+      if (!state.visible) { if (this.recruitPanel) this.recruitPanel.hidden = true; return; }
+      if (!this.recruitPanel) {
+        const make = (tag, text, parent) => {
+          const node = document.createElement(tag);
+          if (text) node.textContent = text;
+          if (parent) parent.appendChild(node);
+          return node;
+        };
+        const panel = this.recruitPanel = make("section");
+        panel.id = "cjs-recruit";
+        panel.setAttribute("aria-label", "Auto recruit");
+        panel.style.cssText = "position:fixed;bottom:12px;right:12px;z-index:2147483646;background:#152025f5;color:#fff;padding:12px 16px;border:1px solid #c0a35b;border-radius:6px;font:14px sans-serif;width:480px;max-width:calc(100vw - 60px);box-shadow:0 3px 16px #0008";
+        const row = make("div", "", panel);
+        row.style.cssText = "display:flex;align-items:end;gap:10px;flex-wrap:wrap";
+        make("strong", "Auto recruit", row).style.cssText = "align-self:center";
+        const gradeLabel = make("label", "Minimum grade ", row);
+        this.recruitGrade = make("select", "", gradeLabel);
+        this.recruitGrade.id = "cjs-recruit-grade";
+        for (const [i, name] of state.grades.entries()) {
+          const option = make("option", name, this.recruitGrade); option.value = String(i + 1);
+        }
+        const methodLabel = make("label", "Method ", row);
+        this.recruitMethod = make("select", "", methodLabel);
+        this.recruitMethod.id = "cjs-recruit-method";
+        this.recruitMethod.style.maxWidth = "230px";
+        this.recruitButton = make("button", "Start rolling", row);
+        this.recruitButton.id = "cjs-recruit-toggle";
+        this.recruitButton.type = "button";
+        this.recruitButton.style.cssText = "background:#c0a35b;color:#10191d;border:0;border-radius:4px;padding:7px 12px;cursor:pointer;font:inherit";
+        this.recruitInfo = make("div", "", panel);
+        this.recruitInfo.style.cssText = "margin-top:8px;line-height:1.4";
+        this.recruitInfo.setAttribute("role", "status");
+        make("div", "Any work category at this grade or better. Matches are locked for you to hire.", panel).style.cssText = "margin-top:5px;color:#c5ced1;font-size:12px";
+        this.recruitOptions = { minimum: 5, method: 1 };
+        try {
+          const saved = JSON.parse(localStorage.getItem("cjs-formations:recruit-options:v1"));
+          if (Number.isInteger(saved?.minimum) && saved.minimum >= 1 && saved.minimum <= state.grades.length) this.recruitOptions.minimum = saved.minimum;
+          if (Number.isInteger(saved?.method) && saved.method >= 1 && saved.method <= 5) this.recruitOptions.method = saved.method;
+        } catch { /* A search still works when browser storage is unavailable. */ }
+        this.recruitGrade.value = String(this.recruitOptions.minimum);
+        const saveOptions = () => {
+          this.recruitOptions = { minimum: Number(this.recruitGrade.value), method: Number(this.recruitMethod.value) };
+          try { localStorage.setItem("cjs-formations:recruit-options:v1", JSON.stringify(this.recruitOptions)); } catch { /* Session settings remain usable. */ }
+        };
+        this.recruitGrade.addEventListener("change", saveOptions);
+        this.recruitMethod.addEventListener("change", saveOptions);
+        this.recruitButton.addEventListener("click", () => {
+          if (this.recruitState.running) this.PostToRuntime("recruit-stop", {});
+          else {
+            saveOptions();
+            this.PostToRuntime("cancel", {});
+            this.PostToRuntime("recruit-start", { method: this.recruitOptions.method,
+              criteria: [{ type: "work-grade", minimum: this.recruitOptions.minimum }] });
+          }
+        });
+        for (const event of ["pointerdown", "pointerup", "pointermove", "pointerrawupdate", "pointercancel", "mousedown", "mouseup", "mousemove", "click", "dblclick", "touchstart", "touchend", "touchmove", "touchcancel", "keydown", "keyup", "wheel"]) {
+          panel.addEventListener(event, e => e.stopPropagation());
+        }
+        document.body.appendChild(panel);
+      }
+      this.recruitPanel.hidden = false;
+      const methods = JSON.stringify(state.methods);
+      if (methods !== this.recruitMethods) {
+        this.recruitMethods = methods;
+        this.recruitMethod.replaceChildren();
+        for (const method of state.methods) {
+          const option = document.createElement("option");
+          option.value = String(method.id);
+          option.textContent = `${method.name} · ${method.cost.toLocaleString()} copper/roll`;
+          this.recruitMethod.appendChild(option);
+        }
+        if (state.methods.some(m => m.id === this.recruitOptions.method)) this.recruitMethod.value = String(this.recruitOptions.method);
+      }
+      this.recruitGrade.disabled = this.recruitMethod.disabled = state.running;
+      this.recruitButton.disabled = !state.running && !state.methods.length;
+      this.recruitButton.textContent = state.running ? "Stop" : "Start rolling";
+      this.recruitInfo.textContent = `${state.message} · ${state.rolls} rolls · ${state.spent.toLocaleString()} copper spent` +
+        (state.methods.length ? "" : " · Unlock paid recruitment refreshes to start.");
     }
     forestStatus(text) {
       if (!this.forestBadge) {

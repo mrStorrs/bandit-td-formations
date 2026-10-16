@@ -1,0 +1,114 @@
+"use strict";
+const { test } = require("node:test");
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const vm = require("node:vm");
+const sandbox = { BanditFormations: {} };
+vm.createContext(sandbox);
+vm.runInContext(fs.readFileSync(`${__dirname}/../src/recruit.js`, "utf8"), sandbox);
+const { RecruitSearch, compileRecruitCriteria, recruitCriteria } = sandbox.BanditFormations;
+const criteria = [{ type: "work-grade", minimum: 5 }];
+const candidate = (id, grade = 1) => ({ id, name: `Recruit ${id}`, locked: false,
+  work: Array.from({ length: 9 }, (_, i) => ({ name: `Work ${i}`, grade: i === 8 ? grade : 1 })) });
+
+function fixture() {
+  let clock = 0, current = { token: "campaign:map:page", ready: true, blocked: false, money: 9000,
+    methods: [{ id: 1, cost: 3000 }], candidates: [candidate(1), candidate(2), candidate(3)] };
+  let active = true;
+  const rolls = [], locks = [], statuses = [], notices = [], queue = [];
+  const search = new RecruitSearch({ now: () => clock, context: () => current,
+    roll(c, method) { rolls.push(method); c.money -= 3000; c.candidates = queue.shift() || [candidate(1), candidate(2), candidate(3)]; return c; },
+    lock(candidates) { for (const c of candidates) { locks.push(c.id); c.locked = true; } },
+    suspend() { const original = active; active = false; return () => { active = original; }; },
+    status: s => statuses.push(s), notify: s => notices.push(s),
+  });
+  return { search, current, rolls, locks, statuses, notices, queue,
+    get active() { return active; }, set active(value) { active = value; },
+    setCurrent(value) { current = value; },
+    start(options = {}) { search.start({ method: 1, criteria, ...options }); },
+    tick(ms = 600) { clock += ms; search.tick(); } };
+}
+test("any of the nine work grades meets the target, including better grades", () => {
+  const match = compileRecruitCriteria(criteria);
+  for (let i = 0; i < 9; i++) {
+    for (const grade of [5, 6, 7]) {
+      const c = candidate(1); c.work[i].grade = grade;
+      assert.match(match(c).join(), new RegExp(`Work ${i} (A|S|SS)`));
+    }
+  }
+  assert.equal(match(candidate(1, 4)), null);
+});
+test("future criteria combine on the same candidate, without changing the loop", () => {
+  recruitCriteria.talent = { validate: r => r.id === 10, match: (c, r) => c.talents?.includes(r.id) ? ["Talent 10"] : null };
+  try {
+    const rules = [...criteria, { type: "talent", id: 10 }], match = compileRecruitCriteria(rules);
+    assert.equal(match(candidate(1, 7)), null);
+    assert.equal(match({ ...candidate(2, 4), talents: [10] }), null);
+    assert.equal(match({ ...candidate(3, 5), talents: [10] }).length, 2);
+    rules[0].minimum = 7;
+    assert.ok(match({ ...candidate(3, 5), talents: [10] }), "compiled rules are independent of later edits");
+  } finally { delete recruitCriteria.talent; criteria[0].minimum = 5; }
+});
+test("invalid or unknown filters and unreadable grades fail closed", () => {
+  for (const rules of [null, [], [{ type: "unknown" }], [{ type: "toString" }], [{ type: "work-grade", minimum: 0 }], [{ type: "work-grade", minimum: 8 }], [{ type: "work-grade", minimum: "5" }]]) {
+    assert.throws(() => compileRecruitCriteria(rules));
+  }
+  const match = compileRecruitCriteria(criteria), c = candidate(1, 7);
+  c.work[0].grade = NaN;
+  assert.throws(() => match(c), /nine work grades/);
+  c.work.pop(); assert.throws(() => match(c), /nine work grades/);
+});
+test("an existing match is locked without spending, including a match already locked", () => {
+  const f = fixture(); f.current.candidates[1] = candidate(2, 6); f.current.candidates[1].locked = true;
+  f.start(); f.tick();
+  assert.equal(f.search.running, false); assert.deepEqual(f.rolls, []);
+  assert.deepEqual(f.locks, [2]); assert.equal(f.current.money, 9000); assert.equal(f.active, true);
+});
+test("rolls once at a time, locks every match immediately, and never rolls past it", () => {
+  const f = fixture();
+  f.queue.push([candidate(1), candidate(2), candidate(3)], [candidate(1, 5), candidate(2), candidate(3, 7)]);
+  f.start(); assert.equal(f.active, false);
+  f.tick(200); f.tick(200); assert.equal(f.rolls.length, 0);
+  f.tick(200); assert.equal(f.rolls.length, 1);
+  f.tick(200); f.tick(200); assert.equal(f.rolls.length, 1);
+  f.tick(200); assert.equal(f.rolls.length, 2);
+  assert.deepEqual(f.locks, [1, 3]); assert.equal(f.search.running, false); assert.equal(f.active, true);
+  assert.equal(f.search.spent, 6000); assert.equal(f.search.rolls, 2);
+  for (let i = 0; i < 5; i++) f.tick();
+  assert.equal(f.rolls.length, 2); assert.equal(f.notices.length, 1);
+});
+test("the last affordable roll still checks and locks its match before stopping", () => {
+  const f = fixture(); f.current.money = 3000; f.queue.push([candidate(1, 5)]);
+  f.start(); f.tick(); assert.deepEqual(f.locks, [1]); assert.equal(f.current.money, 0);
+  assert.match(f.search.message, /Found and locked/);
+});
+test("insufficient money, all locked slots, and lost methods never spend", () => {
+  for (const change of [f => { f.current.money = 2999; }, f => f.current.candidates.forEach(c => { c.locked = true; }),
+    f => { f.current.methods = []; }, f => { f.current.money = NaN; }]) {
+    const f = fixture(); f.start(); change(f); f.tick();
+    assert.equal(f.search.running, false); assert.equal(f.rolls.length, 0); assert.equal(f.active, true);
+  }
+});
+test("screen close, save/map change, blockers, and Stop cancel without an extra roll", () => {
+  for (const change of [f => f.setCurrent(null), f => { f.current.token = "other"; },
+    f => { f.current.blocked = true; }, f => f.search.stop(), f => f.search.leave()]) {
+    const f = fixture(); f.start(); change(f); f.tick(); f.tick();
+    assert.equal(f.search.running, false); assert.equal(f.rolls.length, 0); assert.equal(f.active, true);
+  }
+});
+test("cooldown and disabled native automation are restored correctly", () => {
+  const f = fixture(); f.current.ready = false; f.start();
+  assert.equal(f.search.running, false); assert.equal(f.active, true);
+  f.current.ready = true; f.active = false; f.start(); f.search.stop(); assert.equal(f.active, false);
+  f.active = true; f.start(); f.current.ready = false; f.tick();
+  assert.equal(f.search.running, false); assert.equal(f.active, true);
+});
+test("roll and lock failures release native automation and stop retrying", () => {
+  for (const operation of ["roll", "lock"]) {
+    const f = fixture(); f.search[operation] = () => { throw new Error("native failure"); };
+    if (operation === "lock") f.current.candidates[0] = candidate(1, 5);
+    f.start(); f.tick(); f.tick();
+    assert.equal(f.search.running, false); assert.equal(f.active, true); assert.equal(f.rolls.length, 0);
+    assert.match(f.search.message, /native failure/);
+  }
+});
