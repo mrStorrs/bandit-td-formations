@@ -116,6 +116,14 @@ test("each forging, crafting and alchemy station repeats 10 only after its own q
   f.finish(0); await f.tick(); assert.equal(f.remaining(0), 10); assert.deepEqual(f.balance(), [9920, 9880]);
   assert.equal(f.flushes, 4); assert.equal(f.notifications.length, 0);
 });
+test("Soul Tower's movement lock does not stop forging, crafting or brewing refills", async () => {
+  const f = fixture(); f.g.当前地图编号 = 40; f.g.爬塔挑战开关 = true; await f.tick();
+  for (let i = 0; i < 3; i++) { f.start(i); f.finish(i); }
+  await f.tick();
+  assert.deepEqual([0, 1, 2].map(i => f.remaining(i)), [10, 10, 10]);
+  assert.deepEqual(f.balance(), [9940, 9910]);
+  assert.equal(f.g.爬塔挑战开关, true); assert.equal(f.notifications.length, 0);
+});
 test("waits for materials for a full batch, retries automatically, and shares materials safely", async () => {
   const f = fixture(); await f.tick(); f.start(0); f.start(1); f.finish(0); f.finish(1);
   f.materials(20, 29); await f.tick(); assert.equal(f.queue(0), 0); assert.deepEqual(f.balance(), [20, 29]);

@@ -162,7 +162,7 @@
     engine.AddDOMComponentMessageHandler(component, "cancel", cancelKeys);
     runtime.addEventListener("tick", () => { recruitment.tick(); crafting.tick(); return hotkeys.tick() || buildingHotkeys.tick() || forest.tick(); });
     runtime.addEventListener("beforelayoutstart", () => { cancelKeys(); forest.leave(); recruitment.leave(); });
-    engine.PostComponentMessageToDOM(component, "ready", { version: "1.8.0" });
-    console.info("[Bandit TD Formations] v1.8.0 ready: hold 1–4 to save positions and jobs, tap to restore; Shift + 1–4 for buildings; C toggles combat; Ink Forest loop on, F6 toggles; auto recruit controls on the recruitment screen; crafting stations repeat batches of 10.");
+    engine.PostComponentMessageToDOM(component, "ready", { version: "1.8.1" });
+    console.info("[Bandit TD Formations] v1.8.1 ready: hold 1–4 to save positions and jobs, tap to restore; Shift + 1–4 for buildings; C toggles combat; Ink Forest loop on, F6 toggles; auto recruit controls on the recruitment screen; crafting stations repeat batches of 10.");
   });
 })();

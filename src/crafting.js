@@ -67,7 +67,8 @@
           usable: !!v["有效解锁"] && !["失效", "满仓"].includes(v["资源类型"]) &&
             save.getAt(owner, 1, 1) > 0 && save.getAt(owner, 4, 1) <= 0 });
       }
-      const blocked = g["游戏暂停"] || runtime.timeScale === 0 || g["分页界面"] || g["爬塔挑战开关"] || g["拖动模式"] ||
+      // Soul Tower locks character movement; native station work remains allowed.
+      const blocked = g["游戏暂停"] || runtime.timeScale === 0 || g["分页界面"] || g["拖动模式"] ||
         ["二级页面背景", "转场云", "世界地图", "提示信息", "对话选择框", "角色拖动点", "建造拖动点", "搬迁拖动点", "设施搬迁拖动点"]
           .some(name => all(name).length) || all("黑幕").some(instance => instance.isVisible);
       return { save, wp, saveId, stations, blocked };

@@ -207,6 +207,9 @@ while the game is paused, menus or transitions are open, or the station is
 unavailable. Full inventory keeps the native queue unfinished and prevents a
 new batch.
 
+Soul Tower's character-movement lock does not pause repeat crafting: forging,
+crafting, and brewing stations continue refilling during an active challenge.
+
 Recipes and multipliers persist locally per campaign and facility slot across
 map changes and game restarts. They are not part of Steam Cloud. Recipes that
 finished before this feature was installed cannot be recovered: start a batch
@@ -232,7 +235,7 @@ python3 manage.py install --game-dir "/path/to/Steam/steamapps/common/塔防山�
 
 On Windows, use `py -3` in place of `python3` if appropriate. Restart the game
 after installing. Look for the “Formations ready” message on startup.
-The startup message includes the installed version number (currently 1.8.0).
+The startup message includes the installed version number (currently 1.8.1).
 
 The installer backs up the input archive in `cjs-formations-backups/` beside the
 game, verifies the result, then replaces `package.nw` atomically. It does not
@@ -364,6 +367,14 @@ completed all 10 crafts, waited for supplies, and resumed after restocking.
 Cancellation, changed recipes, multiplier preservation, selection preservation,
 and persistence after reloading the copied save also passed. This update still
 needs a manual Steam/NW.js check.
+
+Version 1.8.1 fixes repeat crafting being incorrectly blocked during Soul Tower
+challenges. It passes 139 JavaScript tests and four installer tests. In the
+isolated game copy, the reported save reproduced all three stations staying
+empty in version 1.8.0 after a native Soul Tower challenge started. With the fix,
+forging, crafting, and brewing each refilled twice with 10 crafts, paid normal
+material costs, and left the challenge active. Character movement restrictions
+remain unchanged. This fix still needs a manual Steam/NW.js check.
 
 To check the controls in-game:
 
