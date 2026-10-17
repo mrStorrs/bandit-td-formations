@@ -1,6 +1,6 @@
 # Bandit TD Formations
 
-A character/building formation, combat, and recruitment mod for Bandit Simulator TD (Steam app 4267800).
+A character/building formation, combat, recruitment, and crafting mod for Bandit Simulator TD (Steam app 4267800).
 
 - **Hold a top-row number key (`1`–`4`) for one second:** save all currently
   placed characters' positions, job modes, and priority work targets into that
@@ -19,6 +19,9 @@ A character/building formation, combat, and recruitment mod for Bandit Simulator
   optional STR/AGI/INT thresholds, a minimum copper reserve, and a recruitment
   method, then start rolling. Stop and lock recruits when **any** selected target
   matches, or stop before another roll would spend below the reserve.
+- **Automatic repeat crafting:** forging, crafting, and alchemy stations remember
+  their last started recipe and material multiplier. Each empty station queues
+  another batch of **10**, waiting for materials when necessary.
 - A message confirms saving or restoring. An empty slot leaves characters alone.
 - Formations persist locally across restarts and are separate for each campaign
   save identifier and current map. They are not included in Steam Cloud saves.
@@ -183,6 +186,32 @@ can inspect it. A match is locked before these systems resume.
 Talent filters are not included yet. The matching code accepts typed criteria
 combined with OR, so more targets can be added without rewriting the rolling controls.
 
+## Repeat crafting
+
+Start a recipe at a forging, crafting, or alchemy station normally. When that
+station finishes its entire queue, the mod queues **10 more crafts** of the same
+recipe with the same material multiplier. Each station repeats independently;
+one busy station does not hold up the others. Existing active queues are learned
+automatically when the mod loads. An empty station with no remembered recipe
+stays idle until you start something there.
+
+Repeating is always enabled during normal gameplay. It uses the game's material
+costs and requires enough materials for all 10 crafts. If supplies are short, it
+waits and checks again about once per second. It never adds to an unfinished
+queue or grants completed items directly; workers still do the crafting normally.
+
+Use the station's normal **Cancel** action to stop its repeat. Start another
+recipe to enable it again and replace the remembered choice. Moving a station
+keeps its remembered recipe; demolishing it clears that choice. Repeat waits
+while the game is paused, menus or transitions are open, or the station is
+unavailable. Full inventory keeps the native queue unfinished and prevents a
+new batch.
+
+Recipes and multipliers persist locally per campaign and facility slot across
+map changes and game restarts. They are not part of Steam Cloud. Recipes that
+finished before this feature was installed cannot be recovered: start a batch
+once at those empty stations to teach the mod what to repeat.
+
 ## Install
 
 Requires Python 3.10 or later. No Python packages, mod loader, or Node installation
@@ -203,7 +232,7 @@ python3 manage.py install --game-dir "/path/to/Steam/steamapps/common/塔防山�
 
 On Windows, use `py -3` in place of `python3` if appropriate. Restart the game
 after installing. Look for the “Formations ready” message on startup.
-The startup message includes the installed version number (currently 1.7.0).
+The startup message includes the installed version number (currently 1.8.0).
 
 The installer backs up the input archive in `cjs-formations-backups/` beside the
 game, verifies the result, then replaces `package.nw` atomically. It does not
@@ -231,6 +260,9 @@ Recruitment generation, work grading, paid refreshes, costs, locks, readiness,
 and auto-recruit event groups were inspected on both builds for version 1.4.0.
 Building relocation, object creation, and facility-range event groups were
 compared on both builds for version 1.5.0 and are unchanged.
+Crafting queue allocation, recipe costs, facility linkage, cancellation and
+completion were inspected on both builds for version 1.8.0. Native item quality,
+completion rewards, and auto-sale behavior remain under the game's control.
 
 Steam updates and “Verify integrity of game files” can replace `package.nw`
 and remove the mod. If `C` opens the character menu again, or the startup
@@ -322,6 +354,17 @@ reserve, and preserving the setting after reload. Five native paid rolls also
 verified matches at the limit, manual locks, and retrying declined matches after
 lowering the minimum. This update still needs a manual Steam/NW.js check.
 
+Version 1.8.0 passes 138 JavaScript tests and four installer tests. Crafting tests
+cover independent stations, full batches, material shortages and shared supplies,
+recipe changes, multipliers, cancellation, relocation, demolition, campaign
+isolation, pending storage reads, native menu updates, and failed queue/payment
+rollback. In copied build 25975458, forging, crafting, and alchemy each completed
+native work and queued 10 more with exact material charges. A repeated batch
+completed all 10 crafts, waited for supplies, and resumed after restocking.
+Cancellation, changed recipes, multiplier preservation, selection preservation,
+and persistence after reloading the copied save also passed. This update still
+needs a manual Steam/NW.js check.
+
 To check the controls in-game:
 
 1. Arrange your characters, choose their jobs and priority work targets, then
@@ -356,6 +399,11 @@ To check the controls in-game:
     another roll would leave less than that amount. Lower the minimum and click
     Start again to continue; clear it or use `0` to remove the reserve. Restart
     and check that the minimum is remembered without starting a search.
+12. Start recipes at several crafting stations with different material multipliers.
+    Let each queue finish and check it adds exactly 10 of its own recipe, paying
+    normal costs. Try insufficient materials, then replenish them. Cancel one
+    station and confirm it stays stopped; start a new recipe to resume. Restart
+    the game and check that remembered recipes still repeat.
 
 ## Development
 
@@ -384,6 +432,8 @@ relocation and flushes pending object creation/destruction between moves.
 `src/recruit.js` handles candidate matching and the recruitment search loop.
 `src/recruit-runtime.js` reads recruitment data and adapts native paid refreshes,
 locks, and event groups.
+`src/crafting.js` observes native queue creation and cancellation, remembers
+station recipes, and refills empty queues through the native crafting functions.
 `src/runtime.js` adapts character/tile APIs, native movement/mode/summon functions,
 the victory callback, and the native auto-summon event group.
 `src/dom.js` handles keyboard focus, confirmation messages, and recruitment
@@ -400,6 +450,9 @@ Recruitment preferences use DOM local storage at
 `cjs-formations:recruit-options:v1`; the running state is never persisted.
 The `minimumMoney` option is a nonnegative copper reserve (default `0`), separate
 from the matching criteria. It applies to every paid roll regardless of targets.
+Crafting memory uses `cjs-formations:crafting:v1:<saveId>` in runtime storage.
+Each entry contains a facility slot, facility type, parent building slot, recipe,
+and material multiplier. Queue progress and materials remain in the game save.
 
 Recruitment rules have the shape `[{ type: "work-grade", minimum: 5 }]` (`A` and
 better). `compileRecruitCriteria` validates and snapshots the rules. Each entry
