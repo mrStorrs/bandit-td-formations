@@ -17,10 +17,14 @@ function fixture() {
     save.setAt(c.instVars.设定状态, id, 9, 2); save.setAt(c.instVars.优先工作目标X, id, 57, 2);
   }
   const tiles = [1, 2, 3].map(x => ({ instVars: { X坐标: x, Y坐标: 0, 角色许可: true, 占用开关: x < 3, 建筑序号: 0, 建筑编号: 0 } }));
-  const objects = { save: [save], 角色核心: cores, 地面: tiles, jz: [{ getAt: () => 1 }], 转场云: [], 世界地图: [], 黑幕: [], 二级页面背景: [] };
+  const objects = { save: [save], 角色核心: cores, 地面: tiles, jz: [{ getAt: () => 1 }],
+    zddt: [{ getAt: (id, field) => field === 2 && id >= 28 && id <= 36 ? "野外" : "特殊" }],
+    转场云: [], 世界地图: [], 黑幕: [], 二级页面背景: [] };
   let autoActive = true;
   const auto = { IsGroupActive: () => autoActive, SetGroupActive: value => { autoActive = value; } };
-  const victory = { _RunAndBlock() { runtime.globalVars.挑战灵兽开关 = false; save.setAt(0, 28, 10, 0); } };
+  const victory = { _RunAndBlock() {
+    runtime.globalVars.挑战灵兽开关 = false; save.setAt(0, runtime.globalVars.当前地图编号, 10, 0);
+  } };
   const runtime = {
     layout: { name: "主界面" }, globalVars: { 当前地图编号: 1, 分页界面: "", 爬塔挑战开关: false, 战斗开关: true },
     objects: Object.fromEntries(Object.entries(objects).map(([k, v]) => [k, { getFirstInstance: () => v[0], getAllInstances: () => v }])),
@@ -223,8 +227,8 @@ test("a malformed saved job prevents both movement and job changes", async () =>
   assert.match(f.messages.at(-1)[1].text, /invalid jobs/);
 });
 
-async function forestFixture() {
-  const f = fixture(); f.runtime.globalVars.当前地图编号 = 28;
+async function forestFixture(mapId = 28) {
+  const f = fixture(); f.runtime.globalVars.当前地图编号 = mapId;
   await f.hold(1);
   f.runtime.callFunction("角色位置移动", 1, 2, 0, "主地图", false);
   f.runtime.callFunction("角色位置移动", 2, 1, 0, "主地图", false);
@@ -401,27 +405,53 @@ test("recruit adapter ignores closed screens and rejects locked methods, dialogs
     assert.ok([...f.groups.values()].every(g => g.IsGroupActive()));
   }
 });
-test("Ink Forest adapter uses readiness, suppresses native auto, and observes native victory before repeating", async () => {
+for (const mapId of [28, 29, 30, 31, 32, 33, 34, 35, 36]) {
+  test(`beast map ${mapId} uses its own readiness, native summon and victory, and saved positions/jobs`, async () => {
+    const f = await forestFixture(mapId);
+    f.save.setAt(100, mapId === 28 ? 29 : 28, 10, 0);
+    await f.tick(); await f.tick();
+    assert.deepEqual(f.cores.map(c => c.instVars.X坐标), [1, 2]);
+    assert.deepEqual(f.cores.map(c => c.instVars.设定状态), ["采矿", "自动"]);
+    assert.equal(f.cores[0].instVars.优先工作目标X, 3);
+    assert.equal(f.auto.IsGroupActive(), false);
+    assert.equal(f.calls.filter(c => c[0] === "开始灵兽挑战").length, 0, "another map's threat must not summon here");
+    f.save.setAt(100, mapId, 10, 0); await f.tick();
+    assert.deepEqual(f.cores.map(c => c.instVars.X坐标), [2, 1]);
+    assert.deepEqual(f.cores.map(c => c.instVars.设定状态), ["战斗", "战斗"]);
+    assert.equal(f.cores[0].instVars.优先工作目标X, 0);
+    assert.deepEqual(f.calls.filter(c => c[0] === "开始灵兽挑战"), [["开始灵兽挑战", mapId]]);
+    f.victory._RunAndBlock(); await f.tick();
+    assert.deepEqual(f.cores.map(c => c.instVars.X坐标), [1, 2]);
+    assert.deepEqual(f.cores.map(c => c.instVars.设定状态), ["采矿", "自动"]);
+    assert.equal(f.save.getAt(1, 57, 2), 3);
+    f.save.setAt(100, mapId, 10, 0); await f.tick();
+    assert.equal(f.calls.filter(c => c[0] === "开始灵兽挑战").length, 2);
+    f.handlers.forest(); assert.equal(f.auto.IsGroupActive(), true);
+  });
+}
+test("changing beast maps loads that map's formations even when character instances stay the same", async () => {
   const f = await forestFixture(); await f.tick();
-  assert.deepEqual(f.cores.map(c => c.instVars.X坐标), [1, 2]);
-  assert.deepEqual(f.cores.map(c => c.instVars.设定状态), ["采矿", "自动"]);
-  assert.equal(f.cores[0].instVars.优先工作目标X, 3);
-  assert.equal(f.auto.IsGroupActive(), false);
-  f.save.setAt(100, 28, 10, 0); await f.tick();
-  assert.deepEqual(f.cores.map(c => c.instVars.X坐标), [2, 1]);
-  assert.deepEqual(f.cores.map(c => c.instVars.设定状态), ["战斗", "战斗"]);
-  assert.equal(f.cores[0].instVars.优先工作目标X, 0);
-  assert.deepEqual(f.calls.filter(c => c[0] === "开始灵兽挑战"), [["开始灵兽挑战", 28]]);
+  for (const slot of [1, 2]) {
+    const saved = JSON.parse(JSON.stringify(f.stored.get(`cjs-formations:v1:12345678:28:${slot}`)));
+    saved.mapId = 29;
+    if (slot === 1) saved.characters[0].x = 3;
+    f.stored.set(`cjs-formations:v1:12345678:29:${slot}`, saved);
+  }
+  f.save.setAt(100, 28, 10, 0);
+  f.runtime.globalVars.当前地图编号 = 29;
+  await f.tick(); await f.tick();
+  assert.deepEqual(f.cores.map(c => c.instVars.X坐标), [3, 2]);
+  assert.equal(f.calls.filter(c => c[0] === "开始灵兽挑战").length, 0);
+  f.save.setAt(100, 29, 10, 0); await f.tick();
+  assert.deepEqual(f.calls.filter(c => c[0] === "开始灵兽挑战"), [["开始灵兽挑战", 29]]);
   f.victory._RunAndBlock(); await f.tick();
-  assert.deepEqual(f.cores.map(c => c.instVars.X坐标), [1, 2]);
-  assert.deepEqual(f.cores.map(c => c.instVars.设定状态), ["采矿", "自动"]);
-  assert.equal(f.save.getAt(1, 57, 2), 3);
-  f.save.setAt(100, 28, 10, 0); await f.tick();
-  assert.equal(f.calls.filter(c => c[0] === "开始灵兽挑战").length, 2);
-  f.handlers.forest(); assert.equal(f.auto.IsGroupActive(), true);
+  assert.deepEqual(f.cores.map(c => c.instVars.X坐标), [3, 2]);
+  assert.equal(f.auto.IsGroupActive(), false);
+  f.runtime.globalVars.当前地图编号 = 40; await f.tick();
+  assert.equal(f.auto.IsGroupActive(), true);
 });
-test("Ink Forest never acts on another map, during transitions, pause, battle off, menus, or dragging", async () => {
-  for (const block of [f => { f.runtime.globalVars.当前地图编号 = 29; },
+test("beast loop never acts outside beast maps, during transitions, pause, battle off, menus, or dragging", async () => {
+  for (const block of [f => { f.runtime.globalVars.当前地图编号 = 1; },
     f => { f.runtime.globalVars.游戏暂停 = true; }, f => { f.runtime.globalVars.战斗开关 = false; },
     f => { f.runtime.globalVars.分页界面 = "menu"; }, f => { f.objects.转场云.push({}); },
     f => { f.objects.二级页面背景.push({ instVars: { 功能: "招募" } }); },
@@ -437,15 +467,19 @@ test("layout exit restores native auto and default-on loop resumes on a later In
   assert.equal(f.auto.IsGroupActive(), true);
   await f.tick(); assert.equal(f.auto.IsGroupActive(), false);
 });
-test("saving a formation while the automatic loop loads storage is not lost or overridden", async () => {
-  const f = await forestFixture(), resolves = [];
-  f.runtime.storage.getItem = key => new Promise(resolve => resolves.push(() => resolve(f.stored.get(key))));
+test("saving a later realm's formation while the automatic loop loads storage is not lost or overridden", async () => {
+  const f = await forestFixture(30), resolves = [];
+  f.runtime.storage.getItem = key => {
+    const saved = f.stored.get(key);
+    return new Promise(resolve => resolves.push(() => resolve(saved)));
+  };
   const loading = f.tick();
+  assert.equal(resolves.length, 2);
   f.cores[0].instVars.X坐标 = 3;
   await f.hold(1);
   for (const resolve of resolves) resolve();
   await loading;
-  const saved = f.stored.get("cjs-formations:v1:12345678:28:1");
+  const saved = f.stored.get("cjs-formations:v1:12345678:30:1");
   assert.equal(saved.characters.find(c => c.id === 1).x, 3);
   assert.equal(f.cores[0].instVars.X坐标, 3);
   assert.equal(f.calls.filter(c => c[0] === "开始灵兽挑战").length, 0);

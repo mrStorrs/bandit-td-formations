@@ -8,7 +8,7 @@
       this.AddRuntimeMessageHandlers([
         ["ready", ({ version }) => {
           this.ready = true;
-          this.notify(`Formations ready · v${version} · Hold 1–4 to save, tap to restore · Shift + 1–4 buildings · C combat · F6 Ink Forest loop (default ON).`);
+          this.notify(`Formations ready · v${version} · Hold 1–4 to save, tap to restore · Shift + 1–4 buildings · C combat · F6 Beast realm loop (default ON).`);
         }],
         ["notify", ({ text }) => this.notify(text)],
         ["forest-status", ({ text }) => this.forestStatus(text)],

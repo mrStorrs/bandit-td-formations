@@ -12,7 +12,7 @@ A character/building formation, combat, recruitment, and crafting mod for Bandit
 - **Press `C`:** remember all placed characters' modes and switch them to combat.
   **Press `C` again:** restore each character's previous mode, including their
   work target when it still exists on the same map. Character positions stay put.
-- **Ink Forest loop is ON by default. Press `F6` to toggle it:** use formation 1
+- **Beast realm loop is ON by default. Press `F6` to toggle it:** use formation 1
   while waiting, switch to formation 2 when Summon is ready, summon the spirit
   beast, then return to formation 1 after a win and repeat.
 - **Auto recruit panel on the recruitment screen:** choose a minimum work grade,
@@ -79,29 +79,34 @@ building footprints are supported.
 Facility plots such as crops and workstations stay in place, following normal
 building relocation behavior. The game recalculates their range from the moved
 building. Character positions and jobs use their own formation shortcuts.
-The Ink Forest loop waits while a building shortcut is held or being restored.
+The beast realm loop waits while a building shortcut is held or being restored.
 
-## Ink Forest loop
+## Beast realm loop
 
 Save formation **1** as your waiting arrangement and formation **2** as your
-summon-fighting arrangement **on Ink Forest**. The loop starts automatically
+summon-fighting arrangement **on each beast map**. The loop starts automatically
 when both are available. It moves characters before calling the game's normal
 summon function and waits for the game's actual victory event before returning
 to formation 1. It restores the jobs and work targets saved in each formation
 too, so formation 1 can prioritize work and formation 2 can prioritize combat.
 Resave both slots to include jobs if they were saved before version 1.3.0.
 
-The loop only runs on Ink Forest. It pauses while the game is paused, battle is
-off, a menu or map transition is open, or characters are being dragged. Returning
-to Ink Forest resumes it if enabled. A status message in the bottom-left corner
-shows what it is doing. `F6` switches it off or on without changing positions;
+The loop runs on every beast map, including Ink Forest and later realms. It uses
+the game's native beast-map category, the current map's readiness and summon,
+and formations saved specifically for that map. Save slots 1 and 2 separately
+on each map; existing Ink Forest formations keep working.
+
+It pauses while the game is paused, battle is off, a menu or map transition is
+open, or characters are being dragged. Returning to a beast map resumes it if
+enabled. A status message in the bottom-left corner shows what it is doing.
+`F6` switches it off or on without changing positions;
 the choice lasts until the game closes, and each launch defaults to **ON**.
 Turn it off while rearranging formations if needed.
 
 The game's own auto-summon is temporarily suspended while the loop controls the
 fight, so it cannot summon before formation 2 is applied. Its saved setting is
 left intact, and its normal operation resumes when the loop stops or you leave
-Ink Forest. An already-running summon uses formation 2 without summoning again.
+the beast map. An already-running summon uses formation 2 without summoning again.
 
 Both formations must include all currently placed characters. Missing presets,
 changed character identities, or blocked destinations pause the loop and show
@@ -235,7 +240,7 @@ python3 manage.py install --game-dir "/path/to/Steam/steamapps/common/塔防山�
 
 On Windows, use `py -3` in place of `python3` if appropriate. Restart the game
 after installing. Look for the “Formations ready” message on startup.
-The startup message includes the installed version number (currently 1.8.1).
+The startup message includes the installed version number (currently 1.8.2).
 
 The installer backs up the input archive in `cjs-formations-backups/` beside the
 game, verifies the result, then replaces `package.nw` atomically. It does not
@@ -279,8 +284,8 @@ save/map changes, invalid presets, missing characters, occupancy cycles, buildin
 slots, combat/undo with mixed jobs, work targets, native shortcut interception,
 formation job restoration with and without movement, older position-only
 presets, invalid job data, storage failures, the runtime adapter, and
-install/reinstall/uninstall. Ink
-Forest tests cover default-on behavior, F6, repeated summon/victory cycles,
+install/reinstall/uninstall. Beast realm tests cover default-on behavior, F6,
+repeated summon/victory cycles,
 native auto-summon coordination, invalid presets, map changes during storage
 reads, pause/menu guards, roster changes, and failed challenges.
 
@@ -376,6 +381,17 @@ forging, crafting, and brewing each refilled twice with 10 crafts, paid normal
 material costs, and left the challenge active. Character movement restrictions
 remain unchanged. This fix still needs a manual Steam/NW.js check.
 
+Version 1.8.2 extends the summon loop from Ink Forest to every native beast map.
+It passes 148 JavaScript tests and four installer tests, including each map's
+readiness, summon argument, victory tracking, saved jobs, and formation storage.
+Map changes and saving during a pending formation read are also covered. The
+native map category and summon/victory hooks were checked on both supported
+builds. In copied build 25975458, all nine beast maps completed two native
+summon/victory cycles each with ten characters. Each summoned its own boss only
+after formation 2 was applied and returned to formation 1 with its saved jobs.
+F6 stop/resume, unchanged native auto-summon preferences, and pausing after a
+failed challenge passed on every map. This needs a manual Steam/NW.js check.
+
 To check the controls in-game:
 
 1. Arrange your characters, choose their jobs and priority work targets, then
@@ -387,12 +403,13 @@ To check the controls in-game:
 5. Give characters different modes (such as mining, automatic, and combat).
    Press `C` once: all should show combat without moving. Press it again: each
    should return to their previous mode and eligible work target.
-6. On Ink Forest, save the waiting arrangement in slot 1 and the fighting
+6. On each beast map, save the waiting arrangement in slot 1 and the fighting
    arrangement with combat jobs in slot 2. With battle running, check that the
    loop waits and works in 1, moves to 2 with combat jobs before summoning, and
    returns to 1 with its saved jobs after victory. Let it repeat.
-7. Press `F6` to stop the loop, then again to resume. Leave Ink Forest and check
-   that it does not move characters or summon on the other map.
+7. Press `F6` to stop the loop, then again to resume. Switch to another beast
+   map and check that it uses that map's saved slots. Leave for a non-beast map
+   and check that the loop stops moving characters and summoning.
 8. Open recruitment, choose a target grade and affordable method in **Auto
    recruit**, then start. Check that a matching work grade stops rolling and
    locks the candidate. Click **Start rolling** again to skip that result and
@@ -439,7 +456,7 @@ python3 manage.py build --package /path/to/package.nw --output /path/to/new-pack
 temporary swap positions. `src/building-runtime.js` adapts native building
 relocation and flushes pending object creation/destruction between moves.
 `src/combat.js` handles persistent combat undo and character matching.
-`src/forest.js` handles the Ink Forest cycle and formation validation.
+`src/forest.js` handles the beast realm cycle and formation validation.
 `src/recruit.js` handles candidate matching and the recruitment search loop.
 `src/recruit-runtime.js` reads recruitment data and adapts native paid refreshes,
 locks, and event groups.

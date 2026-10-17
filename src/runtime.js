@@ -87,11 +87,14 @@
       }
     }
 
+    // Use the same map category as native auto-summon across all beast realms.
+    const isBeastMap = mapId => Number.isSafeInteger(mapId) && first("zddt")?.getAt(mapId, 2) === "野外";
     let victories = 0, victoryHooked = false;
     function forestContext() {
       const g = runtime.globalVars, save = first("save"), cores = all("角色核心");
+      const mapId = g["当前地图编号"];
       if (!engine.GetMainRunningLayout() || runtime.layout.name !== "主界面" ||
-          g["当前地图编号"] !== 28 || !save || !cores.length) return null;
+          !isBeastMap(mapId) || !save || !cores.length) return null;
       const saveId = save.getAt(0, 1, 0);
       if (!Number.isSafeInteger(saveId) || saveId < 10000000) return null;
       const current = context();
@@ -100,16 +103,16 @@
         ["转场云", "世界地图", "提示信息", "对话选择框"].some(name => all(name).length) ||
         all("黑幕").some(instance => instance.isVisible);
       const threshold = blocked ? Infinity : runtime.callFunction("威胁度上限");
-      return { ...current, saveId, mapId: 28, token: `${saveId}:28:${cores[0].uid}`, blocked,
+      return { ...current, saveId, mapId, token: `${saveId}:${mapId}:${cores[0].uid}`, blocked,
         active: !!g["挑战灵兽开关"], victories,
-        ready: Number.isFinite(threshold) && threshold > 0 && Number(save.getAt(28, 10, 0)) >= threshold };
+        ready: Number.isFinite(threshold) && threshold > 0 && Number(save.getAt(mapId, 10, 0)) >= threshold };
     }
     function suspendNativeAuto() {
       const manager = engine.GetEventSheetManager();
       const group = manager.GetEventGroupByName("自动开启灵兽挑战");
       const victory = manager.GetFunctionBlockByName("灵兽胜利")?.GetEventBlock();
       if (!group || typeof victory?._RunAndBlock !== "function") {
-        throw new Error("Ink Forest summon hooks are unavailable in this game build.");
+        throw new Error("Beast realm summon hooks are unavailable in this game build.");
       }
       if (!victoryHooked) {
         // Both native event calls and script calls enter this block. Observe the
@@ -117,7 +120,7 @@
         const run = victory._RunAndBlock;
         victory._RunAndBlock = function (...args) {
           const result = run.apply(this, args);
-          if (runtime.globalVars["当前地图编号"] === 28) victories++;
+          if (isBeastMap(runtime.globalVars["当前地图编号"])) victories++;
           return result;
         };
         victoryHooked = true;
@@ -127,7 +130,7 @@
       return () => group.SetGroupActive(active);
     }
     const hotkeys = new Hotkeys({ context, storage: runtime.storage, apply, notify,
-      onSave: (slot, current) => { if (current.mapId === 28 && slot <= 2) forest.formationSaved(); } });
+      onSave: (slot, current) => { if (isBeastMap(current.mapId) && slot <= 2) forest.formationSaved(); } });
     const buildingHotkeys = globalThis.BanditFormations.attachBuildingFormations(runtime, engine, notify);
     const cancelKeys = () => { hotkeys.cancel(); buildingHotkeys.cancel(); };
     const combat = new CombatToggle({ context, storage: runtime.storage, apply: applyModes, notify });
@@ -140,7 +143,7 @@
         if (!latest || latest.token !== current.token || latest.blocked || !latest.ready || latest.active) {
           throw new Error("Summon is no longer ready. Toggle F6 off/on to retry.");
         }
-        runtime.callFunction("开始灵兽挑战", 28);
+        runtime.callFunction("开始灵兽挑战", latest.mapId);
         if (!runtime.globalVars["挑战灵兽开关"]) throw new Error("The game refused the summon. Toggle F6 off/on to retry.");
       },
     });
@@ -162,7 +165,7 @@
     engine.AddDOMComponentMessageHandler(component, "cancel", cancelKeys);
     runtime.addEventListener("tick", () => { recruitment.tick(); crafting.tick(); return hotkeys.tick() || buildingHotkeys.tick() || forest.tick(); });
     runtime.addEventListener("beforelayoutstart", () => { cancelKeys(); forest.leave(); recruitment.leave(); });
-    engine.PostComponentMessageToDOM(component, "ready", { version: "1.8.1" });
-    console.info("[Bandit TD Formations] v1.8.1 ready: hold 1–4 to save positions and jobs, tap to restore; Shift + 1–4 for buildings; C toggles combat; Ink Forest loop on, F6 toggles; auto recruit controls on the recruitment screen; crafting stations repeat batches of 10.");
+    engine.PostComponentMessageToDOM(component, "ready", { version: "1.8.2" });
+    console.info("[Bandit TD Formations] v1.8.2 ready: hold 1–4 to save positions and jobs, tap to restore; Shift + 1–4 for buildings; C toggles combat; Beast realm loop on, F6 toggles; auto recruit controls on the recruitment screen; crafting stations repeat batches of 10.");
   });
 })();
