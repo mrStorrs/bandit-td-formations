@@ -100,7 +100,8 @@
                 const y = index === 0 ? g["选中地块Y"] : index === 1 ? s.getAt(params[0], 2, 13) : params[1];
                 station = current.stations.find(st => st.x === x && st.y === y);
                 if (index === 3) moving = !!params[7];
-                if (station && index === 1 && (!params[1] || moving)) observe(current, station, params[0]);
+                if (station && index === 1 && (!params[1] || moving) && !sets.owns(current, station) &&
+                    (station.kind === 6 || !sets.controls(current))) observe(current, station, params[0]);
               }
             } catch (error) { fail(error); }
           }
@@ -108,7 +109,12 @@
             const result = run.apply(this, args);
             if (station && !failed) {
               try {
-                if (index === 0) observe(current, station, variables[2].GetValue());
+                if (index === 0) {
+                  observe(current, station, variables[2].GetValue());
+                  if (station.kind !== 6) sets.cancel(current, station, true);
+                }
+                if (index !== 0) sets.cancel(current, station, station.kind !== 6 && !moving &&
+                  (index === 1 ? !!params[1] : index === 2 || index === 3));
                 if (index === 1 && params[1] && !moving && current.save.getAt(params[0], 0, 13) === 0) forget(current, station.id);
                 if (index === 2 && !moving && current.save.getAt(station.id, 3, 21) === 0) forget(current, station.id);
                 if (index === 3 && !moving && current.save.getAt(station.id, 0, 21) === 0) forget(current, station.id);
@@ -120,7 +126,7 @@
       });
       hooked = true;
     }
-    function repeat(current, station, entry) {
+    function repeat(current, station, entry, count = 10) {
       const { save, wp } = current, recipe = entry.recipe, tier = wp.getAt(recipe, 3);
       if (save.getAt(station.id, 3, 21) !== 0) return;
       const equipment = wp.getAt(recipe, 5) === "装备" && wp.getAt(recipe, 4) === "普通";
@@ -135,7 +141,7 @@
       const costs = new Map();
       for (let i = 1; i <= 2; i++) {
         const material = runtime.callFunction("锻造材料编号", recipe, i);
-        const amount = runtime.callFunction("锻造材料数量", recipe, tier, i, entry.multiplier, 0) * 10;
+        const amount = runtime.callFunction("锻造材料数量", recipe, tier, i, entry.multiplier, 0) * count;
         if (!positive(material) || !Number.isFinite(amount) || amount <= 0) return;
         costs.set(material, (costs.get(material) || 0) + amount);
       }
@@ -150,12 +156,12 @@
       automatic = true;
       try {
         [station.x, station.y, recipe].forEach((value, i) => { g[names[i]] = value; });
-        variables[0].SetValue(10); variables[1].SetValue(entry.multiplier);
+        variables[0].SetValue(count); variables[1].SetValue(entry.multiplier);
         runtime.callFunction("加入锻造队列", false);
         if (variables[2].GetValue() !== free || save.getAt(free, 0, 13) !== free ||
             save.getAt(free, 1, 13) !== station.x || save.getAt(free, 2, 13) !== station.y ||
             save.getAt(free, 3, 13) !== recipe || save.getAt(free, 5, 13) !== tier ||
-            save.getAt(free, 6, 13) !== entry.multiplier || save.getAt(free, 8, 13) !== 10 ||
+            save.getAt(free, 6, 13) !== entry.multiplier || save.getAt(free, 8, 13) !== count ||
             !Number.isFinite(save.getAt(free, 10, 13)) || save.getAt(free, 10, 13) <= 0) {
           throw new Error("The game refused a crafting queue. Restart the game to retry.");
         }
@@ -171,6 +177,7 @@
             menu.instVars["X坐标"] === station.x && menu.instVars["Y坐标"] === station.y)) {
           runtime.callFunction("刷新底部菜单", 8, "底部", "设施", 0, 0, "", true, 0, 0, 0, 0, 0, false, 0);
         }
+        return free;
       } catch (error) {
         if (!committed) {
           // Only this synchronous attempt can own the previously free queue.
@@ -184,17 +191,21 @@
         automatic = false;
       }
     }
+    const sets = globalThis.BanditFormations.attachCraftSets(runtime, engine, notify, { context, enqueue: repeat });
     return {
+      leave() { sets.leave(); },
       tick() {
         if (failed || performance.now() < next) return;
         next = performance.now() + 1000;
         try {
           const current = context();
-          if (!current) return;
+          if (!current) { sets.tick(null); return; }
           if (!hooked) installHooks();
           const state = campaign(current.saveId);
+          const gearControlled = sets.tick(current);
           for (const station of current.stations) {
-            if (station.queue > 0) { observe(current, station); continue; }
+            if (station.queue > 0) { if (!sets.owns(current, station) && (station.kind === 6 || !gearControlled)) observe(current, station); continue; }
+            if (gearControlled && station.kind !== 6) continue;
             const entry = state.entries.get(station.id);
             if (!state.ready || current.blocked || station.queue !== 0 || !station.usable || !valid(entry)) continue;
             if (entry.type !== station.type || entry.owner !== station.owner) { forget(current, station.id); continue; }

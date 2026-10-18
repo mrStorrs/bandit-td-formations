@@ -251,3 +251,31 @@ test("outfit controls block game input and stale or busy actions and hide outsid
   f.handlers["outfit-status"]({ visible: false }); f.dom.outfitSave.dispatch("click");
   assert.equal(f.dom.outfitPanel.hidden, true); assert.equal(f.messages.length, count);
 });
+
+const craftState = { visible:true,token:"campaign:layout",running:false,busy:false,message:"Ready",kept:0,sold:0,
+  options:{mode:"repeat",loop:"all",roles:["forge","research"],tier:1,minimum:3,multiplier:1,autoSell:true},
+  roles:[{id:"forge",name:"Forger",stat:1},{id:"research",name:"Researcher",stat:3},{id:"combat-agi",name:"Combat — AGI",stat:2,combat:true}] };
+test("crafting controls offer mode, role checkboxes, single-role override, tier, rarity and material multiplier",()=>{
+  const f=fixture();f.handlers["craft-status"](craftState);
+  assert.equal(f.dom.craftBody.hidden,true);f.dom.craftToggle.dispatch("click");assert.equal(f.dom.craftBody.hidden,false);
+  f.dom.craftMode.value="sets";f.dom.craftMode.dispatch("change");
+  f.dom.craftLoop.value="combat-agi";f.dom.craftLoop.dispatch("change");
+  assert.ok(Object.values(f.dom.craftRoles).every(i=>i.disabled));
+  f.dom.craftTier.value="2";f.dom.craftMinimum.value="5";f.dom.craftMultiplier.value="10";f.dom.craftSell.checked=false;
+  f.dom.craftButton.dispatch("click");
+  assert.deepEqual(JSON.parse(JSON.stringify(f.messages.at(-1))),["craft-configure",{token:craftState.token,options:{
+    mode:"sets",loop:"combat-agi",roles:["forge","research"],tier:2,minimum:5,multiplier:10,autoSell:false,
+  }}]);
+});
+test("crafting status preserves unsaved edits and permits disabling sales during an active loop",()=>{
+  const f=fixture();f.handlers["craft-status"](craftState);f.dom.craftTier.value="4";
+  f.handlers["craft-status"]({...craftState,message:"Updated"});assert.equal(f.dom.craftTier.value,"4");
+  const active={...craftState,running:true,options:{...craftState.options,mode:"sets"}};
+  f.handlers["craft-status"](active);assert.equal(f.dom.craftTier.disabled,true);assert.equal(f.dom.craftSell.disabled,false);
+  f.dom.craftSell.checked=false;f.dom.craftSell.dispatch("change");assert.deepEqual(f.messages.at(-1),["craft-sell",{token:craftState.token,autoSell:false}]);
+  f.dom.craftButton.dispatch("click");assert.deepEqual(f.messages.at(-1),["craft-pause",{token:craftState.token}]);
+  f.document.activeElement=f.dom.craftButton;f.window.dispatch("keydown",{code:"KeyC"});assert.equal(f.messages.at(-1)[0],"cancel");
+  for(const event of ["pointerdown","pointermove","pointerup","wheel","keydown"])assert.equal(f.dom.craftPanel.dispatch(event).stopped,true);
+  f.handlers["craft-status"]({visible:false});assert.equal(f.dom.craftPanel.hidden,true);
+  const count=f.messages.length;f.dom.craftButton.dispatch("click");assert.equal(f.messages.length,count);
+});

@@ -174,8 +174,8 @@
     });
     engine.AddDOMComponentMessageHandler(component, "cancel", cancelKeys);
     runtime.addEventListener("tick", () => { outfits.tick(); recruitment.tick(); crafting.tick(); return hotkeys.tick() || buildingHotkeys.tick() || forest.tick(); });
-    runtime.addEventListener("beforelayoutstart", () => { cancelKeys(); forest.leave(); recruitment.leave(); outfits.leave(); });
-    engine.PostComponentMessageToDOM(component, "ready", { version: "1.9.0" });
-    console.info("[Bandit TD Formations] v1.9.0 ready: hold 1–4 to save positions and jobs, tap to restore; Shift + 1–4 for buildings; C toggles combat; Beast realm loop on, F6 toggles; auto recruit controls on the recruitment screen; crafting stations repeat batches of 10; per-job outfits on the character panel.");
+    runtime.addEventListener("beforelayoutstart", () => { cancelKeys(); forest.leave(); recruitment.leave(); outfits.leave(); crafting.leave(); });
+    engine.PostComponentMessageToDOM(component, "ready", { version: "1.10.0" });
+    console.info("[Bandit TD Formations] v1.10.0 ready: hold 1–4 to save positions and jobs, tap to restore; Shift + 1–4 for buildings; C toggles combat; Beast realm loop on, F6 toggles; auto recruit controls on the recruitment screen; Crafting controls at the lower right; per-job outfits on the character panel.");
   });
 })();

@@ -1,0 +1,162 @@
+"use strict";
+const { test } = require("node:test");
+const assert = require("node:assert/strict");
+const { fixture } = require("./helpers/crafting-fixture");
+const settle = () => new Promise(resolve => setImmediate(resolve));
+const key = "cjs-formations:craft-sets:v1:12345678";
+async function start(changes={}) {
+  const f=fixture(new Map(),true);await f.tick();await f.configure(changes);await f.tick();return f;
+}
+function bag(f) {
+  const out=[];for(let row=1;row<f.save.width;row++)if(f.save.getAt(row,1,7)>0)out.push({row,recipe:f.save.getAt(row,1,7),lock:f.save.getAt(row,22,7)});
+  return out;
+}
+function give(f,recipe,bonus,quality=3) {
+  f.bonuses=[bonus];f.runtime.callFunction("获得物品",true,recipe,quality,1,1,200,1,false,0,"特定装备",false,false);
+}
+
+test("Auto-all cooperates across stations, pays single-craft costs and advances jobs and rounds", async()=>{
+  const f=await start();
+  assert.deepEqual([f.remaining(0),f.remaining(1)],[1,1]);
+  assert.deepEqual([f.save.getAt(f.queue(0),3,13),f.save.getAt(f.queue(1),3,13)],[2,19]);
+  assert.deepEqual(f.balance(),[9996,9994]);
+  for(let round=1;round<=2;round++) {
+    for(const bonus of [59,63]) {
+      for(let step=0;step<2;step++){f.complete(0,[bonus]);f.complete(1,[bonus]);await f.tick();}
+    }
+    assert.match(f.status().message,new RegExp(`Round ${round+1} · Forger`));
+  }
+  assert.equal(bag(f).length,16);assert.ok(bag(f).every(i=>i.lock===1));
+  assert.equal(f.notifications.length,0);
+});
+test("dropdown loops just one role and retains inactive checkbox choices", async()=>{
+  const f=await start({loop:"combat-agi",roles:["forge"]});
+  for(let round=0;round<2;round++)for(let step=0;step<2;step++){f.complete(0,[20]);f.complete(1,[20]);await f.tick();}
+  assert.deepEqual(bag(f).map(i=>i.recipe).sort((a,b)=>a-b),[4,4,11,11,17,17,23,23]);
+  assert.match(f.status().message,/Round 3 · Combat — AGI/);
+  assert.deepEqual(f.stored.get(key).options.roles,["forge"]);
+});
+test("keepers are locked before native automatic selling, rejects use the native sale and can be disabled live", async()=>{
+  const f=await start({loop:"forge"});f.save.setAt(6,9,1,0);
+  const money=f.save.getAt(1,2,0);f.complete(0,[59]);
+  assert.deepEqual(bag(f).map(i=>[i.recipe,i.lock]),[[2,1]]);assert.equal(f.save.getAt(1,2,0),money);
+  f.complete(1,[63]);assert.equal(f.save.getAt(1,2,0),money+123);assert.equal(bag(f).length,1);
+  await f.handlers["craft-sell"]({token:f.status().token,autoSell:false});await f.tick();
+  f.complete(0,[63]);assert.equal(bag(f).length,2);assert.equal(bag(f).at(-1).lock,0);
+  assert.equal(f.save.getAt(1,2,0),money+123);assert.equal(f.stored.get(key).options.autoSell,false);
+});
+test("all selected roles are checked and duplicate keepers go to future rounds", async()=>{
+  const f=await start({roles:["forge","building"]});
+  give(f,13,62);await f.tick();assert.equal(bag(f)[0].lock,1);
+  f.complete(1,[62]);assert.equal(bag(f).at(-1).lock,1);
+  assert.equal(f.save.getAt(1,2,0),0);
+  give(f,13,59);give(f,13,59);await f.tick();
+  assert.ok(bag(f).every(i=>i.lock===1));
+});
+test("wrong stat, quality, tier and bonus never count; preexisting rejects and unrelated loot are not swept", async()=>{
+  const f=fixture(new Map(),true);await f.tick();
+  give(f,14,59);give(f,13,59,2);give(f,13,63);give(f,13,59);f.save.setAt(2,4,3,7);
+  await f.configure({loop:"forge"});await f.tick();
+  assert.ok(bag(f).every(i=>i.lock===0));assert.equal(bag(f).length,4);
+  f.save.setAt(6,9,1,0);give(f,1,56);assert.equal(bag(f).length,5);
+  f.runtime.callFunction("获得物品",true,1,3,1,1,200,1,false,0,"特定装备",true,false);
+  assert.equal(bag(f).length,5,"unrelated native drops still follow the game's own sell option");
+  assert.equal(f.save.getAt(1,2,0),123);
+  f.complete(0,[59],2);assert.equal(bag(f).length,5);assert.equal(f.save.getAt(1,2,0),246);
+});
+test("pausing or changing targets keeps an in-progress reject and never cancels paid work", async()=>{
+  const f=await start({loop:"forge"});const q=f.queue(0);
+  await f.handlers["craft-pause"]({token:f.status().token});assert.equal(f.queue(0),q);
+  f.complete(0,[63]);assert.equal(bag(f).length,1);assert.equal(f.save.getAt(1,2,0),0);
+  await f.tick();assert.equal(f.queue(0),0);
+  await f.configure({loop:"research"});await f.tick();
+  f.complete(1,[59]);assert.equal(bag(f).at(-1).lock,1,"the old queue's matching result is still protected");
+});
+test("manual recipe changes and cancellations pause set scheduling; repeat mode keeps the manual recipe", async()=>{
+  const f=await start({loop:"forge"});f.cancel(0);await f.tick();assert.equal(f.status().running,false);assert.equal(f.queue(0),0);
+  f.start(0,3,10);await f.configure({mode:"repeat"});f.finish(0);await f.tick();
+  assert.equal(f.remaining(0),10);assert.equal(f.save.getAt(f.queue(0),3,13),3);assert.equal(f.save.getAt(f.queue(0),6,13),10);
+});
+test("automatic recipes never replace the remembered manual repeat recipe", async()=>{
+  const f=fixture(new Map(),true);await f.tick();f.start(0,3,10);f.finish(0);
+  await f.configure({loop:"forge"});await f.tick();f.complete(0,[59]);
+  await f.configure({mode:"repeat"});await f.tick();
+  assert.equal(f.save.getAt(f.queue(0),3,13),3);assert.equal(f.save.getAt(f.queue(0),6,13),10);
+});
+test("material shortages, full bags, recipe locks, pause and disabled stations prevent spending", async()=>{
+  for(const block of [f=>f.materials(0),f=>{f.capacity=0;},f=>{f.g.游戏暂停=true;},
+    f=>{for(const t of f.tiles)t.instVars.有效解锁=false;},
+    f=>{for(let i=1;i<64;i++)f.save.setAt(0,i,19,0);}]){
+    const f=fixture(new Map(),true);await f.tick();await f.configure({loop:"forge"});block(f);f.calls.length=0;await f.tick();
+    assert.equal(f.calls.filter(c=>c[0]==="失去材料").length,0);assert.equal(f.queue(0),0);
+  }
+  const f=fixture(new Map(),true);await f.tick();await f.configure({loop:"forge"});f.materials(0);await f.tick();f.materials(10);await f.tick();assert.equal(f.remaining(0),1);
+});
+test("active recipes, sold filters and single-role choices persist per campaign", async()=>{
+  const f=await start({loop:"combat-int",autoSell:false,minimum:5,multiplier:10});
+  const next=fixture(f.stored,true);await next.tick();await next.tick();
+  assert.equal(next.status().running,true);assert.equal(next.status().options.loop,"combat-int");assert.equal(next.remaining(0),1);
+  assert.equal(next.save.getAt(next.queue(0),6,13),10);
+  next.save.setAt(87654321,0,1,0);await next.tick();await next.tick();assert.equal(next.status().options.mode,"repeat");
+});
+test("stale UI, pending storage and invalid choices cannot start or sell", async()=>{
+  const f=fixture(new Map(),true);await f.tick();const token=f.status().token;
+  f.loop.leave();await f.handlers["craft-configure"]({token,options:{...f.status().options,mode:"sets"}});await f.tick();
+  assert.equal(f.status().running,false);assert.equal(f.queue(0),0);
+  await f.configure({roles:[],loop:"all"});await f.tick();assert.equal(f.status().running,false);assert.equal(f.queue(0),0);
+  assert.match(f.status().message,/Check at least/);
+});
+test("sale failure or inactive sale functions stops without retrying or changing old inventory", async()=>{
+  for(const block of [f=>{f.refuseSale=true;},f=>{f.groups.get("失去物品function").active=false;},f=>{f.groups.get("装备价格function").active=false;},
+    f=>{f.methods.get("出售物品").IsEnabled=()=>false;}]){
+    const f=await start({loop:"forge"});give(f,13,63);block(f);f.complete(0,[63]);
+    await f.tick();await f.tick();assert.equal(bag(f).length,2);assert.equal(f.status().running,false);
+    assert.equal(f.save.getAt(1,2,0),0);assert.equal(f.notifications.length,1);
+  }
+});
+test("a paid queue is not claimed for automatic selling after re-entry", async()=>{
+  const f=await start({loop:"forge"});f.loop.leave();f.complete(0,[63]);
+  assert.equal(bag(f).length,1);assert.equal(f.save.getAt(1,2,0),0);
+});
+test("qualifying crafts from an inherited queue are protected on re-entry without claiming rejects for mod sales", async()=>{
+  const f=await start({loop:"forge"});f.loop.leave();f.save.setAt(6,9,1,0);f.complete(0,[59]);
+  assert.deepEqual(bag(f).map(i=>[i.recipe,i.lock]),[[2,1]]);assert.equal(f.save.getAt(1,2,0),0);
+  f.complete(1,[63]);assert.equal(f.save.getAt(1,2,0),123,"inherited reject follows native selling preferences");
+});
+test("brewing retains repeat ×10 while equipment stations make sets", async()=>{
+  const f=await start({loop:"forge"});f.start(2,30);f.finish(2);await f.tick();
+  assert.equal(f.status().running,true);assert.equal(f.remaining(2),10);
+});
+test("failed settings writes stop automation without enabling sales", async()=>{
+  const f=fixture(new Map(),true);await f.tick();f.runtime.storage.setItem=async()=>{throw Error("disk unavailable");};
+  await f.configure({loop:"forge"});await f.tick();assert.equal(f.status().running,false);assert.equal(f.queue(0),0);
+  assert.match(f.status().message,/disk unavailable/);await settle();
+});
+test("multiple stations split the current set's missing slots without duplicate pending recipes",async()=>{
+  const f=fixture(new Map(),true);await f.tick();
+  for(const [i,kind,type] of [[10,4,21],[11,5,31],[12,4,21]]){
+    const x=10030+i,y=10010;
+    f.tiles.push({uid:200+i,instVars:{用途:"主地图",设施编号:type,X坐标:x,Y坐标:y,有效解锁:true,资源类型:""}});
+    [i,type,6,0].forEach((v,field)=>f.save.setAt(v,i,field,21));f.save.setAt(i,x-10000+150,y-10000,6);
+  }
+  await f.configure({loop:"forge"});await f.tick();
+  const recipes=[3,4,10,11,12].map(id=>f.save.getAt(f.save.getAt(id,3,21),3,13)).filter(Boolean);
+  assert.deepEqual(recipes.sort((a,b)=>a-b),[2,13,19,25]);assert.equal(f.save.getAt(12,3,21),0);
+});
+test("inherited Auto-all queues do not overwrite the remembered manual recipe on reload",async()=>{
+  const f=fixture(new Map(),true);await f.tick();f.start(0,3,10);f.finish(0);await f.configure({loop:"forge"});await f.tick();
+  const next=fixture(f.stored,true);next.start(0,2,1,1);await next.tick();await next.tick();next.complete(0,[59]);await settle();
+  assert.equal(next.stored.get('cjs-formations:crafting:v1:12345678').stations.find(s=>s.id===3).recipe,3);
+});
+test("a manual station change during a pending Start wins over the older settings write",async()=>{
+  const f=fixture(new Map(),true);await f.tick();const original=f.runtime.storage.setItem;let release;
+  f.runtime.storage.setItem=async(k,v)=>{if(k===key&&!release)await new Promise(r=>{release=r;});return original(k,v);};
+  const configuring=f.configure({loop:"forge"});await settle();f.start(0,3);release();await configuring;await settle();await f.tick();
+  assert.equal(f.status().running,false);assert.equal(f.stored.get(key).enabled,false);assert.equal(f.status().options.mode,"repeat");
+});
+test("a new Start is saved after an earlier manual cancellation even when storage is slow",async()=>{
+  const f=await start({loop:"forge"});const original=f.runtime.storage.setItem;let release;
+  f.runtime.storage.setItem=async(k,v)=>{if(k===key&&!release)await new Promise(r=>{release=r;});return original(k,v);};
+  f.cancel(0);await settle();const configuring=f.configure({loop:"research"});release();await configuring;await settle();await f.tick();
+  assert.equal(f.status().running,true);assert.equal(f.stored.get(key).enabled,true);assert.equal(f.stored.get(key).options.loop,"research");
+});

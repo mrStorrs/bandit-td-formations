@@ -22,6 +22,9 @@ A character/building formation, job outfit, combat, recruitment, and crafting mo
 - **Automatic repeat crafting:** forging, crafting, and alchemy stations remember
   their last started recipe and material multiplier. Each empty station queues
   another batch of **10**, waiting for materials when necessary.
+- **Auto-all gear sets:** open **Crafting** at the lower right to cycle checked
+  work/combat roles or loop one role. Choose tier and minimum rarity, lock
+  matching pieces, optionally sell new rejected crafts, and keep making more sets.
 - **Job outfits:** select a character, choose their job priority, equip their
   gear, and click **Save outfit for [job]**. Choosing that job again restores
   that character's saved outfit. Jobs without an outfit keep current equipment.
@@ -245,7 +248,8 @@ one busy station does not hold up the others. Existing active queues are learned
 automatically when the mod loads. An empty station with no remembered recipe
 stays idle until you start something there.
 
-Repeating is always enabled during normal gameplay. It uses the game's material
+**Repeat current ×10** is the default mode in the lower-right **Crafting** panel.
+It uses the game's material
 costs and requires enough materials for all 10 crafts. If supplies are short, it
 waits and checks again about once per second. It never adds to an unfinished
 queue or grants completed items directly; workers still do the crafting normally.
@@ -264,6 +268,78 @@ Recipes and multipliers persist locally per campaign and facility slot across
 map changes and game restarts. They are not part of Steam Cloud. Recipes that
 finished before this feature was installed cannot be recovered: start a batch
 once at those empty stations to teach the mod what to repeat.
+
+## Auto-all gear sets
+
+Open **Crafting** at the lower right and select **Auto-all sets**. Choose a tier
+(T1–T9), minimum rarity (the game's six color grades), and the native material
+multiplier (×1, ×10 or ×100). Click **Apply / Start**. The dropdown offers:
+
+- **Cycle checked roles:** use the checked jobs, prioritizing Forger, Researcher,
+  then Logger, Miner, Planter, Crafter, Alchemist, Builder, Trainer and the three
+  combat roles, skipping unchecked entries.
+- **A single job or combat role:** repeatedly make that role's sets. This
+  overrides the checkboxes without clearing their selections.
+
+Each target contains four ordinary craftable pieces. Work sets use the job's
+weapon, gloves, belt and necklace; combat sets use a weapon, bracers, headband
+and ring. Cores, treasures and special set upgrades are outside this loop.
+
+| Role | Gear stat | Required rolled bonus |
+| --- | --- | --- |
+| Forger | STR | Forge Bonus |
+| Researcher | INT | Tech Bonus |
+| Logger | STR | Chop Bonus |
+| Miner | AGI | Mine Bonus |
+| Planter | INT | Farm Bonus |
+| Crafter | AGI | Craft Bonus |
+| Alchemist | INT | Brew Bonus |
+| Builder | STR | Build Bonus |
+| Trainer | AGI | Drill Bonus |
+| Combat—STR | STR | Phys Bonus |
+| Combat—AGI | AGI | Pierce Bonus |
+| Combat—INT | INT | Spell Bonus |
+
+The combat roles use the tier's ordinary axe, sword and fan respectively.
+Every piece must be the correct recipe/stat variant, exactly the chosen tier,
+at least the minimum rarity, and have at least one roll of that role's bonus.
+General Work Bonus does not satisfy a specific job bonus. Quality and rolls
+still come from the game; selecting a minimum does not guarantee that rarity.
+
+Forging and crafting stations cooperate on the current role's missing pieces,
+queuing **one craft at a time per station** and paying native material costs.
+Once all selected roles have a complete set, the next round requires another
+copy of every piece. Existing inventory and worn gear count, and any physical
+piece counts only once even if it has several useful bonuses. Extra matches
+are retained for later rounds. Progress is recomputed from gear you still own;
+selling a keeper or changing its rolls makes that piece missing again.
+
+Qualifying equipment is automatically locked, including existing matches.
+Each result is checked against all currently selected roles, so a useful roll
+for a later job is kept. **Auto-sell non-matching crafts** starts checked and
+can be disabled while running. It sells only newly completed Auto-all crafts
+that fail every selected target, using the native equipment sale function.
+Unchecking it keeps rejects unlocked. Existing items, locked items, equipped
+gear, unrelated loot and brewing outputs are never swept for sale.
+
+For owned Auto-all queues, this decision takes priority over the game's native
+quality-based automatic sale. The native sale preferences are preserved.
+Queues already present when loading or changing maps are not claimed for mod
+selling: their matching results are protected while Auto-all is active, and
+their rejects follow the game's existing native sale preferences.
+
+**Pause sets** stops new orders and mod sales while paid queues finish. Pause
+before changing roles, tier, rarity or multiplier, then click **Apply / Start**.
+Manual equipment recipe changes or cancellations also pause the set loop.
+Switching back to **Repeat current ×10** restores normal repeat behavior.
+Brewing stations continue their existing repeat-10 behavior in either mode;
+the Alchemist target crafts equipment for that worker.
+
+The loop waits for materials, unlocked recipes, usable stations and inventory
+space, and while gameplay is paused or menus/transitions are open. It also
+waits for outfit swaps before counting or locking existing equipment. Settings
+and the running/paused choice persist per campaign across maps and restarts,
+locally rather than through Steam Cloud. The panel can be collapsed while it runs.
 
 ## Install
 
@@ -455,6 +531,26 @@ gear after victory. All nine beast maps also passed two summon/victory cycles
 each, F6 stop/resume, and the failed-challenge guard. This update still needs a
 manual Steam/NW.js check.
 
+Version 1.10.0 adds repeated gear sets for selected work/combat roles, the
+single-role dropdown, native stat/bonus matching, keeper locks and optional
+sales limited to newly completed Auto-all crafts. It passes 192 JavaScript
+tests and four installer tests. Automated checks cover role
+ordering, additional rounds, per-piece counting, pending station reservations,
+native sale interception, existing inventory protection, persisted settings,
+manual overrides, shortages, stale UI and failures. All 432 role/tier/slot
+recipes were checked against the installed game's legal bonus pools. Native
+completion and sale paths were inspected on both supported builds.
+
+In isolated build 25975458, controlled native rolls completed two rounds of
+Forger, Researcher and Combat—AGI, a T2 Combat—INT set using ×10 materials, and
+one round of all twelve roles followed by the start of round two. Native sales,
+lock protection against the game's automatic filter, live sale disabling,
+unchanged existing inventory, pause and persisted choices passed. Reloaded
+queues protected keepers, and real pointer/keyboard interaction exercised the
+panel and single-role dropdown. Another 16 native crafts used unmodified
+quality/affix RNG and correctly kept/locked matches or sold rejects. This
+update still needs a manual Steam/NW.js check.
+
 To check the controls in-game:
 
 1. Arrange your characters, choose their jobs and priority work targets, then
@@ -495,6 +591,12 @@ To check the controls in-game:
     normal costs. Try insufficient materials, then replenish them. Cancel one
     station and confirm it stays stopped; start a new recipe to resume. Restart
     the game and check that remembered recipes still repeat.
+13. Open **Crafting**, choose **Auto-all sets**, check the desired work/combat
+    roles and choose tier/rarity, then **Apply / Start**. Confirm correct stat
+    variants and rolled bonuses, locked keepers and another round after all
+    selected sets finish. Disable auto-sell while running and verify rejects
+    remain. Pause, select one role in **Loop**, then start and verify only that
+    role repeats. Restart to check settings and paused/running persistence.
 
 ## Development
 
@@ -525,13 +627,16 @@ relocation and flushes pending object creation/destruction between moves.
 locks, and event groups.
 `src/crafting.js` observes native queue creation and cancellation, remembers
 station recipes, and refills empty queues through the native crafting functions.
+`src/craft-sets.js` selects role recipes, matches gear and counts separate sets.
+`src/craft-sets-runtime.js` schedules one-piece queues, identifies their native
+completion results, locks keepers and handles settings and native sales.
 `src/outfits.js` validates outfit snapshots and matches equipment records.
 `src/outfit-runtime.js` observes native job changes, serializes equipment swaps,
 checks inventory and equip eligibility, and manages the outfit panel and storage.
 `src/runtime.js` adapts character/tile APIs, native movement/mode/summon functions,
 the victory callback, and the native auto-summon event group.
-`src/dom.js` handles keyboard focus, confirmation messages, and recruitment and
-outfit controls. The installer appends these scripts to the game's existing runtime
+`src/dom.js` handles keyboard focus, confirmation messages, and recruitment,
+outfit and crafting controls. The installer appends these scripts to the game's existing runtime
 and DOM bundles. Presets
 use Construct's `runtime.storage` under the `cjs-formations:v1:` namespace.
 New snapshots use data format version 2 with positions, modes, and priority
@@ -547,6 +652,10 @@ from the matching criteria. It applies to every paid roll regardless of targets.
 Crafting memory uses `cjs-formations:crafting:v1:<saveId>` in runtime storage.
 Each entry contains a facility slot, facility type, parent building slot, recipe,
 and material multiplier. Queue progress and materials remain in the game save.
+Set crafting uses `cjs-formations:craft-sets:v1:<saveId>` with validated options
+and an enabled flag. Queue ownership for selling is session-only; it is never
+inferred from inventory changes or persisted queue numbers. Completion hooks
+protect qualifying inherited crafts without claiming them for mod sales.
 Job outfits use `cjs-formations:outfits:v1:<saveId>` in runtime storage, with an
 enabled flag and per-character/per-job snapshots of six equipment identities.
 Native equip/unequip calls are asynchronous across game frames; formation
