@@ -2,7 +2,7 @@
   "use strict";
   function attachCraftSets(runtime, engine, notify, bridge) {
     const { craftRoles, craftDefaults, validateCraftOptions, craftTargets, matchesCraftItem, planCraftSets } = globalThis.BanditFormations;
-    const prefix = "cjs-formations:craft-sets:v1:", states = new Map(), tickets = new Map();
+    const prefix = "cjs-formations:craft-sets:v1:", batchSize = 10, states = new Map(), tickets = new Map();
     let hooked = false, activeWork = null, creating = null, epoch = 0, lastStatus = "";
     const token = current => `${current.saveId}:${current.save.uid}:${epoch}`;
     const running = state => state.ready && !state.error && !state.busy && state.enabled && state.options.mode === "sets";
@@ -44,12 +44,12 @@
     }
     const sameOptions = (a, b) => JSON.stringify({ ...a, autoSell: false }) === JSON.stringify({ ...b, autoSell: false });
     function owns(current, station) {
-      const ticket = tickets.get(station.id), s = current.save;
+      const ticket = tickets.get(station.id), s = current.save, remaining = ticket && s.getAt(ticket.queue, 8, 13);
       return ticket && ticket.token === token(current) && ticket.type === station.type && ticket.owner === station.owner &&
         ticket.x === station.x && ticket.y === station.y && ticket.queue === s.getAt(station.id, 3, 21) &&
         s.getAt(ticket.queue, 0, 13) === ticket.queue && s.getAt(ticket.queue, 3, 13) === ticket.recipe &&
         s.getAt(ticket.queue, 5, 13) === ticket.options.tier && s.getAt(ticket.queue, 6, 13) === ticket.options.multiplier &&
-        [0, 1].includes(s.getAt(ticket.queue, 8, 13)) ? ticket : null;
+        Number.isInteger(remaining) && remaining >= 0 && remaining <= ticket.count ? ticket : null;
     }
     function nativeGroups(names) {
       const manager = engine.GetEventSheetManager();
@@ -200,8 +200,8 @@
                 const plan = planCraftSets(items(current), targets, state.options);
                 for (const item of plan.keep) current.save.setAt(1, item.row, 22, item.location);
                 for (const [id] of tickets) if (!current.stations.some(st => st.id === id && owns(current, st))) tickets.delete(id);
-                const role = plan.target, counts = plan.counts[plan.index];
-                state.message = `Round ${plan.round} · ${role.name} · ${plan.complete}/4 pieces · T${state.options.tier}`;
+                state.message = plan.cycles.map(cycle => `${cycle.name}: Round ${cycle.round} · ${cycle.target.name} · ${cycle.complete}/2 pieces`).join("\n") +
+                  `\nT${state.options.tier} · Batches of ${batchSize}`;
                 const capacity = runtime.callFunction("背包容量上限");
                 if (!Number.isFinite(capacity) || capacity < 0) throw new Error("Inventory capacity is unavailable.");
                 const bagCount = items(current).filter(item => item.location === 7).length;
@@ -210,15 +210,15 @@
                   let queued = false;
                   for (const station of current.stations) {
                     if (![4, 5].includes(station.kind) || !station.usable || current.save.getAt(station.id, 3, 21) !== 0) continue;
-                    const slots = station.kind === 4 ? [0, 1] : [2, 3];
-                    const slot = slots.find(i => counts[i] < plan.round && ![...tickets.values()].some(t => t.role === role.id && t.slot === i));
+                    const cycle = plan.cycles.find(c => c.kind === station.kind), role = cycle.target, counts = plan.counts[cycle.index];
+                    const slot = cycle.slots.find(i => counts[i] < cycle.round && ![...tickets.values()].some(t => t.role === role.id && t.slot === i));
                     if (slot === undefined) continue;
                     const recipe = role.recipes[slot];
                     if (!recipe || current.save.getAt(recipe, 19, 0) !== 1) { state.message += " · Waiting for recipe unlock"; continue; }
-                    const queue = bridge.enqueue(current, station, { recipe, multiplier: state.options.multiplier }, 1);
+                    const queue = bridge.enqueue(current, station, { recipe, multiplier: state.options.multiplier }, batchSize);
                     if (queue) {
                       tickets.set(station.id, { owned: true, token: token(current), type: station.type, owner: station.owner, x: station.x, y: station.y,
-                        queue, recipe, role: role.id, slot, options: validateCraftOptions(state.options) });
+                        queue, recipe, count: batchSize, role: role.id, slot, options: validateCraftOptions(state.options) });
                       queued = true;
                     }
                   }

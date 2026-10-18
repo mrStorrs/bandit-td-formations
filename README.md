@@ -25,6 +25,7 @@ A character/building formation, job outfit, combat, recruitment, and crafting mo
 - **Auto-all gear sets:** open **Crafting** at the lower right to cycle checked
   work/combat roles or loop one role. Choose tier and minimum rarity, lock
   matching pieces, optionally sell new rejected crafts, and keep making more sets.
+  Forge and crafting loop independently in batches of **10**.
 - **Job outfits:** select a character, choose their job priority, equip their
   gear, and click **Save outfit for [job]**. Choosing that job again restores
   that character's saved outfit. Jobs without an outfit keep current equipment.
@@ -306,13 +307,21 @@ at least the minimum rarity, and have at least one roll of that role's bonus.
 General Work Bonus does not satisfy a specific job bonus. Quality and rolls
 still come from the game; selecting a minimum does not guarantee that rarity.
 
-Forging and crafting stations cooperate on the current role's missing pieces,
-queuing **one craft at a time per station** and paying native material costs.
-Once all selected roles have a complete set, the next round requires another
-copy of every piece. Existing inventory and worn gear count, and any physical
-piece counts only once even if it has several useful bonuses. Extra matches
-are retained for later rounds. Progress is recomputed from gear you still own;
-selling a keeper or changing its rolls makes that piece missing again.
+Forging and crafting stations run **independent loops**, queuing **10 crafts of
+the same recipe per batch** and paying the full native material cost up front.
+The forge covers weapons and hand gear; crafting covers head/belt gear and
+accessories. Each loop advances to the next checked role once its own two pieces
+are covered, then starts its next round without waiting for the other loop.
+The panel shows each loop's role and round separately. Multiple stations of
+the same kind split that loop's missing slots.
+
+A paid batch finishes all ten attempts before that station changes recipe,
+even if an early craft matches. Every result is checked individually. Each
+new round needs another copy of that loop's pieces for every selected role.
+Existing inventory and worn gear count, and any physical piece counts only
+once even if it has several useful bonuses. Extra matches are retained for
+later rounds. Progress is recomputed from gear you still own; selling a keeper
+or changing its rolls makes that piece missing again.
 
 Qualifying equipment is automatically locked, including existing matches.
 Each result is checked against all currently selected roles, so a useful roll
@@ -531,9 +540,9 @@ gear after victory. All nine beast maps also passed two summon/victory cycles
 each, F6 stop/resume, and the failed-challenge guard. This update still needs a
 manual Steam/NW.js check.
 
-Version 1.10.0 adds repeated gear sets for selected work/combat roles, the
+Version 1.10.0 added repeated gear sets for selected work/combat roles, the
 single-role dropdown, native stat/bonus matching, keeper locks and optional
-sales limited to newly completed Auto-all crafts. It passes 192 JavaScript
+sales limited to newly completed Auto-all crafts. It passed 192 JavaScript
 tests and four installer tests. Automated checks cover role
 ordering, additional rounds, per-piece counting, pending station reservations,
 native sale interception, existing inventory protection, persisted settings,
@@ -550,6 +559,17 @@ queues protected keepers, and real pointer/keyboard interaction exercised the
 panel and single-role dropdown. Another 16 native crafts used unmodified
 quality/affix RNG and correctly kept/locked matches or sold rejects. This
 update still needs a manual Steam/NW.js check.
+
+Version 1.11.0 queues ten crafts per Auto-all batch and gives forging and
+crafting independent role/round progress. It passes 196 JavaScript tests and
+four installer tests, including both directions of uneven station progress,
+full-batch costs, per-item decisions through the tenth output, and duplicate
+keepers counting toward later rounds. In isolated build 25975458, 80 native
+crafts confirmed exact costs, advancing roles and rounds while the other
+station stays busy, keeper protection for other selected jobs, rejected-item
+sales, live sale disabling and pause without cancelling paid batches. The
+Crafting panel shows separate progress for both loops. A manual Steam/NW.js
+check remains useful for the live game.
 
 To check the controls in-game:
 
@@ -592,11 +612,13 @@ To check the controls in-game:
     station and confirm it stays stopped; start a new recipe to resume. Restart
     the game and check that remembered recipes still repeat.
 13. Open **Crafting**, choose **Auto-all sets**, check the desired work/combat
-    roles and choose tier/rarity, then **Apply / Start**. Confirm correct stat
-    variants and rolled bonuses, locked keepers and another round after all
-    selected sets finish. Disable auto-sell while running and verify rejects
-    remain. Pause, select one role in **Loop**, then start and verify only that
-    role repeats. Restart to check settings and paused/running persistence.
+    roles and choose tier/rarity, then **Apply / Start**. Confirm batches of ten,
+    correct stat variants and rolled bonuses, and locked keepers for any checked
+    role. Let one station get ahead: it should advance roles and rounds for its
+    own two slots while the other continues, with separate progress in the panel.
+    Disable auto-sell while running and verify rejects remain. Pause, select one
+    role in **Loop**, then start and verify only that role repeats. Restart to
+    check settings and paused/running persistence.
 
 ## Development
 

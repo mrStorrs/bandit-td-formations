@@ -67,9 +67,9 @@ function fixture(stored = new Map(), extended = false) {
     const tile=tiles.find(t=>t.uid===uid), v=tile.instVars, station=stationAt(v.X坐标,v.Y坐标), q=save.getAt(station,3,21);
     const recipe=save.getAt(q,3,13);
     if(!q) return;
-    save.setAt(0,q,8,13);
+    save.setAt(save.getAt(q,8,13)-1,q,8,13);
     runtime.callFunction("获得物品",true,recipe,f.quality??3,1,save.getAt(q,5,13),200,1,false,0,"特定装备",true,false);
-    runtime.callFunction("取消锻造",q,false);save.setAt(0,station,3,21);
+    if(save.getAt(q,8,13)<=0){runtime.callFunction("取消锻造",q,false);save.setAt(0,station,3,21);}
   });
   native("加入锻造队列", () => {
     if (f.refuseQueue) return;

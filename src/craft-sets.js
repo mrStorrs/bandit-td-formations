@@ -53,11 +53,13 @@
       const role = roles.reduce((best, i) => counts[i][slot] < counts[best][slot] ? i : best);
       counts[role][slot]++;
     }
-    const round = targets.length ? Math.min(...counts.flat()) + 1 : 1;
-    const index = counts.findIndex(slots => slots.some(n => n < round));
-    return { counts, round, index, target: targets[index] || null,
-      complete: index < 0 ? 0 : counts[index].filter(n => n >= round).length,
-      keep: eligible.map(entry => entry.item) };
+    const cycles = [[4, "Forge", [0, 1]], [5, "Crafting", [2, 3]]].map(([kind, name, slots]) => {
+      const round = targets.length ? Math.min(...counts.flatMap(row => slots.map(slot => row[slot]))) + 1 : 1;
+      const index = counts.findIndex(row => slots.some(slot => row[slot] < round));
+      return { kind, name, slots, round, index, target: targets[index] || null,
+        complete: index < 0 ? 0 : slots.filter(slot => counts[index][slot] >= round).length };
+    });
+    return { counts, cycles, keep: eligible.map(entry => entry.item) };
   }
   Object.assign(globalThis.BanditFormations, { craftRoles, craftDefaults, validateCraftOptions, selectedCraftRoles,
     craftRecipes, craftTargets, matchesCraftItem, planCraftSets });

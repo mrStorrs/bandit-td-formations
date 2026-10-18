@@ -14,15 +14,19 @@ function bag(f) {
 function give(f,recipe,bonus,quality=3) {
   f.bonuses=[bonus];f.runtime.callFunction("获得物品",true,recipe,quality,1,1,200,1,false,0,"特定装备",false,false);
 }
+function batch(f,index,bonus) {
+  const count=f.remaining(index);
+  for(let i=0;i<count;i++)f.complete(index,[i===0?bonus:72]);
+}
 
-test("Auto-all cooperates across stations, pays single-craft costs and advances jobs and rounds", async()=>{
+test("Auto-all cooperates across stations, pays for ten crafts each and advances jobs and rounds", async()=>{
   const f=await start();
-  assert.deepEqual([f.remaining(0),f.remaining(1)],[1,1]);
+  assert.deepEqual([f.remaining(0),f.remaining(1)],[10,10]);
   assert.deepEqual([f.save.getAt(f.queue(0),3,13),f.save.getAt(f.queue(1),3,13)],[2,19]);
-  assert.deepEqual(f.balance(),[9996,9994]);
+  assert.deepEqual(f.balance(),[9960,9940]);
   for(let round=1;round<=2;round++) {
     for(const bonus of [59,63]) {
-      for(let step=0;step<2;step++){f.complete(0,[bonus]);f.complete(1,[bonus]);await f.tick();}
+      for(let step=0;step<2;step++){batch(f,0,bonus);batch(f,1,bonus);await f.tick();}
     }
     assert.match(f.status().message,new RegExp(`Round ${round+1} · Forger`));
   }
@@ -31,7 +35,7 @@ test("Auto-all cooperates across stations, pays single-craft costs and advances 
 });
 test("dropdown loops just one role and retains inactive checkbox choices", async()=>{
   const f=await start({loop:"combat-agi",roles:["forge"]});
-  for(let round=0;round<2;round++)for(let step=0;step<2;step++){f.complete(0,[20]);f.complete(1,[20]);await f.tick();}
+  for(let round=0;round<2;round++)for(let step=0;step<2;step++){batch(f,0,20);batch(f,1,20);await f.tick();}
   assert.deepEqual(bag(f).map(i=>i.recipe).sort((a,b)=>a-b),[4,4,11,11,17,17,23,23]);
   assert.match(f.status().message,/Round 3 · Combat — AGI/);
   assert.deepEqual(f.stored.get(key).options.roles,["forge"]);
@@ -68,7 +72,8 @@ test("pausing or changing targets keeps an in-progress reject and never cancels 
   const f=await start({loop:"forge"});const q=f.queue(0);
   await f.handlers["craft-pause"]({token:f.status().token});assert.equal(f.queue(0),q);
   f.complete(0,[63]);assert.equal(bag(f).length,1);assert.equal(f.save.getAt(1,2,0),0);
-  await f.tick();assert.equal(f.queue(0),0);
+  await f.tick();assert.equal(f.queue(0),q);assert.equal(f.remaining(0),9);
+  batch(f,0,63);await f.tick();assert.equal(f.queue(0),0);assert.equal(bag(f).length,10);assert.equal(f.save.getAt(1,2,0),0);
   await f.configure({loop:"research"});await f.tick();
   f.complete(1,[59]);assert.equal(bag(f).at(-1).lock,1,"the old queue's matching result is still protected");
 });
@@ -79,7 +84,7 @@ test("manual recipe changes and cancellations pause set scheduling; repeat mode 
 });
 test("automatic recipes never replace the remembered manual repeat recipe", async()=>{
   const f=fixture(new Map(),true);await f.tick();f.start(0,3,10);f.finish(0);
-  await f.configure({loop:"forge"});await f.tick();f.complete(0,[59]);
+  await f.configure({loop:"forge"});await f.tick();batch(f,0,59);
   await f.configure({mode:"repeat"});await f.tick();
   assert.equal(f.save.getAt(f.queue(0),3,13),3);assert.equal(f.save.getAt(f.queue(0),6,13),10);
 });
@@ -90,12 +95,14 @@ test("material shortages, full bags, recipe locks, pause and disabled stations p
     const f=fixture(new Map(),true);await f.tick();await f.configure({loop:"forge"});block(f);f.calls.length=0;await f.tick();
     assert.equal(f.calls.filter(c=>c[0]==="失去材料").length,0);assert.equal(f.queue(0),0);
   }
-  const f=fixture(new Map(),true);await f.tick();await f.configure({loop:"forge"});f.materials(0);await f.tick();f.materials(10);await f.tick();assert.equal(f.remaining(0),1);
+  const f=fixture(new Map(),true);await f.tick();await f.configure({loop:"forge"});
+  f.materials(10);await f.tick();assert.equal(f.queue(0),0);assert.equal(f.queue(1),0);assert.deepEqual(f.balance(),[10,10]);
+  f.materials(20,30);await f.tick();assert.equal(f.remaining(0),10);assert.equal(f.queue(1),0);assert.deepEqual(f.balance(),[0,0]);
 });
 test("active recipes, sold filters and single-role choices persist per campaign", async()=>{
   const f=await start({loop:"combat-int",autoSell:false,minimum:5,multiplier:10});
   const next=fixture(f.stored,true);await next.tick();await next.tick();
-  assert.equal(next.status().running,true);assert.equal(next.status().options.loop,"combat-int");assert.equal(next.remaining(0),1);
+  assert.equal(next.status().running,true);assert.equal(next.status().options.loop,"combat-int");assert.equal(next.remaining(0),10);
   assert.equal(next.save.getAt(next.queue(0),6,13),10);
   next.save.setAt(87654321,0,1,0);await next.tick();await next.tick();assert.equal(next.status().options.mode,"repeat");
 });
@@ -142,6 +149,47 @@ test("multiple stations split the current set's missing slots without duplicate 
   await f.configure({loop:"forge"});await f.tick();
   const recipes=[3,4,10,11,12].map(id=>f.save.getAt(f.save.getAt(id,3,21),3,13)).filter(Boolean);
   assert.deepEqual(recipes.sort((a,b)=>a-b),[2,13,19,25]);assert.equal(f.save.getAt(12,3,21),0);
+  assert.ok([3,4,10,11].every(id=>f.save.getAt(f.save.getAt(id,3,21),8,13)===10));
+});
+test("all ten results are inspected, including other selected roles on the last craft, without early refill",async()=>{
+  const f=await start({roles:["forge","building"]});f.save.setAt(6,9,1,0);
+  batch(f,0,59);await f.tick();
+  assert.equal(f.save.getAt(f.queue(0),3,13),13);
+  const queue=f.queue(0),balance=f.balance(),money=f.save.getAt(1,2,0);
+  const bonuses=[59,72,62,63,59,72,62,72,59,62];
+  for(const [i,bonus] of bonuses.entries()){
+    f.complete(0,[bonus]);assert.equal(f.remaining(0),9-i);
+    if(i<9)assert.equal(f.queue(0),queue);
+    if(i<9){await f.tick();assert.deepEqual(f.balance(),balance);}
+  }
+  assert.equal(f.queue(0),0);assert.equal(f.remaining(1),10);
+  const gloves=bag(f).filter(item=>item.recipe===13);
+  assert.equal(gloves.length,6);assert.ok(gloves.every(item=>item.lock===1));
+  assert.deepEqual(gloves.map(item=>f.save.getAt(item.row,9,7)),[59,62,59,62,59,62]);
+  assert.equal(f.save.getAt(1,2,0),money+4*123);assert.equal(f.notifications.length,0);
+});
+test("each station advances through roles and starts its next round while the other is still on its first piece",async()=>{
+  for(const index of [0,1]){
+    const f=await start(),other=1-index,queue=f.queue(other),names=["Forge","Crafting"];
+    for(let step=0;step<2;step++){batch(f,index,59);await f.tick();}
+    assert.equal(f.save.getAt(f.queue(index),3,13),index===0?7:21);
+    assert.match(f.status().message,new RegExp(`${names[index]}: Round 1 · Researcher`));
+    for(let step=0;step<2;step++){batch(f,index,63);await f.tick();}
+    assert.equal(f.save.getAt(f.queue(index),3,13),index===0?2:19);assert.equal(f.remaining(index),10);
+    assert.match(f.status().message,new RegExp(`${names[index]}: Round 2 · Forger`));
+    assert.match(f.status().message,new RegExp(`${names[other]}: Round 1 · Forger`));
+    assert.equal(f.queue(other),queue);assert.equal(f.remaining(other),10);
+  }
+});
+test("ten matching outputs per slot fill ten rounds while the other station is absent",async()=>{
+  const f=fixture(new Map(),true);f.tiles.splice(1,1);await f.tick();await f.configure({loop:"forge"});await f.tick();
+  for(let step=0;step<2;step++){
+    for(let i=0;i<10;i++)f.complete(0,[59]);
+    await f.tick();
+  }
+  assert.equal(bag(f).length,20);assert.ok(bag(f).every(item=>item.lock===1));
+  assert.match(f.status().message,/Forge: Round 11 · Forger/);assert.match(f.status().message,/Crafting: Round 1 · Forger/);
+  assert.equal(f.remaining(0),10);assert.equal(f.save.getAt(f.queue(0),3,13),2);
 });
 test("inherited Auto-all queues do not overwrite the remembered manual recipe on reload",async()=>{
   const f=fixture(new Map(),true);await f.tick();f.start(0,3,10);f.finish(0);await f.configure({loop:"forge"});await f.tick();

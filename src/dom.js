@@ -105,8 +105,8 @@
         this.craftButton = make("button", "Apply / Start", body); this.craftButton.id = "cjs-craft-apply"; this.craftButton.type = "button";
         this.craftButton.style.cssText = "background:#c0a35b;color:#10191d;border:0;border-radius:4px;padding:7px 12px;cursor:pointer;font:inherit";
         this.craftInfo = make("div", "", body); this.craftInfo.setAttribute("role", "status");
-        this.craftInfo.style.cssText = "margin-top:10px;line-height:1.4";
-        make("div", "Each piece needs the correct stat and at least one role bonus. Matches are locked, including extras for later rounds. Selling affects only new Auto-all crafts. Brewing keeps repeating its last recipe ×10.", body).style.cssText = "margin-top:8px;color:#c5ced1;font-size:12px;line-height:1.4";
+        this.craftInfo.style.cssText = "margin-top:10px;line-height:1.4;white-space:pre-line";
+        make("div", "Forge and crafting loop independently, in batches of 10. Each piece needs the correct stat and at least one role bonus. Matches for any selected role are locked, including extras for later rounds. Selling affects only new Auto-all crafts. Brewing keeps repeating its last recipe ×10.", body).style.cssText = "margin-top:8px;color:#c5ced1;font-size:12px;line-height:1.4";
         const controls = () => {
           const busy = this.craftState.busy, running = this.craftState.running, sets = this.craftMode.value === "sets";
           this.craftMode.disabled = busy || running;

@@ -44,21 +44,34 @@ test("each finished round requires additional complete sets, including gear alre
   const forge = [1,2,3,4].map(slot => item(slot,[59]));
   const research = [1,2,3,4].map(slot => item(slot,[63],{recipe:slot+4,location:9}));
   let plan = api.planCraftSets(forge, targets, o);
-  assert.equal(plan.round, 1); assert.equal(plan.target.id, "research");
+  assert.ok(plan.cycles.every(c=>c.round===1&&c.target.id==="research"));
   plan = api.planCraftSets([...forge,...research], targets, o);
-  assert.equal(plan.round, 2); assert.equal(plan.target.id, "forge"); assert.equal(plan.complete, 0);
+  assert.ok(plan.cycles.every(c=>c.round===2&&c.target.id==="forge"&&c.complete===0));
   plan = api.planCraftSets([...forge,...research,...forge,...research], targets, o);
-  assert.equal(plan.round, 3); assert.equal(plan.target.id, "forge");
+  assert.ok(plan.cycles.every(c=>c.round===3&&c.target.id==="forge"));
 });
 test("multi-job rolls count once and spare matches feed future rounds", () => {
   const targets = [target("forge"), target("building")], o = options();
   const both = [1,2,3,4].map(slot => item(slot,[59,62]));
   const plan = api.planCraftSets([...both,...both],targets,o);
-  assert.deepEqual(clone(plan.counts), [[1,1,1,1],[1,1,1,1]]); assert.equal(plan.round,2);
+  assert.deepEqual(clone(plan.counts), [[1,1,1,1],[1,1,1,1]]); assert.ok(plan.cycles.every(c=>c.round===2));
   const single = api.planCraftSets(both,targets,o);
   assert.deepEqual(clone(single.counts),[[1,1,1,1],[0,0,0,0]]);
   const mixed = api.planCraftSets([...both,...[1,2,3,4].map(s=>item(s,[59]))],targets,o);
-  assert.equal(mixed.round,2);
+  assert.ok(mixed.cycles.every(c=>c.round===2));
+});
+test("forge and crafting select roles and rounds using only their respective slots", () => {
+  const targets = [target("forge"), target("research",[5,6,7,8])], o = options();
+  for(const slots of [[1,2],[3,4]]){
+    const forge = slots.map(slot=>item(slot,[59]));
+    const research = slots.map(slot=>item(slot,[63],{recipe:slot+4}));
+    const active = slots[0]===1?0:1, other = 1-active;
+    let plan = api.planCraftSets(forge,targets,o);
+    assert.equal(plan.cycles[active].target.id,"research");assert.equal(plan.cycles[other].target.id,"forge");
+    plan = api.planCraftSets([...forge,...research],targets,o);
+    assert.equal(plan.cycles[active].round,2);assert.equal(plan.cycles[active].target.id,"forge");
+    assert.equal(plan.cycles[other].round,1);assert.equal(plan.cycles[other].complete,0);
+  }
 });
 test("recipe selection uses the chosen tier, stat and work/combat family", () => {
   const rows = {
