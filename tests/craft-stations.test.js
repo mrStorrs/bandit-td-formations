@@ -137,3 +137,21 @@ test("enabling weapons-only finishes and protects a paid hand-gear batch before 
   assert.deepEqual(gloves,Array(10).fill(1));assert.equal(recipe(f,3),2);
   assert.match(f.status().message,/Round 2 · Forger · 0\/1 weapon/);
 });
+test("identical forges start and refill independently for every output mode",async()=>{
+  for(const output of ["all","weapons","hands"]) {
+    const f=fixture(new Map(),true),second=addForge(f);await f.tick();
+    await f.configureAll({loop:"forge",forgeOutput:output});await f.tick();
+    const other=f.save.getAt(10,3,21),first=output==="hands"?13:2;
+    assert.ok(f.queue(0)>0&&other>0);assert.notEqual(f.queue(0),other);
+    assert.equal(recipe(f,3),first);assert.equal(recipe(f,10),first);
+    assert.equal(f.save.getAt(other,8,13),10);assert.deepEqual(f.balance(),[9940,9910]);
+    for(let i=0;i<10;i++)f.complete(0,[i===0?59:72]);await f.tick();
+    assert.equal(f.remaining(0),10);assert.equal(recipe(f,3),output==="all"?13:first);
+    assert.equal(f.save.getAt(10,3,21),other);assert.equal(f.save.getAt(other,8,13),10);
+    assert.deepEqual(f.balance(),[9920,9880]);
+    await f.handlers["craft-pause"]({token:f.status().token});
+    await f.select(second);assert.equal(f.status().running,true);assert.equal(f.save.getAt(10,3,21),other);
+    const next=fixture(f.stored,true);addForge(next);await next.tick();await next.tick();
+    assert.equal(next.queue(0),0);assert.equal(recipe(next,10),first);
+  }
+});

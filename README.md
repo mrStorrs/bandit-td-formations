@@ -355,10 +355,12 @@ the same recipe per batch** and paying the full native material cost up front.
 The forge covers weapons and hand gear; crafting covers head/belt gear and
 accessories. Each loop advances to the next checked role once its own two pieces
 are covered, then starts its next round without waiting for the other loop.
-The selected station's popup shows its role, round and progress. Stations with
-the same role, tier and rarity target split missing slots; different targets
-run independently. For example, one forge can make T1 Forger equipment while
-another makes T3 combat gear, and a crafting station can focus on Researcher.
+The selected station's popup shows its role, round and progress. Each station
+chooses its recipe using its own settings and queue. Stations can queue identical
+recipes simultaneously, and refill without waiting for another station's batch.
+For example, two forges can both make T1 Forger weapons, or one can make T3 combat
+gear while the other makes work gear. Materials and completed inventory still
+come from the shared campaign.
 
 A paid batch finishes all ten attempts before that station changes recipe,
 even if an early craft matches. Every result is checked individually. Each
@@ -471,7 +473,7 @@ python3 manage.py install --game-dir "/path/to/Steam/steamapps/common/塔防山�
 
 On Windows, use `py -3` in place of `python3` if appropriate. Restart the game
 after installing. Look for the “Formations ready” message on startup.
-The startup message includes the installed version number (currently 1.14.1).
+The startup message includes the installed version number (currently 1.14.2).
 
 The installer backs up the input archive in `cjs-formations-backups/` beside the
 game, verifies the result, then replaces `package.nw` atomically. It does not
@@ -726,6 +728,12 @@ Tests cover old settings, slot-specific roles and rounds, per-station persistenc
 paid batches and keeping useful off-target gear. In isolated build 25975458,
 all three choices were exercised through the popup, including reloads and
 switching back to full sets after restricted crafting.
+
+Version 1.14.2 removes cross-station recipe reservations. Tests cover several
+stations queuing identical recipes, independent refills, full material costs,
+and separate pause settings. In isolated build 25975458, two native forges
+queued identical batches and refilled independently for all three output
+options, with one forge still busy while the other started its next batch.
 
 To check the controls in-game:
 

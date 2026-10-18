@@ -20,7 +20,7 @@ function batch(f,index,bonus) {
   for(let i=0;i<count;i++)f.complete(index,[i===0?bonus:72]);
 }
 
-test("Auto-all cooperates across stations, pays for ten crafts each and advances jobs and rounds", async()=>{
+test("Auto-all pays for ten crafts at each station and advances jobs and rounds", async()=>{
   const f=await start();
   assert.deepEqual([f.remaining(0),f.remaining(1)],[10,10]);
   assert.deepEqual([f.save.getAt(f.queue(0),3,13),f.save.getAt(f.queue(1),3,13)],[2,19]);
@@ -184,7 +184,7 @@ test("failed settings writes stop automation without enabling sales", async()=>{
   await f.configureAll({loop:"forge"});await f.tick();assert.equal(f.status().running,false);assert.equal(f.queue(0),0);
   assert.match(f.status().message,/disk unavailable/);await settle();
 });
-test("multiple stations split the current set's missing slots without duplicate pending recipes",async()=>{
+test("every station can queue the same missing recipe without reserving it from another station",async()=>{
   const f=fixture(new Map(),true);await f.tick();
   for(const [i,kind,type] of [[10,4,21],[11,5,31],[12,4,21]]){
     const x=10030+i,y=10010;
@@ -193,8 +193,9 @@ test("multiple stations split the current set's missing slots without duplicate 
   }
   await f.configureAll({loop:"forge"});await f.tick();
   const recipes=[3,4,10,11,12].map(id=>f.save.getAt(f.save.getAt(id,3,21),3,13)).filter(Boolean);
-  assert.deepEqual(recipes.sort((a,b)=>a-b),[2,13,19,25]);assert.equal(f.save.getAt(12,3,21),0);
-  assert.ok([3,4,10,11].every(id=>f.save.getAt(f.save.getAt(id,3,21),8,13)===10));
+  assert.deepEqual(recipes,[2,19,2,19,2]);
+  assert.ok([3,4,10,11,12].every(id=>f.save.getAt(f.save.getAt(id,3,21),8,13)===10));
+  assert.deepEqual(f.balance(),[9900,9850]);
 });
 test("all ten results are inspected, including other selected roles on the last craft, without early refill",async()=>{
   const f=await start({roles:["forge","building"]});f.save.setAt(6,9,1,0);

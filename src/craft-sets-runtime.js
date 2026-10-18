@@ -244,14 +244,13 @@
       if (!Number.isFinite(capacity) || capacity < 0) throw new Error("Inventory capacity is unavailable.");
       if (inventory.filter(item => item.location === 7).length >= capacity) { state.message += " · Inventory full"; return; }
       const role = cycle.target, counts = plan.counts[cycle.index];
-      const slot = cycle.slots.find(i => counts[i] < cycle.round && ![...tickets.values()].some(t =>
-        t.role === role.id && t.slot === i && t.options.tier === state.options.tier && t.options.minimum === state.options.minimum));
-      if (slot === undefined) { state.message += " · Matching pieces queued at another station"; return; }
+      const slot = cycle.slots.find(i => counts[i] < cycle.round);
+      if (slot === undefined) return;
       const recipe = role.recipes[slot];
       if (!recipe || current.save.getAt(recipe, 19, 0) !== 1) { state.message += " · Waiting for recipe unlock"; return; }
       const queue = bridge.enqueue(current, station, { recipe, multiplier: state.options.multiplier }, batchSize);
       if (queue) tickets.set(station.id, { owned: true, id: station.id, token: token(current), type: station.type, owner: station.owner,
-        x: station.x, y: station.y, queue, recipe, count: batchSize, role: role.id, slot, options: validateCraftOptions(state.options) });
+        x: station.x, y: station.y, queue, recipe, count: batchSize, options: validateCraftOptions(state.options) });
       else state.message += " · Waiting for materials or station";
     }
     return {
