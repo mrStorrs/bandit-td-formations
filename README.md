@@ -28,9 +28,9 @@ research and drilling mod for Bandit Simulator TD (Steam app 4267800).
   matching pieces, optionally sell new rejected crafts, and keep making more sets.
   Forge and crafting loop independently in batches of **10**.
 - **Auto research and drill:** enabled by default in **Automation**. Research
-  prioritizes regular unlocks, then balances advanced topics by level. Drilling
-  finishes unlocked classes in tier order. Manual choices take priority until
-  the chosen target reaches its current cap.
+  prioritizes regular unlocks, then finishes each advanced tree in category
+  order. Drilling finishes unlocked classes in tier order. Manual choices take
+  priority until the chosen target reaches its current cap.
 - **Job outfits:** select a character, choose their job priority, equip their
   gear, and click **Save outfit for [job]**. Choosing that job again restores
   that character's saved outfit. Jobs without an outfit keep current equipment.
@@ -375,13 +375,18 @@ still perform the work normally; automation selects the next target and pays
 the game's normal copper cost. It waits when funds are insufficient.
 
 Research selects an unlocked, unfinished **regular research** first. When none
-is free, it chooses the **lowest current level** among unlocked advanced topics.
-Ties follow **Team → Gather → Growth → Cultivate → Craft**, using the game's
-topic order within each category. Automatic research completes **one level**
-before choosing again. Every open topic at the lowest level is handled before
-starting a higher level; newly available regular research takes priority at
-the next selection. Native prerequisites, category unlocks and building caps
-still apply.
+is free, it follows **Team → Gather → Growth → Cultivate → Craft**, using the
+game's topic order within each category. Each selected tree continues to its
+**current building cap** before the mod chooses another tree. Native Repeat
+handles the levels within a tree, such as displayed levels 1 through 60; the
+mod no longer interrupts it after each level or switches to a lower-level
+topic. Newly available regular research takes priority after the current tree
+finishes. Native prerequisites, category unlocks and building caps still apply.
+Other research stations can take different available trees independently.
+
+The current tree is remembered through copper shortages and restarts. If
+native Repeat is off, the mod resumes the same tree until its cap. A building
+upgrade extends the current tree's cap before another tree is selected.
 
 Drilling chooses the **lowest unlocked class tier** with unfinished training,
 using the game's class order within a tier. It continues that class through
@@ -399,7 +404,7 @@ resumes. Canceling an order releases the override and holds the idle station
 for your next choice while its menu remains selected. Queues already running
 when first installing this feature are treated as manual choices.
 
-Settings and manual choices persist locally per campaign across map changes
+Settings and current targets persist locally per campaign across map changes
 and restarts. Turning a checkbox off stops new mod orders; paid work and the
 game's own repeat can finish. The game's Repeat preference is preserved.
 New selections wait during pause, menus, dragging and transitions, and for a
@@ -650,6 +655,14 @@ native automatic selling, continued Forger-only progress, reloads and all three
 combat weapon targets. The installed catalog also passed keeper checks for all
 432 role/tier/slot targets and 81 compatible combat weapons.
 
+Version 1.12.2 lets native Repeat finish each research tree to its current cap
+before selecting the next tree in category order. Current targets survive
+copper shortages, restarts and Repeat-off settings; manual choices still take
+priority. It passes 233 JavaScript tests and four installer tests. In isolated
+build 25975458, 143 native research completions verified displayed levels 1–60
+without mod reselection, correct native repeat costs, all five categories,
+manual takeover, reloads and resuming the same tree after copper shortages.
+
 To check the controls in-game:
 
 1. Arrange your characters, choose their jobs and priority work targets, then
@@ -733,9 +746,9 @@ station recipes, and refills empty queues through the native crafting functions.
 `src/craft-sets.js` selects role recipes, matches gear and counts separate sets.
 `src/craft-sets-runtime.js` schedules batches of ten, identifies their native
 completion results, locks keepers and handles settings and native sales.
-`src/study.js` orders unlocked research and drill targets by level/category or
+`src/study.js` orders unlocked research and drill targets by category or
 class tier. `src/study-runtime.js` selects targets through native functions,
-preserves manual choices, and stops automatic research after each level.
+preserves current targets until their caps, and respects native Repeat.
 `src/outfits.js` validates outfit snapshots and matches equipment records.
 `src/outfit-runtime.js` observes native job changes, serializes equipment swaps,
 checks inventory and equip eligibility, and manages the outfit panel and storage.

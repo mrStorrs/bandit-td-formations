@@ -174,7 +174,7 @@
         }
         this.studyInfo = make("div", ""); this.studyInfo.setAttribute("role", "status");
         this.studyInfo.style.cssText = "white-space:pre-line;line-height:1.4;margin:8px 0";
-        make("div", "Research: regular unlocks first, then the lowest level across Team → Gather → Growth → Cultivate → Craft. Drill: lowest unlocked class tier first, to its current cap. Manual choices finish to their cap before auto resumes. Turning off stops new orders; current work can finish.").style.cssText = "color:#c5ced1;font-size:12px;line-height:1.4";
+        make("div", "Research: regular unlocks first, then finish each tree to its current cap in Team → Gather → Growth → Cultivate → Craft order. Native Repeat handles the levels within a tree. Drill: lowest unlocked class tier first, to its current cap. Manual choices take priority until their cap. Turning off stops new selections; native Repeat can continue the current target.").style.cssText = "color:#c5ced1;font-size:12px;line-height:1.4";
       }
       for (const [kind, input] of Object.entries(this.studyInputs)) {
         input.checked = state.enabled[kind]; input.disabled = state.busy || state.error;

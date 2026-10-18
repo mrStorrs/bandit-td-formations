@@ -81,7 +81,7 @@
     function installHooks() {
       if (hooked) return;
       const manager = engine.GetEventSheetManager();
-      const names = ["科技研究", "职业操练", "采集核心碰撞", "取消设施进程", "删除地图设施", "关闭二级页面", "刷新底部菜单", "界面音效"];
+      const names = ["科技研究", "职业操练", "取消设施进程", "删除地图设施", "关闭二级页面", "刷新底部菜单", "界面音效"];
       const functions = names.map(name => manager.GetFunctionBlockByName(name));
       if (functions.some(fn => typeof fn?.GetEventBlock()?._RunAndBlock !== "function" || typeof fn?.CaptureFunctionParameters !== "function")) {
         throw new Error("Research / drilling hooks are unavailable in this game build.");
@@ -90,17 +90,16 @@
         const block = fn.GetEventBlock(), run = block._RunAndBlock;
         block._RunAndBlock = function (...args) {
           // Automatic selection must not close or replace the player's menus.
-          if (index >= 5) return automatic ? undefined : run.apply(this, args);
-          let current, station, state, params, repeat, restoreRepeat = false;
+          if (index >= 4) return automatic ? undefined : run.apply(this, args);
+          let current, station, state, params;
           const previousMoving = moving;
           try {
             current = context(); params = fn.CaptureFunctionParameters();
-            if (index === 4) moving = !!params[7];
+            if (index === 3) moving = !!params[7];
             if (current) {
               state = load(current.saveId);
               const g = runtime.globalVars;
-              station = index === 2 ? current.stations.find(st => st.tile.uid === params[1]) :
-                current.stations.find(st => st.x === (index < 2 ? g["选中地块X"] : params[0]) &&
+              station = current.stations.find(st => st.x === (index < 2 ? g["选中地块X"] : params[0]) &&
                   st.y === (index < 2 ? g["选中地块Y"] : params[1]));
               const entry = station && state.entries.get(station.id);
               if (index < 2 && !automatic && station?.kind === (index === 0 ? 8 : 9) &&
@@ -118,13 +117,6 @@
                   }
                 }
               }
-              if (index === 2 && station?.kind === 8 && state.ready && sameStation(entry, station) &&
-                  entry.mode === "auto" && entry.target === station.target && entry.level === current.save.getAt(entry.target, 4, 0)) {
-                // Stop an automatic research target after one level, without
-                // paying for its next level or changing the native Repeat setting.
-                repeat = current.save.getAt(station.id, 5, 21);
-                current.save.setAt(0, station.id, 5, 21); restoreRepeat = true;
-              }
             }
           } catch (error) { if (state) fail(state, error); }
           try {
@@ -136,14 +128,11 @@
                   remember(state, station, target, "manual", s.getAt(target, fields(station.kind).level, 0));
                   cooldowns.delete(`${state.id}:${station.id}`);
                 }
-                if (index >= 3 && !moving) { forget(state, station.id); cooldowns.set(`${state.id}:${station.id}`, performance.now() + 2000); }
+                if (index >= 2 && !moving) { forget(state, station.id); cooldowns.set(`${state.id}:${station.id}`, performance.now() + 2000); }
               } catch (error) { fail(state, error); }
             }
             return result;
           } finally {
-            if (restoreRepeat && current.save.getAt(station.id, 1, 21) === station.type && current.save.getAt(station.id, 2, 21) === station.owner) {
-              current.save.setAt(repeat, station.id, 5, 21);
-            }
             moving = previousMoving;
           }
         };
@@ -212,8 +201,7 @@
             const s = current.save, f = fields(station.kind), label = station.kind === 8 ? "Research" : "Drill";
             let entry = state.entries.get(station.id);
             if (entry && !sameStation(entry, station)) { forget(state, station.id); entry = null; }
-            if (station.target > 0 && (!entry || entry.target !== station.target ||
-                entry.mode === "auto" && station.kind === 8 && entry.level !== s.getAt(station.target, f.level, 0))) {
+            if (station.target > 0 && (!entry || entry.target !== station.target)) {
               remember(state, station, station.target, "manual", s.getAt(station.target, f.level, 0));
               entry = state.entries.get(station.id);
             }
@@ -229,7 +217,7 @@
             }
             const available = targets(current, station);
             let target;
-            if (entry && (entry.mode === "manual" || station.kind === 9)) target = available.find(t => t.id === entry.target);
+            if (entry) target = available.find(t => t.id === entry.target);
             if (entry && !target) { forget(state, station.id); entry = null; }
             if (!target) target = station.kind === 8 ? nextResearch(available, id => occupied(current, 8, id)) :
               available.find(t => !occupied(current, 9, t.id));

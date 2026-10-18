@@ -4,12 +4,12 @@ const assert=require("node:assert/strict");
 const {researchTargets,drillTargets,nextResearch}=require("../src/study.js");
 const {fixture,settle,storageKey}=require("./helpers/study-fixture.js");
 
-test("research sorts all lowest-level topics by Team, Gather, Growth, Cultivate, Craft",()=>{
+test("research follows Team, Gather, Growth, Cultivate, Craft without favoring lower levels",()=>{
   const f=fixture(),read=()=>researchTargets(f.kj,f.save,()=>3);
   assert.deepEqual(read().map(t=>t.id),[31,32,33,34,35,36,40,41,43,42,44,37,38,39]);
-  f.save.setAt(1,31,4,0);assert.equal(nextResearch(read(),()=>false).id,32);
+  f.save.setAt(1,31,4,0);assert.equal(nextResearch(read(),()=>false).id,31);
   f.save.setAt(2,32,4,0);f.save.setAt(3,33,4,0);
-  assert.equal(read().at(-1).id,32);assert.ok(!read().some(t=>t.id===33));
+  assert.deepEqual(read().slice(0,3).map(t=>t.id),[31,32,34]);assert.ok(!read().some(t=>t.id===33));
 });
 test("open regular research takes precedence and new prerequisite unlocks are respected",()=>{
   const f=fixture();f.save.setAt(0,2,4,0);f.save.setAt(0,11,4,0);
@@ -19,10 +19,11 @@ test("open regular research takes precedence and new prerequisite unlocks are re
   assert.equal(nextResearch(list,()=>false).id,11);
   assert.equal(nextResearch(list,id=>id===11).id,34);
 });
-test("higher research levels wait when every topic at the lowest open level is already assigned",()=>{
+test("other stations take the next available tree without waiting for lower levels",()=>{
   const f=fixture();for(let id=31;id<=44;id++)f.save.setAt(1,id,4,0);f.save.setAt(0,34,4,0);
   const list=researchTargets(f.kj,f.save,()=>3);
-  assert.equal(nextResearch(list,()=>false).id,34);assert.equal(nextResearch(list,id=>id===34),undefined);
+  assert.equal(nextResearch(list,()=>false).id,31);assert.equal(nextResearch(list,id=>id===31).id,32);
+  assert.equal(nextResearch(list,()=>true),undefined);
   assert.equal(nextResearch([],()=>false),undefined);
 });
 test("drilling uses class tier order, prerequisites, family unlocks and the current cap",()=>{
@@ -41,18 +42,50 @@ test("defaults start both stations using native payment and preserve UI selectio
   assert.deepEqual([f.g.选中地块X,f.g.选中地块Y],[44,55]);assert.deepEqual(f.ui,[]);
   assert.deepEqual(f.stored.get(storageKey).enabled,{research:true,drill:true});
 });
-test("automatic research pays for one level only and traverses each category before raising the next level",async()=>{
+test("automatic research lets native Repeat finish each tree before moving through the categories",async()=>{
   const f=fixture();await f.ready();f.enabled("drill",false);
-  for(const id of [31,32,33,34,35,36,40,41,43,42,44,37,38,39,31]){
+  for(const id of [31,32,33,34,35,36,40,41,43,42,44,37,38,39]){
     await f.tick();assert.equal(f.queue(0),id);
-    const money=f.save.getAt(1,2,0);f.complete(0);
-    assert.equal(f.queue(0),0);assert.equal(f.save.getAt(1,2,0),money);
-    assert.equal(f.save.getAt(1,5,21),1,"native Repeat preference is restored");
+    for(let level=1;level<=3;level++){
+      const money=f.save.getAt(1,2,0);f.complete(0);
+      assert.equal(f.queue(0),level<3?id:0);assert.equal(f.save.getAt(id,4,0),level);
+      assert.equal(f.save.getAt(1,2,0),money-(level<3?100+level*10:0));
+      if(level<3){await f.tick();assert.match(f.status().message,/Research: Auto/);}
+    }
+    assert.equal(f.calls.filter(c=>c[0]==="科技研究"&&c[1]===id).length,1,"the mod starts the tree once; native Repeat handles its levels");
+    assert.equal(f.save.getAt(1,5,21),1,"native Repeat preference stays enabled");
   }
+  await f.tick();assert.equal(f.queue(0),0);
 });
-test("new regular unlocks preempt automatic advanced research at the next completed level",async()=>{
+test("new regular unlocks wait for the active tree to finish before taking priority",async()=>{
   const f=fixture();await f.ready();await f.tick();f.save.setAt(0,22,4,0);
+  for(let level=1;level<=2;level++){f.complete(0);await f.tick();assert.equal(f.queue(0),31);}
   f.complete(0);await f.tick();assert.equal(f.queue(0),22);f.complete(0);await f.tick();assert.equal(f.queue(0),32);
+});
+test("automatic research resumes the same tree with Repeat off instead of selecting a lower topic",async()=>{
+  const f=fixture();await f.ready();f.enabled("drill",false);f.save.setAt(0,1,5,21);
+  for(let level=1;level<=3;level++){
+    await f.tick();assert.equal(f.queue(0),31);f.complete(0);
+    assert.equal(f.queue(0),0);assert.equal(f.save.getAt(31,4,0),level);
+    assert.equal(f.save.getAt(1,5,21),0);
+  }
+  await f.tick();assert.equal(f.queue(0),32);
+});
+test("automatic research retains its tree across a copper shortage and restart",async()=>{
+  const stored=new Map(),f=fixture(stored);await f.ready();f.enabled("drill",false);await f.tick();
+  f.save.setAt(0,1,2,0);f.complete(0);await f.tick();assert.equal(f.queue(0),0);
+  assert.equal(stored.get(storageKey).stations.find(e=>e.id===1).target,31);
+  const next=fixture(stored);next.save.setAt(1,31,4,0);await next.ready();await next.tick();
+  assert.equal(next.queue(0),31);assert.match(next.status().message,/Research: Auto/);
+  next.complete(0);assert.equal(next.queue(0),31);next.complete(0);await next.tick();assert.equal(next.queue(0),32);
+});
+test("building upgrades extend the current tree before revisiting earlier unfinished trees",async()=>{
+  const f=fixture();await f.ready();f.enabled("drill",false);f.save.setAt(3,31,4,0);await f.tick();
+  assert.equal(f.queue(0),32);f.complete(0);f.save.setAt(1,11,5,1);
+  for(let level=2;level<=6;level++){
+    await f.tick();assert.equal(f.queue(0),32);f.complete(0);assert.equal(f.save.getAt(32,4,0),level);
+  }
+  await f.tick();assert.equal(f.queue(0),31);
 });
 test("manual research runs to the cap, even if native Repeat is off, before automation resumes",async()=>{
   const f=fixture();await f.ready();f.save.setAt(0,1,5,21);f.choose(0,37);
@@ -80,12 +113,13 @@ test("manual drill overrides class order and continues to cap before the lowest 
   for(let level=1;level<=3;level++){await f.tick();assert.equal(f.queue(1),3);f.complete(1);}
   await f.tick();assert.equal(f.queue(1),1);
 });
-test("inherited native queues are manual; saved automatic research still yields after one level",async()=>{
+test("inherited native queues are manual and saved automatic research continues with native Repeat",async()=>{
   const f=fixture();f.save.setAt(37,1,3,21);f.save.setAt(1,37,13,0);await f.ready();await f.tick();
   f.complete(0);assert.equal(f.queue(0),37);assert.equal(f.save.getAt(37,4,0),1);
   const stored=new Map(),a=fixture(stored);await a.ready();await a.tick();
   const b=fixture(stored);b.save.setAt(31,1,3,21);b.save.setAt(1,31,13,0);await b.ready();await b.tick();
-  const money=b.save.getAt(1,2,0);b.complete(0);assert.equal(b.queue(0),0);assert.equal(b.save.getAt(1,2,0),money);
+  const money=b.save.getAt(1,2,0);b.complete(0);assert.equal(b.queue(0),31);assert.equal(b.save.getAt(1,2,0),money-110);
+  await b.tick();assert.match(b.status().message,/Research: Auto/);
 });
 test("manual cancellation releases a pin and selected idle stations wait for user input",async()=>{
   const f=fixture();await f.ready();f.choose(0,37);f.cancel(0);
@@ -107,9 +141,11 @@ test("pause, menus, transitions, unusable stations and disabled native groups ca
     assert.equal(f.save.getAt(1,2,0),100000);
   }
 });
-test("toggles persist independently, stale messages cannot change them, and off finishes a paid research level",async()=>{
+test("toggles stop new selections while native Repeat can finish the current research tree",async()=>{
   const f=fixture();await f.ready();await f.tick();const token=f.status().token;
-  f.enabled("research",false);f.complete(0);await f.tick();assert.equal(f.queue(0),0);assert.equal(f.queue(1),1);
+  f.enabled("research",false);
+  for(let level=1;level<=3;level++){f.complete(0);await f.tick();assert.equal(f.queue(0),level<3?31:0);}
+  assert.equal(f.queue(1),1);
   f.loop.leave();f.handlers["study-enabled"]({token,kind:"research",enabled:true});await f.tick();
   assert.equal(f.status().enabled.research,false);assert.equal(f.stored.get(storageKey).enabled.research,false);
   f.enabled("research",true);await f.tick();assert.equal(f.queue(0),32);
@@ -126,18 +162,20 @@ test("demolished or replaced stations cannot retain manual ownership",async()=>{
   const tile=f.tiles[0];f.runtime.callFunction("删除地图设施",tile.instVars.X坐标,10010,0,0,0,"主地图",0,false);
   await f.tick();assert.equal(f.stored.get(storageKey).stations.some(e=>e.id===1),false);
 });
-test("multiple research stations reserve different topics at the same level",async()=>{
-  const f=fixture();f.add(8);await f.ready();await f.tick();assert.deepEqual([f.queue(0),f.queue(2)],[31,32]);
+test("multiple research stations reserve different trees in category order despite different levels",async()=>{
+  const f=fixture();f.add(8);f.save.setAt(2,31,4,0);f.save.setAt(1,32,4,0);
+  await f.ready();await f.tick();assert.deepEqual([f.queue(0),f.queue(2)],[31,32]);
 });
 
 test("selecting the current automatic research topic manually takes ownership until its cap",async()=>{
   const f=fixture();await f.ready();await f.tick();f.choose(0,31);f.complete(0);
   assert.equal(f.queue(0),31);await f.tick();assert.match(f.status().message,/Research: Manual/);
 });
-test("research changed outside the mod is treated as manual after reload",async()=>{
+test("native level progress does not turn saved automatic research into a manual override after reload",async()=>{
   const stored=new Map(),a=fixture(stored);await a.ready();await a.tick();
   const b=fixture(stored);b.save.setAt(31,1,3,21);b.save.setAt(1,31,13,0);b.save.setAt(1,31,4,0);
-  await b.ready();await b.tick();b.complete(0);assert.equal(b.queue(0),31);
+  await b.ready();await b.tick();assert.match(b.status().message,/Research: Auto/);
+  b.complete(0);assert.equal(b.queue(0),31);
 });
 test("relocating a station preserves its manual target instead of releasing the override",async()=>{
   const f=fixture();await f.ready();f.choose(0,37);const v=f.tiles[0].instVars;

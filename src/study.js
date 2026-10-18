@@ -21,7 +21,7 @@
         category: regular ? "Regular" : researchCategories[order][1] });
     }
     return targets.sort((a, b) => Number(b.regular) - Number(a.regular) ||
-      (a.regular ? a.id - b.id : a.level - b.level || a.order - b.order || a.id - b.id));
+      (a.regular ? a.id - b.id : a.order - b.order || a.id - b.id));
   }
 
   function drillTargets(zy, save, maximum, requirement, familyOpen) {
@@ -39,11 +39,7 @@
   }
 
   function nextResearch(targets, occupied) {
-    const regular = targets.find(t => t.regular && !occupied(t.id));
-    if (regular) return regular;
-    const advanced = targets.filter(t => !t.regular);
-    // Finish the lowest open level across all categories before starting the next.
-    return advanced.find(t => t.level === advanced[0].level && !occupied(t.id));
+    return targets.find(t => !occupied(t.id));
   }
 
   const api = { researchTargets, drillTargets, nextResearch };
