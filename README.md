@@ -297,6 +297,33 @@ map changes and game restarts. They are not part of Steam Cloud. Recipes that
 finished before this feature was installed cannot be recovered: start a batch
 once at those empty stations to teach the mod what to repeat.
 
+## Realm 2 crafting costs
+
+Realm 2 (T2) crafting-station equipment uses **1,000 roots per piece** in place
+of the 17,000-herb ingredient. This covers headgear, belts and accessories for
+work and combat. The recipe screen, manual crafting, Repeat and Auto-all all
+use the adjusted cost. Material multipliers still apply: ten pieces at ×1 cost
+10,000 roots; ten pieces at ×10 cost 100,000 roots.
+
+Canceling a new batch refunds roots for its remaining pieces, including after
+saving and reloading. Queues paid for before this update retain their original
+herb refunds. The paid-cost marker travels with the queue in the game save.
+
+## Gatherer focus
+
+Loggers, miners and planters automatically choose the resource with the fewest
+remaining harvests within their normal work range. They keep working on it
+until it is depleted, then choose the next weakest available resource. Workers
+with the same job and reachable resources choose the same target, including
+when two resources have equal remaining harvests.
+
+This is always enabled and also applies while an Automatic worker is gathering.
+Each worker keeps their assigned profession and position. Moving a worker,
+changing their job or losing access to the resource triggers a new selection.
+Regrowing plots become eligible when ready; infinite battlefield resources
+continue using the game's targeting. Saved work-priority coordinates are kept,
+but active gathering uses the automatic focus choice.
+
 ## Auto-all gear sets
 
 Select an equipment station and choose **Auto-all sets** in its popup. Choose a
@@ -473,7 +500,7 @@ python3 manage.py install --game-dir "/path/to/Steam/steamapps/common/塔防山�
 
 On Windows, use `py -3` in place of `python3` if appropriate. Restart the game
 after installing. Look for the “Formations ready” message on startup.
-The startup message includes the installed version number (currently 1.14.2).
+The startup message includes the installed version number (currently 1.15.0).
 
 The installer backs up the input archive in `cjs-formations-backups/` beside the
 game, verifies the result, then replaces `package.nw` atomically. It does not
@@ -735,6 +762,15 @@ and separate pause settings. In isolated build 25975458, two native forges
 queued identical batches and refilled independently for all three output
 options, with one forge still busy while the other started its next batch.
 
+Version 1.15.0 replaces the realm 2 crafting-gear herb cost with roots and adds
+sticky lowest-remaining-resource targeting for gatherers. Tests cover recipe
+scope and multipliers, old and new queue refunds, reloads, job/range filtering,
+depletion, regrowth, ties and native AI refreshes. In isolated build 25975458,
+all 12 affected recipes returned the new costs; the native recipe screen,
+manual purchase/cancellation and automated batches used roots. A partially
+completed batch refunded the correct remaining roots after save/load. Two
+native miners finished a shared target and began harvesting the next weakest.
+
 To check the controls in-game:
 
 1. Arrange your characters, choose their jobs and priority work targets, then
@@ -816,6 +852,10 @@ relocation and flushes pending object creation/destruction between moves.
 locks, and event groups.
 `src/crafting.js` observes native queue creation and cancellation, remembers
 station recipes, and refills empty queues through the native crafting functions.
+`src/recipe-costs.js` adjusts realm 2 crafting ingredients and records each new
+queue's paid cost in the unused queue field 12 for correct native refunds.
+`src/gathering.js` focuses gatherers on the weakest remaining resources through
+native production turrets, checking work range, remaining harvests and jobs.
 `src/craft-sets.js` selects role recipes, matches gear and counts separate sets.
 `src/craft-sets-runtime.js` schedules batches of ten, identifies their native
 completion results, locks keepers and handles per-station settings, selection,
