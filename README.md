@@ -285,7 +285,10 @@ multiplier (×1, ×10 or ×100). Click **Apply / Start**. The dropdown offers:
   then Logger, Miner, Planter, Crafter, Alchemist, Builder, Trainer and the three
   combat roles, skipping unchecked entries.
 - **A single job or combat role:** repeatedly make that role's sets. This
-  overrides the checkboxes without clearing their selections.
+  overrides the crafting checkboxes without clearing their selections.
+
+These selections control what gets crafted. Matching equipment for all twelve
+roles is kept and locked, including unchecked roles and when looping one role.
 
 Each target contains four ordinary craftable pieces. Work sets use the job's
 weapon, gloves, belt and necklace; combat sets use a weapon, bracers, headband
@@ -306,7 +309,7 @@ and ring. Cores, treasures and special set upgrades are outside this loop.
 | Combat—AGI | AGI | Pierce Bonus |
 | Combat—INT | INT | Spell Bonus |
 
-The combat roles use the tier's ordinary axe, sword and fan respectively.
+The combat roles craft the tier's ordinary spear, bow and fan respectively.
 Every piece must be the correct recipe/stat variant, exactly the chosen tier,
 at least the minimum rarity, and have at least one roll of that role's bonus.
 General Work Bonus does not satisfy a specific job bonus. Quality and rolls
@@ -329,12 +332,21 @@ later rounds. Progress is recomputed from gear you still own; selling a keeper
 or changing its rolls makes that piece missing again.
 
 Qualifying equipment is automatically locked, including existing matches.
-Each result is checked against all currently selected roles, so a useful roll
-for a later job is kept. **Auto-sell non-matching crafts** starts checked and
-can be disabled while running. It sells only newly completed Auto-all crafts
-that fail every selected target, using the native equipment sale function.
-Unchecking it keeps rejects unlocked. Existing items, locked items, equipped
-gear, unrelated loot and brewing outputs are never swept for sale.
+Each result is checked against every job and combat role, regardless of the
+checkboxes or single-role dropdown. With only Forger selected, STR work gloves
+with Build Bonus are kept for Builder, but only Forger sets drive the loop.
+Keepers still need the selected tier, minimum rarity, correct stat and a
+matching role bonus. Work weapons need the job's specific work power. Combat
+weapons can be any ordinary weapon with the matching attack type and primary
+stat: a sword with AGI, Pierce attack and Pierce Bonus is protected even though
+the AGI loop crafts bows. These alternatives do not replace the chosen weapon
+recipe in set progress.
+
+**Auto-sell non-matching crafts** starts checked and can be disabled while
+running. It sells only newly completed Auto-all crafts that qualify for no
+role, using the native equipment sale function. Unchecking it keeps rejects
+unlocked. Existing items, locked items, equipped gear, unrelated loot and
+brewing outputs are never swept for sale.
 
 For owned Auto-all queues, this decision takes priority over the game's native
 quality-based automatic sale. The native sale preferences are preserved.
@@ -628,6 +640,16 @@ exact initial costs, manual targets continuing after reload, and automatic
 resumption after their caps. Native pointer clicks also verified both
 checkboxes. A manual Steam/NW.js check remains useful.
 
+Version 1.12.1 keeps and locks matches for all twelve roles, independently of
+the crafting selection. Compatible ordinary combat weapons are protected too;
+the combat crafting targets are STR spears, AGI bows and INT fans. It passes
+230 JavaScript tests and four installer tests, including unchecked keepers,
+single-role scheduling, existing gear, inherited queues and rejection filters.
+In isolated build 25975458, 52 native crafts verified lock protection against
+native automatic selling, continued Forger-only progress, reloads and all three
+combat weapon targets. The installed catalog also passed keeper checks for all
+432 role/tier/slot targets and 81 compatible combat weapons.
+
 To check the controls in-game:
 
 1. Arrange your characters, choose their jobs and priority work targets, then
@@ -668,14 +690,16 @@ To check the controls in-game:
     normal costs. Try insufficient materials, then replenish them. Cancel one
     station and confirm it stays stopped; start a new recipe to resume. Restart
     the game and check that remembered recipes still repeat.
-13. Open **Crafting**, choose **Auto-all sets**, check the desired work/combat
+13. Open **Automation**, choose **Auto-all sets**, check the desired work/combat
     roles and choose tier/rarity, then **Apply / Start**. Confirm batches of ten,
-    correct stat variants and rolled bonuses, and locked keepers for any checked
-    role. Let one station get ahead: it should advance roles and rounds for its
-    own two slots while the other continues, with separate progress in the panel.
+    correct stat variants and rolled bonuses, and locked keepers for any role,
+    including unchecked jobs. Let one station get ahead: it should advance roles
+    and rounds for its own two slots while the other continues, with separate
+    progress in the panel.
     Disable auto-sell while running and verify rejects remain. Pause, select one
-    role in **Loop**, then start and verify only that role repeats. Restart to
-    check settings and paused/running persistence.
+    role in **Loop**, then start and verify only that role repeats while matches
+    for other roles are still locked. Verify STR crafts spears, AGI bows and INT
+    fans. Restart to check settings and paused/running persistence.
 
 ## Development
 

@@ -1,7 +1,7 @@
 (() => {
   "use strict";
   function attachCraftSets(runtime, engine, notify, bridge) {
-    const { craftRoles, craftDefaults, validateCraftOptions, craftTargets, matchesCraftItem, planCraftSets } = globalThis.BanditFormations;
+    const { craftRoles, craftDefaults, validateCraftOptions, craftTargets, isCraftKeeper, planCraftSets } = globalThis.BanditFormations;
     const prefix = "cjs-formations:craft-sets:v1:", batchSize = 10, states = new Map(), tickets = new Map();
     let hooked = false, activeWork = null, creating = null, epoch = 0, lastStatus = "";
     const token = current => `${current.saveId}:${current.save.uid}:${epoch}`;
@@ -63,8 +63,7 @@
         if (!ticket.owned) return;
         throw new Error("A crafted item could not be identified. It was kept.");
       }
-      const qualifies = craftTargets(current.wp, ticket.options).some(t => matchesCraftItem(item, t, ticket.options)) ||
-        craftTargets(current.wp, state.options).some(t => matchesCraftItem(item, t, state.options));
+      const qualifies = isCraftKeeper(item, current.wp, ticket.options) || isCraftKeeper(item, current.wp, state.options);
       if (qualifies) { s.setAt(1, row, 22, 7); state.kept++; return; }
       if (!ticket.owned || !running(state) || !state.options.autoSell || !sameOptions(state.options, ticket.options) || s.getAt(row, 22, 7) !== 0) return;
       // Only the immediately-created, previously-empty row reaches this path.
@@ -95,7 +94,7 @@
             // this new Auto-all item until all its rolls have been inspected.
             if (creating && params[0] === creating.row && params[2]) {
               const { current, ticket, row } = creating;
-              if (ticket.owned || craftTargets(current.wp, ticket.options).some(t => matchesCraftItem(readItem(current, row, 7), t, ticket.options))) return;
+              if (ticket.owned || isCraftKeeper(readItem(current, row, 7), current.wp, ticket.options)) return;
             }
             return run.apply(this, args);
           }
@@ -197,14 +196,14 @@
               if (!targets.length) throw new Error("Choose at least one crafting role.");
               if (current.blocked || runtime.globalVars["装备穿戴中"]) state.message = "Waiting for gameplay to resume…";
               else {
-                const plan = planCraftSets(items(current), targets, state.options);
-                for (const item of plan.keep) current.save.setAt(1, item.row, 22, item.location);
+                const inventory = items(current), plan = planCraftSets(inventory, targets, state.options);
+                for (const item of inventory) if (isCraftKeeper(item, current.wp, state.options)) current.save.setAt(1, item.row, 22, item.location);
                 for (const [id] of tickets) if (!current.stations.some(st => st.id === id && owns(current, st))) tickets.delete(id);
                 state.message = plan.cycles.map(cycle => `${cycle.name}: Round ${cycle.round} · ${cycle.target.name} · ${cycle.complete}/2 pieces`).join("\n") +
                   `\nT${state.options.tier} · Batches of ${batchSize}`;
                 const capacity = runtime.callFunction("背包容量上限");
                 if (!Number.isFinite(capacity) || capacity < 0) throw new Error("Inventory capacity is unavailable.");
-                const bagCount = items(current).filter(item => item.location === 7).length;
+                const bagCount = inventory.filter(item => item.location === 7).length;
                 if (bagCount >= capacity) state.message += " · Inventory full";
                 else {
                   let queued = false;

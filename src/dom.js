@@ -90,7 +90,7 @@
         make("strong", "Crafting", body).style.cssText = "display:block;margin-bottom:10px";
         this.craftMode = select("Mode", "cjs-craft-mode", [["repeat", "Repeat current ×10"], ["sets", "Auto-all sets"]]);
         this.craftLoop = select("Loop", "cjs-craft-loop", [["all", "Cycle checked roles"], ...state.roles.map(r => [r.id, r.name])]);
-        make("div", "Choose a single role to repeat only that set.", body).style.cssText = "margin:-3px 0 10px;color:#c5ced1;font-size:12px";
+        make("div", "Choose a single role to repeat only that set. Combat weapons: STR spear, AGI bow, INT fan.", body).style.cssText = "margin:-3px 0 10px;color:#c5ced1;font-size:12px";
         this.craftTier = select("Tier", "cjs-craft-tier", Array.from({ length: 9 }, (_, i) => [i + 1, `T${i + 1}`]));
         this.craftMinimum = select("Minimum rarity", "cjs-craft-minimum", ["White", "Green", "Blue", "Purple", "Gold", "Red"].map((name, i) => [i + 1, `${i + 1} · ${name} or better`]));
         this.craftMultiplier = select("Materials per craft", "cjs-craft-multiplier", [1, 10, 100].map(n => [n, `×${n}`]));
@@ -111,7 +111,7 @@
         this.craftButton.style.cssText = "background:#c0a35b;color:#10191d;border:0;border-radius:4px;padding:7px 12px;cursor:pointer;font:inherit";
         this.craftInfo = make("div", "", body); this.craftInfo.setAttribute("role", "status");
         this.craftInfo.style.cssText = "margin-top:10px;line-height:1.4;white-space:pre-line";
-        make("div", "Forge and crafting loop independently, in batches of 10. Each piece needs the correct stat and at least one role bonus. Matches for any selected role are locked, including extras for later rounds. Selling affects only new Auto-all crafts. Brewing keeps repeating its last recipe ×10.", body).style.cssText = "margin-top:8px;color:#c5ced1;font-size:12px;line-height:1.4";
+        make("div", "Forge and crafting loop independently, in batches of 10. Checked roles and Loop choose what to craft. Items matching any job or combat role at your tier and minimum rarity are kept and locked, including unchecked roles and compatible combat weapons. Each piece needs the correct stats and a matching role bonus. Selling affects only new Auto-all crafts. Brewing keeps repeating its last recipe ×10.", body).style.cssText = "margin-top:8px;color:#c5ced1;font-size:12px;line-height:1.4";
         const controls = () => {
           const busy = this.craftState.busy, running = this.craftState.running, sets = this.craftMode.value === "sets";
           this.craftMode.disabled = busy || running;

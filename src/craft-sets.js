@@ -6,7 +6,7 @@
     ["planting", "Planter", 3, 42, 58], ["crafting", "Crafter", 2, 44, 60],
     ["alchemy", "Alchemist", 3, 45, 61], ["building", "Builder", 1, 46, 62],
     ["training", "Trainer", 2, 48, 64],
-    ["combat-str", "Combat — STR", 1, 40, 19], ["combat-agi", "Combat — AGI", 2, 48, 20],
+    ["combat-str", "Combat — STR", 1, 43, 19], ["combat-agi", "Combat — AGI", 2, 44, 20],
     ["combat-int", "Combat — INT", 3, 47, 21],
   ].map(([id, name, stat, power, bonus]) => ({ id, name, stat, power, bonus, combat: id.startsWith("combat-") }));
   const craftDefaults = { mode: "repeat", loop: "all", roles: craftRoles.map(r => r.id), tier: 1, minimum: 3, multiplier: 1, autoSell: true };
@@ -37,10 +37,19 @@
   function craftTargets(wp, options) {
     return selectedCraftRoles(options).map(role => ({ ...role, recipes: craftRecipes(wp, role, options.tier) }));
   }
+  const eligibleCraftItem = (item, options) => item.slot >= 1 && item.slot <= 4 &&
+    item.tier === options.tier && item.quality >= options.minimum && item.quality <= 6;
   function matchesCraftItem(item, target, options) {
-    return item.slot >= 1 && item.slot <= 4 && item.recipe === target.recipes[item.slot - 1] &&
-      item.tier === options.tier && item.quality >= options.minimum && item.quality <= 6 &&
-      item.bonuses.includes(target.bonus);
+    return eligibleCraftItem(item, options) && item.recipe === target.recipes[item.slot - 1] && item.bonuses.includes(target.bonus);
+  }
+  function isCraftKeeper(item, wp, options) {
+    if (!eligibleCraftItem(item, options) || wp.getAt(item.recipe, 5) !== "装备" || wp.getAt(item.recipe, 4) !== "普通" ||
+        wp.getAt(item.recipe, 3) !== options.tier || wp.getAt(item.recipe, 6) !== item.slot) return false;
+    return craftRoles.some(role => {
+      if (wp.getAt(item.recipe, 10) !== role.stat || !item.bonuses.includes(role.bonus)) return false;
+      if (item.slot !== 1) return wp.getAt(item.recipe, 23) === (role.combat ? "战斗" : "生产");
+      return role.combat ? wp.getAt(item.recipe, 8) === role.stat + 3 : wp.getAt(item.recipe, 9) === role.power;
+    });
   }
   function planCraftSets(items, targets, options) {
     const counts = targets.map(() => [0, 0, 0, 0]);
@@ -59,8 +68,8 @@
       return { kind, name, slots, round, index, target: targets[index] || null,
         complete: index < 0 ? 0 : slots.filter(slot => counts[index][slot] >= round).length };
     });
-    return { counts, cycles, keep: eligible.map(entry => entry.item) };
+    return { counts, cycles };
   }
   Object.assign(globalThis.BanditFormations, { craftRoles, craftDefaults, validateCraftOptions, selectedCraftRoles,
-    craftRecipes, craftTargets, matchesCraftItem, planCraftSets });
+    craftRecipes, craftTargets, matchesCraftItem, isCraftKeeper, planCraftSets });
 })();

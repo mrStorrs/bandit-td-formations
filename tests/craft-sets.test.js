@@ -85,5 +85,24 @@ test("recipe selection uses the chosen tier, stat and work/combat family", () =>
   const wp = { width:7, getAt:(i,f)=>rows[i]?.[f]??0 };
   assert.deepEqual(clone(api.craftRecipes(wp,target("forge"),1)), [1,3,0,0]);
   assert.deepEqual(clone(api.craftRecipes(wp,target("forge"),2)), [0,4,0,0]);
-  assert.deepEqual(clone(api.craftRecipes(wp,target("combat-str"),1)), [0,5,0,0]);
+  assert.deepEqual(clone(api.craftRecipes(wp,target("combat-str"),1)), [1,5,0,0]);
+});
+test("combat crafting chooses spear, bow and fan while keeping compatible alternatives", () => {
+  const rows = {
+    1:{3:1,4:"普通",5:"装备",6:1,8:4,9:40,10:1,23:"通用"},
+    2:{3:1,4:"普通",5:"装备",6:1,8:4,9:43,10:1,23:"通用"},
+    3:{3:1,4:"普通",5:"装备",6:1,8:5,9:48,10:2,23:"通用"},
+    4:{3:1,4:"普通",5:"装备",6:1,8:5,9:44,10:2,23:"通用"},
+    5:{3:1,4:"普通",5:"装备",6:1,8:6,9:45,10:3,23:"通用"},
+    6:{3:1,4:"普通",5:"装备",6:1,8:6,9:47,10:3,23:"通用"},
+  };
+  const wp = { width:7, getAt:(i,f)=>rows[i]?.[f]??0 }, o = options({loop:"forge",roles:["forge"]});
+  for(const [role,recipe,alternative,bonus] of [["combat-str",2,1,19],["combat-agi",4,3,20],["combat-int",6,5,21]]){
+    const recipes=api.craftRecipes(wp,target(role),1);
+    assert.equal(recipes[0],recipe);
+    for(const id of [recipe,alternative]) assert.equal(api.isCraftKeeper(item(1,[bonus],{recipe:id}),wp,o),true);
+    assert.equal(api.matchesCraftItem(item(1,[bonus],{recipe:alternative}),target(role,recipes),o),false);
+  }
+  rows[1][8]=5;
+  assert.equal(api.isCraftKeeper(item(1,[19]),wp,o),false,"a mismatched attack stat does not qualify for combat");
 });

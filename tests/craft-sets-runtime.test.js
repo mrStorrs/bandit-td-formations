@@ -36,7 +36,7 @@ test("Auto-all cooperates across stations, pays for ten crafts each and advances
 test("dropdown loops just one role and retains inactive checkbox choices", async()=>{
   const f=await start({loop:"combat-agi",roles:["forge"]});
   for(let round=0;round<2;round++)for(let step=0;step<2;step++){batch(f,0,20);batch(f,1,20);await f.tick();}
-  assert.deepEqual(bag(f).map(i=>i.recipe).sort((a,b)=>a-b),[4,4,11,11,17,17,23,23]);
+  assert.deepEqual(bag(f).map(i=>i.recipe).sort((a,b)=>a-b),[5,5,11,11,17,17,23,23]);
   assert.match(f.status().message,/Round 3 · Combat — AGI/);
   assert.deepEqual(f.stored.get(key).options.roles,["forge"]);
 });
@@ -56,6 +56,50 @@ test("all selected roles are checked and duplicate keepers go to future rounds",
   assert.equal(f.save.getAt(1,2,0),0);
   give(f,13,59);give(f,13,59);await f.tick();
   assert.ok(bag(f).every(i=>i.lock===1));
+});
+test("unchecked jobs are kept and locked while only selected jobs advance the crafting loop", async()=>{
+  for(const loop of ["all","forge"]){
+    const f=await start({loop,roles:["forge"]});f.save.setAt(6,9,1,0);
+    batch(f,0,59);await f.tick();assert.equal(f.save.getAt(f.queue(0),3,13),13);
+    const money=f.save.getAt(1,2,0),other=f.queue(1);
+    for(let i=0;i<10;i++)f.complete(0,[i===0?59:62]);
+    await f.tick();
+    const gloves=bag(f).filter(item=>item.recipe===13);
+    assert.equal(gloves.length,10);assert.ok(gloves.every(item=>item.lock===1));
+    assert.equal(f.save.getAt(1,2,0),money);
+    assert.equal(f.save.getAt(f.queue(0),3,13),2);
+    assert.match(f.status().message,/Forge: Round 2 · Forger/);
+    assert.equal(f.queue(1),other);
+    await f.configure({loop:"all",roles:["building"]});await f.tick();
+    assert.match(f.status().message,/Forge: Round 1 · Builder · 1\/2 pieces/);
+  }
+});
+test("existing unchecked matches and compatible combat weapons are locked without counting toward the selected set", async()=>{
+  const f=fixture(new Map(),true);await f.tick();
+  give(f,13,62);give(f,19,62);give(f,1,19);give(f,4,20);give(f,8,21);
+  await f.configure({loop:"forge",roles:["forge"]});await f.tick();
+  assert.equal(bag(f).length,5);assert.ok(bag(f).every(item=>item.lock===1));
+  assert.match(f.status().message,/Forge: Round 1 · Forger · 0\/2 pieces/);
+  assert.match(f.status().message,/Crafting: Round 1 · Forger · 0\/2 pieces/);
+  const money=f.save.getAt(1,2,0);f.save.setAt(6,9,1,0);f.complete(0,[19]);
+  assert.equal(bag(f).length,6);assert.equal(bag(f).at(-1).lock,1);assert.equal(f.save.getAt(1,2,0),money);
+});
+test("inherited queues protect unchecked job and combat matches before native automatic sales", async()=>{
+  const f=await start({loop:"forge",roles:["forge"]});f.loop.leave();f.save.setAt(6,9,1,0);
+  f.complete(0,[19]);f.complete(1,[62]);
+  assert.deepEqual(bag(f).map(item=>[item.recipe,item.lock]),[[2,1],[19,1]]);
+  assert.equal(f.save.getAt(1,2,0),0);
+  f.complete(1,[63]);assert.equal(f.save.getAt(1,2,0),123);
+});
+test("all-role protection still rejects wrong stats, work weapons, rarity, tier and generic work bonuses", async()=>{
+  const f=fixture(new Map(),true);await f.tick();
+  give(f,13,63);give(f,2,62);give(f,19,62,2);give(f,13,62);f.save.setAt(2,4,3,7);
+  give(f,13,72);give(f,2,20);
+  await f.configure({loop:"forge",roles:["forge"]});await f.tick();
+  assert.ok(bag(f).every(item=>item.lock===0));
+  const money=f.save.getAt(1,2,0);
+  f.complete(0,[62]);f.complete(0,[19],2);f.complete(1,[63]);
+  assert.equal(bag(f).length,6);assert.equal(f.save.getAt(1,2,0),money+3*123);
 });
 test("wrong stat, quality, tier and bonus never count; preexisting rejects and unrelated loot are not swept", async()=>{
   const f=fixture(new Map(),true);await f.tick();

@@ -21,7 +21,7 @@ function fixture(stored = new Map(), extended = false) {
     const slot = id <= 9 ? 1 : id <= 15 ? 2 : id <= 21 ? 3 : 4;
     const stat = id <= 9 ? Math.ceil(id / 3) : ((id - 10) % 3) + 1;
     const production = id >= 10 && (id - 10) % 6 >= 3;
-    catalog[id] = { 3:1,4:"普通",5:"装备",6:slot,9: id <= 9 ? [40,43,46,48,44,41,47,45,42][id-1] : production ? 72 : 28,
+    catalog[id] = { 3:1,4:"普通",5:"装备",6:slot,8:id<=9?stat+3:0,9: id <= 9 ? [40,43,46,48,44,41,47,45,42][id-1] : production ? 72 : 28,
       10:stat,23:id<=9?"通用":production?"生产":"战斗" };
     recipes[id] ??= [1, "普通", "装备", slot];
   }
