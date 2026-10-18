@@ -111,3 +111,18 @@ test("a map change while saving the undo cancels combat and clears the unused sn
   await h.toggle.toggle();
   assert.equal(h.applied.length, 0); assert.equal([...h.data.values()][0], null);
 });
+
+test("combat undo waits for outfit completion and retains its snapshot after an asynchronous failure", async () => {
+  const h = harness(); await h.toggle.toggle();
+  let resolve, reject;
+  h.toggle.apply = () => new Promise((yes, no) => { resolve = yes; reject = no; });
+  const failed = h.toggle.toggle();
+  await Promise.resolve();
+  assert.equal(h.toggle.busy, true); assert.ok([...h.data.values()][0]);
+  await h.toggle.toggle();
+  reject(new Error("outfit transfer failed")); await failed;
+  assert.ok([...h.data.values()][0]); assert.equal(h.toggle.busy, false);
+  const retry = h.toggle.toggle(); await Promise.resolve();
+  assert.ok([...h.data.values()][0]); resolve(); await retry;
+  assert.equal([...h.data.values()][0], null);
+});

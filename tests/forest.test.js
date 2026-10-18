@@ -132,3 +132,22 @@ test("a failed native summon does not retry every tick", async () => {
   f.current.ready = true; await f.tick(); await f.tick();
   assert.equal(f.calls.length, 2); assert.deepEqual(f.notices, ["game refused summon"]);
 });
+
+test("summoning waits for async formation/outfit completion and rechecks cancellation and map state", async () => {
+  for (const action of ["complete", "toggle", "map", "blocked", "reject"]) {
+    const f = fixture(); await f.tick(); f.current.ready = true;
+    let resolve, reject;
+    f.loop.apply = () => new Promise((yes, no) => { resolve = yes; reject = no; });
+    const pending = f.tick();
+    assert.equal(f.calls.filter(c => c[0] === "summon").length, 0);
+    assert.equal(f.loop.busy, true);
+    if (action === "toggle") f.loop.toggle();
+    if (action === "map") f.current.token = "different-map";
+    if (action === "blocked") f.current.blocked = true;
+    if (action === "reject") reject(new Error("Outfit failed")); else resolve();
+    await pending;
+    assert.equal(f.calls.filter(c => c[0] === "summon").length, action === "complete" ? 1 : 0);
+    assert.equal(f.loop.busy, false);
+    if (action === "reject") assert.deepEqual(f.notices, ["Outfit failed"]);
+  }
+});

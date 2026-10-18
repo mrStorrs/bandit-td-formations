@@ -123,7 +123,7 @@
           if (!latest || latest.token !== pending.token) return;
           if (data == null) { this.notify(this.formation.emptyMessage(pending.slot)); return; }
           const plan = this.formation.planRestore(data, latest);
-          this.apply(plan, latest);
+          await this.apply(plan, latest);
           this.notify(this.formation.restoredMessage(pending.slot, data, plan));
         }
       } catch (error) {

@@ -10,9 +10,11 @@
     const first = name => runtime.objects[name]?.getFirstInstance();
     const all = name => runtime.objects[name]?.getAllInstances() || [];
     const notify = text => engine.PostComponentMessageToDOM(component, "notify", { text });
+    const outfits = globalThis.BanditFormations.attachOutfits(runtime, engine, notify);
 
     function context() {
       const g = runtime.globalVars;
+      if (!outfits.ready()) return null;
       if (!engine.GetMainRunningLayout() || runtime.layout.name !== "主界面" || g["分页界面"] || g["爬塔挑战开关"] ||
           all("二级页面背景").length ||
           all("角色拖动点").length || all("建造拖动点").length || all("搬迁拖动点").length) return null;
@@ -41,7 +43,7 @@
       return { saveId, mapId, token: `${saveId}:${mapId}:${cores[0].uid}`, characters, tiles, save };
     }
 
-    function apply({ moves, changes }, current) {
+    async function apply({ moves, changes }, current) {
       const tiles = new Map(current.tiles.map(t => [tileKey(t), t]));
       // The native move function clears each source tile. Reconcile occupancy
       // after the synchronous batch so swaps do not leave occupied tiles free.
@@ -68,11 +70,11 @@
       }
       // Moving clears work priorities. Apply the saved jobs after all moves,
       // including characters already standing on their destination tiles.
-      applyModes({ changes }, current);
+      await applyModes({ changes }, current);
       for (const move of moves) runtime.callFunction("角色自动逻辑", move.id);
     }
 
-    function applyModes({ changes }, current) {
+    async function applyModes({ changes }, current) {
       for (const { id, mode, priorityX, priorityY, from } of changes) {
         runtime.callFunction("改变角色状态", id, mode);
         if (current.save.getAt(id, 9, 2) !== mode || from.core.instVars["设定状态"] !== mode) {
@@ -84,6 +86,14 @@
         from.core.instVars["优先工作目标Y"] = priorityY;
         current.save.setAt(priorityX, id, 57, 2);
         current.save.setAt(priorityY, id, 58, 2);
+        outfits.request(id);
+      }
+      await outfits.flush();
+      const latest = context();
+      if (latest?.token !== current.token || changes.some(change => !latest.characters.some(c =>
+        c.id === change.id && c.identity === change.from.identity && c.mode === change.mode &&
+        c.priorityX === change.priorityX && c.priorityY === change.priorityY))) {
+        throw new Error("The character or job changed during the outfit swap. Recall the formation again.");
       }
     }
 
@@ -160,12 +170,12 @@
     });
     engine.AddDOMComponentMessageHandler(component, "building-key", ({ phase, slot }) => {
       hotkeys.cancel();
-      if (!combat.busy && !hotkeys.busy) return buildingHotkeys.key(phase, slot);
+      if (!combat.busy && !hotkeys.busy && outfits.ready()) return buildingHotkeys.key(phase, slot);
     });
     engine.AddDOMComponentMessageHandler(component, "cancel", cancelKeys);
-    runtime.addEventListener("tick", () => { recruitment.tick(); crafting.tick(); return hotkeys.tick() || buildingHotkeys.tick() || forest.tick(); });
-    runtime.addEventListener("beforelayoutstart", () => { cancelKeys(); forest.leave(); recruitment.leave(); });
-    engine.PostComponentMessageToDOM(component, "ready", { version: "1.8.2" });
-    console.info("[Bandit TD Formations] v1.8.2 ready: hold 1–4 to save positions and jobs, tap to restore; Shift + 1–4 for buildings; C toggles combat; Beast realm loop on, F6 toggles; auto recruit controls on the recruitment screen; crafting stations repeat batches of 10.");
+    runtime.addEventListener("tick", () => { outfits.tick(); recruitment.tick(); crafting.tick(); return hotkeys.tick() || buildingHotkeys.tick() || forest.tick(); });
+    runtime.addEventListener("beforelayoutstart", () => { cancelKeys(); forest.leave(); recruitment.leave(); outfits.leave(); });
+    engine.PostComponentMessageToDOM(component, "ready", { version: "1.9.0" });
+    console.info("[Bandit TD Formations] v1.9.0 ready: hold 1–4 to save positions and jobs, tap to restore; Shift + 1–4 for buildings; C toggles combat; Beast realm loop on, F6 toggles; auto recruit controls on the recruitment screen; crafting stations repeat batches of 10; per-job outfits on the character panel.");
   });
 })();

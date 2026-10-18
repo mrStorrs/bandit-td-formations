@@ -44,7 +44,7 @@
       }
       return plan;
     }
-    restore(slot, current) { this.apply(this.plan(slot, current), current); }
+    restore(slot, current) { return this.apply(this.plan(slot, current), current); }
     async tick() {
       if (this.now() < this.nextTick) return;
       this.nextTick = this.now() + 250;
@@ -70,8 +70,8 @@
           this.presets = presets;
           if (latest.blocked || !this.available()) return;
           // Re-read after storage: the map, fight, or roster may have changed.
-          this.advance(latest);
-        } else this.advance(current);
+          await this.advance(latest, generation);
+        } else await this.advance(current, generation);
       } catch (error) {
         if (generation !== this.generation) return;
         console.error("[Bandit TD Formations] Beast realm loop", error);
@@ -85,21 +85,27 @@
         if (generation === this.generation && this.context()?.token !== this.token) this.leave();
       }
     }
-    advance(current) {
+    async advance(current, generation) {
+      const token = current.token;
+      const valid = () => generation === this.generation && this.enabled &&
+        this.context()?.token === token && !this.context()?.blocked;
       if (!this.phase) {
         this.plan(1, current); this.plan(2, current);
-        this.restore(current.active ? 2 : 1, current);
+        await this.restore(current.active ? 2 : 1, current);
+        if (!valid()) return;
         this.phase = current.active ? "fighting" : "waiting";
         this.victories = current.victories;
       } else if (this.phase === "waiting" && (current.ready || current.active)) {
         // Validate the return formation before committing to another fight.
         this.plan(1, current);
-        this.restore(2, current);
+        await this.restore(2, current);
+        if (!valid()) return;
         this.victories = current.victories;
-        if (!current.active) this.summon(current);
+        if (!this.context().active) this.summon(current);
         this.phase = "fighting";
       } else if (this.phase === "fighting" && !current.active) {
-        this.restore(1, current);
+        await this.restore(1, current);
+        if (!valid()) return;
         if (current.victories <= this.victories) {
           throw new Error("Summon ended without a win. Toggle F6 off/on to retry.");
         }

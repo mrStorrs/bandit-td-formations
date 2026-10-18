@@ -226,3 +226,28 @@ test("invalid minimum copper is rejected without overwriting preferences; invali
     assert.equal(f.dom.recruitMoney.validityReported, true);
   }
 });
+
+const outfitState = { visible: true, token: "campaign:character:job", name: "Worker", jobName: "Forging", enabled: true, saved: false, busy: false, error: "" };
+test("outfit controls save/forget only the displayed character and job and submit the auto-equip toggle", () => {
+  const f = fixture(); f.handlers["outfit-status"](outfitState);
+  assert.equal(f.dom.outfitSave.textContent, "Save outfit for Forging");
+  assert.equal(f.dom.outfitForget.disabled, true);
+  f.dom.outfitSave.dispatch("click");
+  assert.deepEqual(f.messages, [["cancel", {}], ["outfit-save", { token: outfitState.token }]]);
+  f.handlers["outfit-status"]({ ...outfitState, token: "different-character:mining", jobName: "Mining", saved: true });
+  f.dom.outfitForget.dispatch("click");
+  assert.deepEqual(f.messages.at(-1), ["outfit-forget", { token: "different-character:mining" }]);
+  f.dom.outfitEnabled.checked = false; f.dom.outfitEnabled.dispatch("change");
+  assert.deepEqual(f.messages.at(-1), ["outfit-enabled", { token: "different-character:mining", enabled: false }]);
+});
+test("outfit controls block game input and stale or busy actions and hide outside character screens", () => {
+  const f = fixture(); f.handlers["outfit-status"](outfitState);
+  f.document.activeElement = f.dom.outfitSave; f.window.dispatch("keydown", { code: "Digit1" });
+  assert.deepEqual(f.messages.at(-1), ["cancel", {}]);
+  for (const event of ["pointerdown", "pointermove", "pointerup", "keydown", "wheel"]) assert.equal(f.dom.outfitPanel.dispatch(event).stopped, true);
+  const count = f.messages.length;
+  f.handlers["outfit-status"]({ ...outfitState, busy: true }); f.dom.outfitSave.dispatch("click");
+  assert.equal(f.messages.length, count); assert.equal(f.dom.outfitEnabled.disabled, true);
+  f.handlers["outfit-status"]({ visible: false }); f.dom.outfitSave.dispatch("click");
+  assert.equal(f.dom.outfitPanel.hidden, true); assert.equal(f.messages.length, count);
+});

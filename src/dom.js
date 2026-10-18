@@ -13,10 +13,11 @@
         ["notify", ({ text }) => this.notify(text)],
         ["forest-status", ({ text }) => this.forestStatus(text)],
         ["recruit-status", state => this.recruitStatus(state)],
+        ["outfit-status", state => this.outfitStatus(state)],
       ]);
     }
     Attach() {
-      const editable = element => element?.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(element?.tagName) || this.recruitPanel?.contains(element);
+      const editable = element => element?.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(element?.tagName) || this.recruitPanel?.contains(element) || this.outfitPanel?.contains(element);
       const cancel = () => {
         this.held.clear();
         if (this.ready) this.PostToRuntime("cancel", {});
@@ -53,6 +54,61 @@
       window.addEventListener("blur", loseFocus);
       document.addEventListener("visibilitychange", () => { if (document.hidden) loseFocus(); });
       document.addEventListener("focusin", e => { if (editable(e.target)) cancel(); });
+    }
+    outfitStatus(state) {
+      this.outfitState = state;
+      if (!state.visible) { if (this.outfitPanel) this.outfitPanel.hidden = true; return; }
+      if (!this.outfitPanel) {
+        const make = (tag, text, parent) => {
+          const element = document.createElement(tag);
+          element.textContent = text;
+          if (parent) parent.appendChild(element);
+          return element;
+        };
+        const panel = this.outfitPanel = make("section", "");
+        panel.id = "cjs-outfits";
+        panel.setAttribute("aria-label", "Job outfits");
+        panel.style.cssText = "position:fixed;bottom:55px;left:12px;z-index:2147483646;background:#152025f5;color:#fff;padding:12px 16px;border:1px solid #c0a35b;border-radius:6px;font:14px sans-serif;width:220px;max-width:calc(100vw - 60px);box-shadow:0 3px 16px #0008";
+        this.outfitTitle = make("strong", "Job outfits", panel);
+        this.outfitInfo = make("div", "", panel);
+        this.outfitInfo.style.cssText = "margin:8px 0;line-height:1.4";
+        this.outfitInfo.setAttribute("role", "status");
+        const row = make("div", "", panel);
+        row.style.cssText = "display:flex;gap:8px;flex-wrap:wrap";
+        this.outfitSave = make("button", "Save outfit", row);
+        this.outfitSave.id = "cjs-outfit-save";
+        this.outfitForget = make("button", "Forget", row);
+        this.outfitForget.id = "cjs-outfit-forget";
+        for (const [action, button] of [["save", this.outfitSave], ["forget", this.outfitForget]]) {
+          button.type = "button";
+          button.style.cssText = "background:#c0a35b;color:#10191d;border:0;border-radius:4px;padding:7px 10px;cursor:pointer;font:inherit";
+          button.addEventListener("click", () => {
+            if (!this.outfitState?.visible || this.outfitState.busy || this.outfitState.error) return;
+            this.PostToRuntime("cancel", {});
+            this.PostToRuntime(`outfit-${action}`, { token: this.outfitState.token });
+          });
+        }
+        const label = make("label", "", panel);
+        label.style.cssText = "display:block;margin-top:10px";
+        this.outfitEnabled = make("input", "", label);
+        this.outfitEnabled.type = "checkbox"; this.outfitEnabled.id = "cjs-outfit-enabled";
+        make("span", " Auto-equip saved job outfits", label);
+        this.outfitEnabled.addEventListener("change", () => {
+          this.PostToRuntime("outfit-enabled", { token: this.outfitState.token, enabled: this.outfitEnabled.checked });
+        });
+        make("div", "Choose a job, equip your gear, then Save. Jobs without a saved outfit keep current gear.", panel).style.cssText = "margin-top:7px;color:#c5ced1;font-size:12px;line-height:1.4";
+        for (const event of ["pointerdown", "pointerup", "pointermove", "pointerrawupdate", "pointercancel", "mousedown", "mouseup", "mousemove", "click", "dblclick", "touchstart", "touchend", "touchmove", "touchcancel", "keydown", "keyup", "wheel"]) {
+          panel.addEventListener(event, e => e.stopPropagation());
+        }
+        document.body.appendChild(panel);
+      }
+      this.outfitPanel.hidden = false;
+      this.outfitTitle.textContent = `${state.name} · ${state.jobName}`;
+      this.outfitSave.textContent = `Save outfit for ${state.jobName}`;
+      this.outfitInfo.textContent = state.error || (state.busy ? "Updating outfit…" : state.saved ? "Outfit saved for this character and job." : "No saved outfit for this job.");
+      this.outfitSave.disabled = this.outfitEnabled.disabled = state.busy || !!state.error;
+      this.outfitForget.disabled = state.busy || !!state.error || !state.saved;
+      this.outfitEnabled.checked = state.enabled;
     }
     recruitStatus(state) {
       this.recruitState = state;

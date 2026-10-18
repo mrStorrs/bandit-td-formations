@@ -55,7 +55,7 @@
         if (!current || current.token !== initial.token) return;
         if (saved != null) {
           const plan = planModes(saved, current, true);
-          this.apply(plan, current);
+          await this.apply(plan, current);
           // Retain the snapshot on an apply/storage failure so C can retry undo.
           await this.storage.setItem(key, null);
           if (this.context()?.token === initial.token) {
@@ -71,7 +71,7 @@
             return;
           }
           const plan = planModes(snapshot, latest, false);
-          this.apply(plan, latest);
+          await this.apply(plan, latest);
           this.notify(`Combat on (${plan.changes.length} characters). Press C to restore previous modes.`);
         }
       } catch (error) {

@@ -1,6 +1,6 @@
 # Bandit TD Formations
 
-A character/building formation, combat, recruitment, and crafting mod for Bandit Simulator TD (Steam app 4267800).
+A character/building formation, job outfit, combat, recruitment, and crafting mod for Bandit Simulator TD (Steam app 4267800).
 
 - **Hold a top-row number key (`1`–`4`) for one second:** save all currently
   placed characters' positions, job modes, and priority work targets into that
@@ -22,6 +22,9 @@ A character/building formation, combat, recruitment, and crafting mod for Bandit
 - **Automatic repeat crafting:** forging, crafting, and alchemy stations remember
   their last started recipe and material multiplier. Each empty station queues
   another batch of **10**, waiting for materials when necessary.
+- **Job outfits:** select a character, choose their job priority, equip their
+  gear, and click **Save outfit for [job]**. Choosing that job again restores
+  that character's saved outfit. Jobs without an outfit keep current equipment.
 - A message confirms saving or restoring. An empty slot leaves characters alone.
 - Formations persist locally across restarts and are separate for each campaign
   save identifier and current map. They are not included in Steam Cloud saves.
@@ -54,6 +57,48 @@ clears them. Jobs also restore for characters already on their saved tiles.
 characters, set their desired jobs and work targets, then hold each slot again
 to include jobs. Recalling a formation does not replace the separate `C` undo;
 the next `C` undo still restores the modes remembered when combat was enabled.
+
+## Job outfits
+
+Each character can save a separate outfit for each job priority: combat,
+logging, mining, planting, forging, crafting, alchemy, building, research,
+training, and automatic. Select the character to show the **Job outfits** panel
+at the lower left; it also appears on their equipment, details, and core screens.
+
+1. Choose the character's job priority using the normal game controls.
+2. Equip the pieces you want through the normal equipment screen.
+3. Click **Save outfit for [job]**. Repeat for other jobs and characters.
+
+Changing to a job with a saved outfit equips that outfit. Changing to a job
+without one leaves every equipped slot alone. Saving again replaces only the
+selected character's outfit for the selected job; ordinary equipment changes do
+not overwrite saved outfits. **Forget** removes that job's outfit without
+changing equipment. **Auto-equip saved job outfits** enables or disables swaps
+for the campaign and remembers the setting across restarts; it starts enabled.
+Saving and forgetting remain available while auto-equip is disabled.
+
+Outfits include all six equipment slots, including the equipped core and
+treasure. An empty slot in a saved outfit is restored as empty, subject to
+inventory space. Absorbed cores are not equipment slots and are not changed.
+The same outfit can reference a piece used by another job on that character.
+Items must be in inventory or already equipped on the character: the mod never
+takes gear from another character. Missing, ineligible, or indistinguishable
+duplicate pieces leave that slot's current gear in place and show a notice.
+
+The mod matches the original item marker, type, quality, and rolled properties
+across the game's inventory transfers. Upgrades and item-lock changes preserve
+the match. Resave after rerolling/replacing equipment or renaming the character.
+Keep unused outfit pieces in your inventory; saving an outfit does not reserve
+items against selling, crafting, or equipping them on someone else.
+
+Manual job selection, priority work targets, formation recalls, and the combat
+toggle all use the same outfit rules. The beast loop waits for the game's
+equipment transfers to finish before summoning, then restores the waiting jobs
+and their outfits after victory. Swaps follow the assigned priority; momentary
+AI activity changes under **Automatic** do not switch between work outfits.
+
+Outfits persist locally per campaign and character across maps and game
+restarts. They are separate from formation slots and are not in Steam Cloud.
 
 ## Building formations
 
@@ -392,6 +437,24 @@ after formation 2 was applied and returned to formation 1 with its saved jobs.
 F6 stop/resume, unchanged native auto-summon preferences, and pausing after a
 failed challenge passed on every map. This needs a manual Steam/NW.js check.
 
+Version 1.9.0 adds outfits per character and job, with explicit Save/Forget
+controls and a persistent auto-equip toggle. It passes 163 JavaScript tests and
+four installer tests. Coverage includes multiple work jobs, unknown-job no-ops,
+all six slots and saved empty slots, item conservation, upgrades and locks,
+missing/ambiguous items, character/campaign isolation, persistence, inventory
+capacity, equip restrictions, storage failures, asynchronous transfers, and
+cancellation during map changes. Combat undo and summoning wait for gear changes.
+The native equipment and job hooks match across both supported builds.
+
+In isolated build 25975458, repeated six-slot swaps across three work jobs kept
+every item, and outfits survived a browser reload onto a different beast map.
+Save/Forget accepted real pointer clicks, and the panel remained available on
+equipment, character details, and core screens. Two native summon/victory cycles
+equipped the complete combat outfit before spawning the boss and restored work
+gear after victory. All nine beast maps also passed two summon/victory cycles
+each, F6 stop/resume, and the failed-challenge guard. This update still needs a
+manual Steam/NW.js check.
+
 To check the controls in-game:
 
 1. Arrange your characters, choose their jobs and priority work targets, then
@@ -462,10 +525,13 @@ relocation and flushes pending object creation/destruction between moves.
 locks, and event groups.
 `src/crafting.js` observes native queue creation and cancellation, remembers
 station recipes, and refills empty queues through the native crafting functions.
+`src/outfits.js` validates outfit snapshots and matches equipment records.
+`src/outfit-runtime.js` observes native job changes, serializes equipment swaps,
+checks inventory and equip eligibility, and manages the outfit panel and storage.
 `src/runtime.js` adapts character/tile APIs, native movement/mode/summon functions,
 the victory callback, and the native auto-summon event group.
-`src/dom.js` handles keyboard focus, confirmation messages, and recruitment
-controls. The installer appends these scripts to the game's existing runtime
+`src/dom.js` handles keyboard focus, confirmation messages, and recruitment and
+outfit controls. The installer appends these scripts to the game's existing runtime
 and DOM bundles. Presets
 use Construct's `runtime.storage` under the `cjs-formations:v1:` namespace.
 New snapshots use data format version 2 with positions, modes, and priority
@@ -481,6 +547,12 @@ from the matching criteria. It applies to every paid roll regardless of targets.
 Crafting memory uses `cjs-formations:crafting:v1:<saveId>` in runtime storage.
 Each entry contains a facility slot, facility type, parent building slot, recipe,
 and material multiplier. Queue progress and materials remain in the game save.
+Job outfits use `cjs-formations:outfits:v1:<saveId>` in runtime storage, with an
+enabled flag and per-character/per-job snapshots of six equipment identities.
+Native equip/unequip calls are asynchronous across game frames; formation
+recalls, combat undo, and the beast loop await their completion and recheck the
+current map and jobs before continuing. Outfits do not write item records
+directly or add identifiers to the player's items.
 
 Recruitment rules have the shape `[{ type: "work-grade", minimum: 5 }]` (`A` and
 better). `compileRecruitCriteria` validates and snapshots the rules. Each entry
