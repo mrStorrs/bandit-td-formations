@@ -279,3 +279,17 @@ test("crafting status preserves unsaved edits and permits disabling sales during
   f.handlers["craft-status"]({visible:false});assert.equal(f.dom.craftPanel.hidden,true);
   const count=f.messages.length;f.dom.craftButton.dispatch("click");assert.equal(f.messages.length,count);
 });
+
+test("research and drill toggles stay independent and share the Automation panel",()=>{
+  const f=fixture(),state={visible:true,token:"campaign:study",enabled:{research:true,drill:true},busy:false,error:false,message:"Research: Manual · Team"};
+  f.handlers["study-status"](state);f.handlers["craft-status"](craftState);
+  assert.equal(f.dom.craftToggle.textContent,"Automation ▸");
+  assert.equal(f.dom.studyInputs.research.checked,true);assert.equal(f.dom.studyInputs.drill.checked,true);
+  f.dom.studyInputs.research.checked=false;f.dom.studyInputs.research.dispatch("change");
+  assert.deepEqual(f.messages.at(-1),["study-enabled",{token:state.token,kind:"research",enabled:false}]);
+  assert.equal(f.dom.studyInputs.drill.checked,true);assert.equal(f.dom.studyInfo.textContent,state.message);
+  f.handlers["study-status"]({...state,busy:true});const count=f.messages.length;
+  f.dom.studyInputs.drill.dispatch("change");assert.equal(f.messages.length,count);assert.equal(f.dom.studyInputs.drill.disabled,true);
+  f.handlers["study-status"]({visible:false});f.dom.studyInputs.drill.dispatch("change");
+  assert.equal(f.messages.length,count);assert.equal(f.dom.studySection.hidden,true);
+});

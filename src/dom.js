@@ -15,6 +15,7 @@
         ["recruit-status", state => this.recruitStatus(state)],
         ["outfit-status", state => this.outfitStatus(state)],
         ["craft-status", state => this.craftStatus(state)],
+        ["study-status", state => this.studyStatus(state)],
       ]);
     }
     Attach() {
@@ -66,15 +67,15 @@
           return element;
         };
         const panel = this.craftPanel = make("section", "");
-        panel.id = "cjs-crafting"; panel.setAttribute("aria-label", "Auto crafting");
+        panel.id = "cjs-crafting"; panel.setAttribute("aria-label", "Automation");
         panel.style.cssText = "position:fixed;bottom:12px;right:12px;z-index:2147483646;background:#152025f5;color:#fff;padding:10px 14px;border:1px solid #c0a35b;border-radius:6px;font:14px sans-serif;max-width:calc(100vw - 60px);box-shadow:0 3px 16px #0008";
-        const toggle = this.craftToggle = make("button", "Crafting ▸", panel);
+        const toggle = this.craftToggle = make("button", "Automation ▸", panel);
         toggle.id = "cjs-craft-open"; toggle.type = "button"; toggle.setAttribute("aria-expanded", "false");
         toggle.style.cssText = "background:transparent;color:#fff;border:0;padding:3px;cursor:pointer;font:inherit";
         const body = this.craftBody = make("div", "", panel);
         body.hidden = true; body.style.cssText = "width:330px;max-width:100%;max-height:calc(100vh - 110px);overflow:auto;padding-top:10px";
         toggle.addEventListener("click", () => {
-          body.hidden = !body.hidden; toggle.textContent = body.hidden ? "Crafting ▸" : "Crafting ▾";
+          body.hidden = !body.hidden; toggle.textContent = body.hidden ? "Automation ▸" : "Automation ▾";
           toggle.setAttribute("aria-expanded", String(!body.hidden));
         });
         const select = (title, id, options) => {
@@ -83,6 +84,10 @@
           for (const [value, text] of options) make("option", text, input).value = String(value);
           return input;
         };
+        this.studySection = make("fieldset", "", body);
+        this.studySection.style.cssText = "border:1px solid #5a676d;margin:0 0 12px;padding:8px";
+        this.studyStatus(this.studyState || { visible: false });
+        make("strong", "Crafting", body).style.cssText = "display:block;margin-bottom:10px";
         this.craftMode = select("Mode", "cjs-craft-mode", [["repeat", "Repeat current ×10"], ["sets", "Auto-all sets"]]);
         this.craftLoop = select("Loop", "cjs-craft-loop", [["all", "Cycle checked roles"], ...state.roles.map(r => [r.id, r.name])]);
         make("div", "Choose a single role to repeat only that set.", body).style.cssText = "margin:-3px 0 10px;color:#c5ced1;font-size:12px";
@@ -144,6 +149,37 @@
       }
       this.updateCraftControls();
       this.craftInfo.textContent = `${state.message} · ${state.kept} kept · ${state.sold} sold this session`;
+    }
+    studyStatus(state) {
+      this.studyState = state;
+      if (!this.studySection) return;
+      this.studySection.hidden = !state.visible;
+      if (!state.visible) return;
+      if (!this.studyInputs) {
+        const make = (tag, text, parent = this.studySection) => {
+          const element = document.createElement(tag); element.textContent = text;
+          parent.appendChild(element); return element;
+        };
+        make("legend", "Research & drilling");
+        this.studyInputs = {};
+        for (const [kind, title] of [["research", "Auto research"], ["drill", "Auto drill"]]) {
+          const label = make("label", ""); label.style.cssText = "display:block;margin-bottom:7px";
+          const input = make("input", "", label); input.type = "checkbox"; input.id = `cjs-study-${kind}`;
+          this.studyInputs[kind] = input; make("span", " " + title, label);
+          input.addEventListener("change", () => {
+            if (!this.studyState.visible || this.studyState.busy || this.studyState.error) return;
+            this.PostToRuntime("cancel", {});
+            this.PostToRuntime("study-enabled", { token: this.studyState.token, kind, enabled: input.checked });
+          });
+        }
+        this.studyInfo = make("div", ""); this.studyInfo.setAttribute("role", "status");
+        this.studyInfo.style.cssText = "white-space:pre-line;line-height:1.4;margin:8px 0";
+        make("div", "Research: regular unlocks first, then the lowest level across Team → Gather → Growth → Cultivate → Craft. Drill: lowest unlocked class tier first, to its current cap. Manual choices finish to their cap before auto resumes. Turning off stops new orders; current work can finish.").style.cssText = "color:#c5ced1;font-size:12px;line-height:1.4";
+      }
+      for (const [kind, input] of Object.entries(this.studyInputs)) {
+        input.checked = state.enabled[kind]; input.disabled = state.busy || state.error;
+      }
+      this.studyInfo.textContent = state.message;
     }
     outfitStatus(state) {
       this.outfitState = state;

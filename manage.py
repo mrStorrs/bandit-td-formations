@@ -10,7 +10,7 @@ import tempfile
 import zipfile
 
 ROOT = Path(__file__).resolve().parent
-VERSION = "1.11.0"
+VERSION = "1.12.0"
 MANIFEST = "cjs-formations.json"
 BEGIN = b"\n/* CJS_FORMATIONS_BEGIN */\n"
 END = b"\n/* CJS_FORMATIONS_END */\n"
@@ -78,7 +78,7 @@ def write_package(source, output, uninstall=False):
         replacements = {name: originals[name] for name in ("scripts/main.js", "scripts/c3runtime.js")}
         manifest = {"format": 1, "version": VERSION, "game_build": build, "blocks": {}}
         if not uninstall:
-            sources = {"scripts/main.js": ["dom.js"], "scripts/c3runtime.js": ["formations.js", "buildings.js", "building-runtime.js", "combat.js", "forest.js", "recruit.js", "recruit-runtime.js", "craft-sets.js", "craft-sets-runtime.js", "crafting.js", "outfits.js", "outfit-runtime.js", "runtime.js"]}
+            sources = {"scripts/main.js": ["dom.js"], "scripts/c3runtime.js": ["formations.js", "buildings.js", "building-runtime.js", "combat.js", "forest.js", "recruit.js", "recruit-runtime.js", "craft-sets.js", "craft-sets-runtime.js", "crafting.js", "study.js", "study-runtime.js", "outfits.js", "outfit-runtime.js", "runtime.js"]}
             for name, files in sources.items():
                 block = BEGIN + b"\n".join((ROOT / "src" / f).read_bytes() for f in files) + END
                 manifest["blocks"][name] = digest(block)

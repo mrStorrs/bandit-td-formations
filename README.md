@@ -1,6 +1,7 @@
 # Bandit TD Formations
 
-A character/building formation, job outfit, combat, recruitment, and crafting mod for Bandit Simulator TD (Steam app 4267800).
+A character/building formation, job outfit, combat, recruitment, crafting,
+research and drilling mod for Bandit Simulator TD (Steam app 4267800).
 
 - **Hold a top-row number key (`1`–`4`) for one second:** save all currently
   placed characters' positions, job modes, and priority work targets into that
@@ -22,10 +23,14 @@ A character/building formation, job outfit, combat, recruitment, and crafting mo
 - **Automatic repeat crafting:** forging, crafting, and alchemy stations remember
   their last started recipe and material multiplier. Each empty station queues
   another batch of **10**, waiting for materials when necessary.
-- **Auto-all gear sets:** open **Crafting** at the lower right to cycle checked
+- **Auto-all gear sets:** open **Automation** at the lower right to cycle checked
   work/combat roles or loop one role. Choose tier and minimum rarity, lock
   matching pieces, optionally sell new rejected crafts, and keep making more sets.
   Forge and crafting loop independently in batches of **10**.
+- **Auto research and drill:** enabled by default in **Automation**. Research
+  prioritizes regular unlocks, then balances advanced topics by level. Drilling
+  finishes unlocked classes in tier order. Manual choices take priority until
+  the chosen target reaches its current cap.
 - **Job outfits:** select a character, choose their job priority, equip their
   gear, and click **Save outfit for [job]**. Choosing that job again restores
   that character's saved outfit. Jobs without an outfit keep current equipment.
@@ -249,9 +254,9 @@ one busy station does not hold up the others. Existing active queues are learned
 automatically when the mod loads. An empty station with no remembered recipe
 stays idle until you start something there.
 
-**Repeat current ×10** is the default mode in the lower-right **Crafting** panel.
-It uses the game's material
-costs and requires enough materials for all 10 crafts. If supplies are short, it
+**Repeat current ×10** is the default crafting mode in the lower-right
+**Automation** panel. It uses the game's material costs and requires enough
+materials for all 10 crafts. If supplies are short, it
 waits and checks again about once per second. It never adds to an unfinished
 queue or grants completed items directly; workers still do the crafting normally.
 
@@ -272,7 +277,7 @@ once at those empty stations to teach the mod what to repeat.
 
 ## Auto-all gear sets
 
-Open **Crafting** at the lower right and select **Auto-all sets**. Choose a tier
+Open **Automation** at the lower right and select **Auto-all sets**. Choose a tier
 (T1–T9), minimum rarity (the game's six color grades), and the native material
 multiplier (×1, ×10 or ×100). Click **Apply / Start**. The dropdown offers:
 
@@ -350,6 +355,44 @@ waits for outfit swaps before counting or locking existing equipment. Settings
 and the running/paused choice persist per campaign across maps and restarts,
 locally rather than through Steam Cloud. The panel can be collapsed while it runs.
 
+## Research and drilling
+
+**Auto research** and **Auto drill** start enabled. Each has its own checkbox
+under **Research & drilling** in the lower-right **Automation** panel. Workers
+still perform the work normally; automation selects the next target and pays
+the game's normal copper cost. It waits when funds are insufficient.
+
+Research selects an unlocked, unfinished **regular research** first. When none
+is free, it chooses the **lowest current level** among unlocked advanced topics.
+Ties follow **Team → Gather → Growth → Cultivate → Craft**, using the game's
+topic order within each category. Automatic research completes **one level**
+before choosing again. Every open topic at the lowest level is handled before
+starting a higher level; newly available regular research takes priority at
+the next selection. Native prerequisites, category unlocks and building caps
+still apply.
+
+Drilling chooses the **lowest unlocked class tier** with unfinished training,
+using the game's class order within a tier. It continues that class through
+its current building/class level cap, then chooses again. Partially trained
+classes count as unfinished. Classes already assigned to another drill station
+are skipped; each station works independently.
+
+**A manual target takes priority at that station.** Choose a research topic or
+drill class with the normal controls. A valid, affordable choice replaces an
+automatic order using the game's normal cancellation/refund; existing research
+or drill progress is retained. The mod keeps that choice until its current cap,
+including further levels when native
+Repeat is off and retries after a copper shortage. Then automatic selection
+resumes. Canceling an order releases the override and holds the idle station
+for your next choice while its menu remains selected. Queues already running
+when first installing this feature are treated as manual choices.
+
+Settings and manual choices persist locally per campaign across map changes
+and restarts. Turning a checkbox off stops new mod orders; paid work and the
+game's own repeat can finish. The game's Repeat preference is preserved.
+New selections wait during pause, menus, dragging and transitions, and for a
+usable completed building. Other mod automation continues independently.
+
 ## Install
 
 Requires Python 3.10 or later. No Python packages, mod loader, or Node installation
@@ -370,7 +413,7 @@ python3 manage.py install --game-dir "/path/to/Steam/steamapps/common/塔防山�
 
 On Windows, use `py -3` in place of `python3` if appropriate. Restart the game
 after installing. Look for the “Formations ready” message on startup.
-The startup message includes the installed version number (currently 1.8.2).
+The startup message includes the installed version number (currently 1.12.0).
 
 The installer backs up the input archive in `cjs-formations-backups/` beside the
 game, verifies the result, then replaces `package.nw` atomically. It does not
@@ -401,6 +444,8 @@ compared on both builds for version 1.5.0 and are unchanged.
 Crafting queue allocation, recipe costs, facility linkage, cancellation and
 completion were inspected on both builds for version 1.8.0. Native item quality,
 completion rewards, and auto-sale behavior remain under the game's control.
+Research/drill selection, prerequisites, caps, cancellation and completion
+branches were compared across both supported builds for version 1.12.0.
 
 Steam updates and “Verify integrity of game files” can replace `package.nw`
 and remove the mod. If `C` opens the character menu again, or the startup
@@ -571,6 +616,18 @@ sales, live sale disabling and pause without cancelling paid batches. The
 Crafting panel shows separate progress for both loops. A manual Steam/NW.js
 check remains useful for the live game.
 
+Version 1.12.0 adds research and drilling automation and renames the Crafting
+panel to **Automation**. It passes 225 JavaScript tests and four installer
+tests. Coverage includes regular research priority, lowest-level category
+ordering, drilling prerequisites and caps, manual replacement and refunds,
+manual choices across restarts and copper shortages, concurrent stations,
+menu/transition guards, independent toggles and storage failures. In isolated
+build 25975458, 30 native research/drill level completions verified the full
+category rotation, direct manual takeover, preserved native Repeat settings,
+exact initial costs, manual targets continuing after reload, and automatic
+resumption after their caps. Native pointer clicks also verified both
+checkboxes. A manual Steam/NW.js check remains useful.
+
 To check the controls in-game:
 
 1. Arrange your characters, choose their jobs and priority work targets, then
@@ -650,15 +707,18 @@ locks, and event groups.
 `src/crafting.js` observes native queue creation and cancellation, remembers
 station recipes, and refills empty queues through the native crafting functions.
 `src/craft-sets.js` selects role recipes, matches gear and counts separate sets.
-`src/craft-sets-runtime.js` schedules one-piece queues, identifies their native
+`src/craft-sets-runtime.js` schedules batches of ten, identifies their native
 completion results, locks keepers and handles settings and native sales.
+`src/study.js` orders unlocked research and drill targets by level/category or
+class tier. `src/study-runtime.js` selects targets through native functions,
+preserves manual choices, and stops automatic research after each level.
 `src/outfits.js` validates outfit snapshots and matches equipment records.
 `src/outfit-runtime.js` observes native job changes, serializes equipment swaps,
 checks inventory and equip eligibility, and manages the outfit panel and storage.
 `src/runtime.js` adapts character/tile APIs, native movement/mode/summon functions,
 the victory callback, and the native auto-summon event group.
 `src/dom.js` handles keyboard focus, confirmation messages, and recruitment,
-outfit and crafting controls. The installer appends these scripts to the game's existing runtime
+outfit and automation controls. The installer appends these scripts to the game's existing runtime
 and DOM bundles. Presets
 use Construct's `runtime.storage` under the `cjs-formations:v1:` namespace.
 New snapshots use data format version 2 with positions, modes, and priority
@@ -678,6 +738,10 @@ Set crafting uses `cjs-formations:craft-sets:v1:<saveId>` with validated options
 and an enabled flag. Queue ownership for selling is session-only; it is never
 inferred from inventory changes or persisted queue numbers. Completion hooks
 protect qualifying inherited crafts without claiming them for mod sales.
+Research and drilling use `cjs-formations:study:v1:<saveId>` with separate
+enabled flags and station/target ownership records. The records distinguish
+automatic research from manual targets across reloads. Native queues, levels,
+progress and copper remain in the game save; cancellation preserves progress.
 Job outfits use `cjs-formations:outfits:v1:<saveId>` in runtime storage, with an
 enabled flag and per-character/per-job snapshots of six equipment identities.
 Native equip/unequip calls are asynchronous across game frames; formation
