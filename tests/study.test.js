@@ -57,11 +57,11 @@ test("other stations take the next available tree without waiting for lower leve
   assert.equal(nextResearch(list,()=>true),undefined);
   assert.equal(nextResearch([],()=>false),undefined);
 });
-test("drilling uses class tier order, prerequisites, family unlocks and the current cap",()=>{
+test("drilling uses class tier order, prerequisites, family unlocks and unlock limits",()=>{
   const f=fixture(),read=()=>drillTargets(f.zy,f.save,3,id=>id===1?1:2,()=>f.familyOpen);
   assert.deepEqual(read().map(t=>t.id),[1]);f.save.setAt(3,1,5,0);
   assert.deepEqual(read().map(t=>t.id),[2,3]);f.save.setAt(2,2,5,0);
-  assert.deepEqual(read().map(t=>t.id),[2,3,4,5]);
+  assert.deepEqual(read().map(t=>t.id),[3,4,5]);
   for(const id of [4,8,9])f.save.setAt(3,id,5,0);
   assert.equal(read().at(-1).id,16);f.familyOpen=false;assert.ok(!read().some(t=>t.id===16));
   assert.deepEqual(drillTargets(f.zy,f.save,NaN,()=>0,()=>true),[]);
@@ -133,16 +133,16 @@ test("manual research retains control through insufficient copper and a restart"
   assert.equal(stored.get(storageKey).stations.find(e=>e.id===1).mode,"manual");
   const next=fixture(stored);next.save.setAt(1,37,4,0);await next.ready();await next.tick();assert.equal(next.queue(0),37);
 });
-test("auto drill finishes each class to the cap and never duplicates another station's target",async()=>{
+test("auto drill stops at its unlock level and never duplicates another station's target",async()=>{
   const f=fixture();f.add(9);await f.ready();await f.tick();assert.equal(f.queue(1),1);assert.equal(f.queue(2),0);
-  for(let level=1;level<=3;level++){f.complete(1);await f.tick();assert.equal(f.save.getAt(1,5,0),level);}
+  f.complete(1);await f.tick();assert.equal(f.save.getAt(1,5,0),1);
   assert.deepEqual([f.queue(1),f.queue(2)].sort(),[2,3]);
 });
 test("manual drill overrides class order and continues to cap before the lowest class resumes",async()=>{
   const f=fixture();f.save.setAt(1,1,5,0);await f.ready();f.cancel(1);f.choose(1,3);
   f.menus.push({instVars:{功能:"设施",X坐标:f.tiles[1].instVars.X坐标,Y坐标:10010}});
   for(let level=1;level<=3;level++){await f.tick();assert.equal(f.queue(1),3);f.complete(1);}
-  await f.tick();assert.equal(f.queue(1),1);
+  await f.tick();assert.equal(f.queue(1),2);
 });
 test("inherited native queues are manual and saved automatic research continues with native Repeat",async()=>{
   const f=fixture();f.save.setAt(37,1,3,21);f.save.setAt(1,37,13,0);await f.ready();await f.tick();
@@ -239,9 +239,9 @@ test("a valid manual research choice immediately replaces an auto order with a n
   f.complete(0);assert.equal(f.queue(0),37,"manual target keeps repeating to its cap");
 });
 test("manual drill replacement refunds the old current level and clears its active flag",async()=>{
-  const f=fixture();await f.ready();await f.tick();f.complete(1);
+  const f=fixture();await f.ready();await f.tick();f.complete(1);await f.tick();
   const money=f.save.getAt(1,2,0);f.choose(1,3);
-  assert.equal(f.queue(1),3);assert.equal(f.save.getAt(1,2,0),money+110-100);assert.equal(f.save.getAt(1,15,0),0);
+  assert.equal(f.queue(1),3);assert.equal(f.save.getAt(1,2,0),money);assert.equal(f.save.getAt(2,15,0),0);
   f.complete(1);assert.equal(f.queue(1),3);
 });
 

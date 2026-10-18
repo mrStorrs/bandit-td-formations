@@ -26,7 +26,16 @@
       (a.regular ? a.id - b.id : a.order - b.order || a.id - b.id));
   }
 
-  function drillTargets(zy, save, maximum, requirement, familyOpen) {
+  function drillUnlockLevel(zy, id, requirement) {
+    for (let child = 1; child < zy.width; child++) {
+      if (zy.getAt(child, 0) !== child || ![10, 11, 12].some(field => zy.getAt(child, field) === id)) continue;
+      const level = requirement(id);
+      return levelOK(level) && level > 0 ? level : 0;
+    }
+    return 1;
+  }
+
+  function drillTargets(zy, save, maximum, requirement, familyOpen, unlockOnly = true) {
     const targets = [];
     if (!levelOK(maximum) || maximum === 0) return targets;
     for (let id = 1; id < zy.width; id++) {
@@ -35,7 +44,8 @@
           !levelOK(level) || level >= maximum) continue;
       if (prerequisite > 0 && save.getAt(prerequisite, 5, 0) < requirement(prerequisite)) continue;
       if (rank > 4 && !familyOpen(zy.getAt(id, 4))) continue;
-      targets.push({ id, level, maximum, rank });
+      const limit = unlockOnly ? Math.min(maximum, drillUnlockLevel(zy, id, requirement)) : maximum;
+      if (level < limit) targets.push({ id, level, maximum: limit, rank });
     }
     return targets.sort((a, b) => a.rank - b.rank || a.id - b.id);
   }
@@ -44,7 +54,7 @@
     return targets.find(t => !occupied(t.id));
   }
 
-  const api = { researchTargets, drillTargets, nextResearch };
+  const api = { researchTargets, drillUnlockLevel, drillTargets, nextResearch };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   globalThis.BanditFormations = Object.assign(globalThis.BanditFormations || {}, api);
 })();

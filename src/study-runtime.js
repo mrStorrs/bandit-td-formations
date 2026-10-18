@@ -1,7 +1,7 @@
 (() => {
   "use strict";
   function attachStudy(runtime, engine, notify) {
-    const { researchTargets, drillTargets, nextResearch } = globalThis.BanditFormations;
+    const { researchTargets, drillUnlockLevel, drillTargets, nextResearch } = globalThis.BanditFormations;
     const prefix = "cjs-formations:study:v1:", states = new Map(), cooldowns = new Map();
     const first = name => runtime.objects[name]?.getFirstInstance();
     const all = name => runtime.objects[name]?.getAllInstances() || [];
@@ -83,7 +83,8 @@
       const manager = engine.GetEventSheetManager();
       const names = ["科技研究", "职业操练", "取消设施进程", "删除地图设施", "关闭二级页面", "刷新底部菜单", "界面音效"];
       const functions = names.map(name => manager.GetFunctionBlockByName(name));
-      if (functions.some(fn => typeof fn?.GetEventBlock()?._RunAndBlock !== "function" || typeof fn?.CaptureFunctionParameters !== "function")) {
+      const work = manager.GetFunctionBlockByName("采集核心碰撞");
+      if ([...functions, work].some(fn => typeof fn?.GetEventBlock()?._RunAndBlock !== "function" || typeof fn?.CaptureFunctionParameters !== "function")) {
         throw new Error("Research / drilling hooks are unavailable in this game build.");
       }
       for (const [index, fn] of functions.entries()) {
@@ -105,7 +106,7 @@
               if (index < 2 && !automatic && station?.kind === (index === 0 ? 8 : 9) &&
                   sameStation(entry, station) && entry.mode === "auto" && entry.target === station.target &&
                   station.target !== params[0]) {
-                const chosen = targets(current, station).find(t => t.id === params[0]), f = fields(station.kind);
+                const chosen = targets(current, station, "manual").find(t => t.id === params[0]), f = fields(station.kind);
                 if (chosen && !occupied(current, station.kind, chosen.id) &&
                     ["取消设施进程function", "获得铜钱function", f.cost + "function"].every(name => manager.GetEventGroupByName(name)?.IsGroupActive())) {
                   const cost = runtime.callFunction(f.cost, chosen.id), refund = runtime.callFunction(f.cost, station.target);
@@ -137,14 +138,41 @@
           }
         };
       }
+      const block = work.GetEventBlock(), run = block._RunAndBlock;
+      block._RunAndBlock = function (...args) {
+        let current, station, state, repeat;
+        try {
+          current = context();
+          station = current?.stations.find(st => st.kind === 9 && st.tile.uid === work.CaptureFunctionParameters()[1]);
+          if (station) {
+            state = load(current.saveId);
+            const entry = state.entries.get(station.id), limit = drillLimit(current, station.target);
+            if (state.ready && !state.error && sameStation(entry, station) && entry.mode === "auto" &&
+                entry.target === station.target && limit > 0 && current.save.getAt(station.target, 5, 0) + 1 >= limit) {
+              // Native completion pays for the next level immediately. Suppress
+              // that repeat at the unlock boundary, then restore the preference.
+              repeat = current.save.getAt(station.id, 5, 21);
+              current.save.setAt(0, station.id, 5, 21);
+            }
+          }
+        } catch (error) { if (state) fail(state, error); }
+        try { return run.apply(this, args); }
+        finally {
+          if (repeat !== undefined && first("save") === current.save && current.save.getAt(0, 1, 0) === current.saveId &&
+              current.save.getAt(station.id, 1, 21) === station.type && current.save.getAt(station.id, 2, 21) === station.owner) {
+            current.save.setAt(repeat, station.id, 5, 21);
+          }
+        }
+      };
       hooked = true;
     }
-    function targets(current, station) {
+    const drillLimit = (current, id) => drillUnlockLevel(current.zy, id, target => runtime.callFunction("转职等级要求", target));
+    function targets(current, station, mode = "auto") {
       const { save, kj, zy } = current;
       if (station.kind === 8) return researchTargets(kj, save, id => runtime.callFunction("科技等级上限", id, station.level));
       const maximum = Math.min(runtime.globalVars["职业等级上限"], runtime.callFunction("操练等级上限", station.level));
       return drillTargets(zy, save, maximum, id => runtime.callFunction("转职等级要求", id),
-        family => runtime.callFunction("操练按钮解锁判断", ["", "力量系", "敏捷系", "智力系", "生产系"][family]) === 1);
+        family => runtime.callFunction("操练按钮解锁判断", ["", "力量系", "敏捷系", "智力系", "生产系"][family]) === 1, mode !== "manual");
     }
     function occupied(current, kind, target) {
       const s = current.save;
@@ -206,6 +234,17 @@
               entry = state.entries.get(station.id);
             }
             const describe = (target, mode) => `${label}: ${mode === "manual" ? "Manual" : "Auto"} · ${runtime.callFunction("文本", (station.kind === 8 ? current.kj : current.zy).getAt(target, 1), 0)}`;
+            const limit = station.kind === 9 && station.target > 0 && entry?.mode === "auto" ? drillLimit(current, station.target) : 0;
+            if (limit > 0 && !current.blocked && s.getAt(station.target, 5, 0) >= limit) {
+              const manager = engine.GetEventSheetManager();
+              if (!["取消设施进程function", "获得铜钱function", "操练货币需求function"]
+                .every(name => manager.GetEventGroupByName(name)?.IsGroupActive())) continue;
+              automatic = true;
+              try { runtime.callFunction("取消设施进程", station.x, station.y, false, 0); engine.FlushPendingInstances(); }
+              finally { automatic = false; }
+              if (s.getAt(station.id, 3, 21) !== 0) throw new Error("The game refused to stop a completed automatic drill target.");
+              forget(state, station.id); entry = null; station.target = 0;
+            }
             if (station.target > 0) { messages.push(describe(station.target, entry?.mode)); continue; }
             if (!state.enabled[key(station.kind)]) { messages.push(`${label}: Off`); continue; }
             if (!station.usable) { messages.push(`${label}: Waiting for station`); continue; }
@@ -217,7 +256,8 @@
             }
             const available = targets(current, station);
             let target;
-            if (entry) target = available.find(t => t.id === entry.target);
+            if (entry) target = (entry.mode === "manual" ? targets(current, station, "manual") : available)
+              .find(t => t.id === entry.target);
             if (entry && !target) { forget(state, station.id); entry = null; }
             if (!target) target = station.kind === 8 ? nextResearch(available, id => occupied(current, 8, id)) :
               available.find(t => !occupied(current, 9, t.id));

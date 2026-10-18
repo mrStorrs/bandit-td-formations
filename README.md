@@ -30,8 +30,9 @@ research and drilling mod for Bandit Simulator TD (Steam app 4267800).
   They keep and lock useful gear and craft in batches of **10**.
 - **Auto research and drill:** enabled by default in **Research & drilling**. Research
   prioritizes the Research bonus, then regular unlocks and advanced trees in
-  category order. Each tree finishes to its current cap. Drilling finishes
-  unlocked classes in tier order. Manual choices take priority until their cap.
+  category order. Each tree finishes to its current cap. Drilling trains the
+  lowest unlocked class only far enough to unlock the next job. Manual choices
+  take priority and train to the normal cap.
 - **Job outfits:** select a character, choose their job priority, equip their
   gear, and click **Save outfit for [job]**. Choosing that job again restores
   that character's saved outfit. Jobs without an outfit keep current equipment.
@@ -458,11 +459,18 @@ The current tree is remembered through copper shortages and restarts. If
 native Repeat is off, the mod resumes the same tree until its cap. A building
 upgrade extends the current tree's cap before another tree is selected.
 
-Drilling chooses the **lowest unlocked class tier** with unfinished training,
-using the game's class order within a tier. It continues that class through
-its current building/class level cap, then chooses again. Partially trained
-classes count as unfinished. Classes already assigned to another drill station
-are skipped; each station works independently.
+Drilling chooses the **lowest unlocked class tier** that still needs training
+to unlock the next job, using the game's class order within a tier. It stops
+at the native promotion requirement: **level 5 for the starting job, level 10
+for later prerequisite jobs**. Jobs at the end of a branch stop at **level 1**
+to unlock them. Native Repeat stops at that boundary without paying for another
+level; the mod then selects the next unfinished job. Building/class caps still
+apply, and a building upgrade lets an unmet unlock requirement resume.
+Classes already assigned to another drill station are skipped.
+
+Existing automatic orders already at or above their unlock level are canceled
+with the native refund for the pending level, preserving progress. Manually
+selected orders retain their full training cap.
 
 **A manual target takes priority at that station.** Choose a research topic or
 drill class with the normal controls. A valid, affordable choice replaces an
@@ -475,8 +483,9 @@ for your next choice while its menu remains selected. Queues already running
 when first installing this feature are treated as manual choices.
 
 Settings and current targets persist locally per campaign across map changes
-and restarts. Turning a checkbox off stops new mod orders; paid work and the
-game's own repeat can finish. The game's Repeat preference is preserved.
+and restarts. Turning a checkbox off stops new mod orders; current research can
+finish its tree and an active automatic drill stops at its unlock level.
+The game's Repeat preference is preserved.
 New selections wait during pause, menus, dragging and transitions, and for a
 usable completed building. Other mod automation continues independently.
 
@@ -500,7 +509,7 @@ python3 manage.py install --game-dir "/path/to/Steam/steamapps/common/塔防山�
 
 On Windows, use `py -3` in place of `python3` if appropriate. Restart the game
 after installing. Look for the “Formations ready” message on startup.
-The startup message includes the installed version number (currently 1.15.0).
+The startup message includes the installed version number (currently 1.15.1).
 
 The installer backs up the input archive in `cjs-formations-backups/` beside the
 game, verifies the result, then replaces `package.nw` atomically. It does not
@@ -771,6 +780,14 @@ manual purchase/cancellation and automated batches used roots. A partially
 completed batch refunded the correct remaining roots after save/load. Two
 native miners finished a shared target and began harvesting the next weakest.
 
+Version 1.15.1 limits automatic drilling to job unlock requirements, including
+one level for terminal jobs. Tests cover native Repeat costs at the boundary,
+manual training beyond unlock levels, building caps, copper shortages, reloads,
+and refunds for older automatic orders already past the limit. In isolated
+build 25975458, native drilling stopped at levels 5 and 10 without charging for
+another level, manual training continued to level 20, loaded orders refunded
+their pending level, and terminal jobs stopped at level 1.
+
 To check the controls in-game:
 
 1. Arrange your characters, choose their jobs and priority work targets, then
@@ -861,8 +878,10 @@ native production turrets, checking work range, remaining harvests and jobs.
 completion results, locks keepers and handles per-station settings, selection,
 legacy settings migration and native sales.
 `src/study.js` orders unlocked research and drill targets by category or
-class tier. `src/study-runtime.js` selects targets through native functions,
-preserves current targets until their caps, and respects native Repeat.
+class tier and calculates the drill levels needed for further job unlocks.
+`src/study-runtime.js` selects targets through native functions, preserves
+manual training to its cap, and bounds automatic drilling without changing
+the player's native Repeat preference.
 `src/outfits.js` validates outfit snapshots and matches equipment records.
 `src/outfit-runtime.js` observes native job changes, serializes equipment swaps,
 checks inventory and equip eligibility, and manages the outfit panel and storage.
