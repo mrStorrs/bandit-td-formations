@@ -260,6 +260,9 @@ Click **Apply / Start** to save and enable that station. **Pause** stops its new
 orders and mod sales while its paid queue finishes. You can change settings and
 apply them while running; new recipes start after the current queue finishes.
 Closing or collapsing the popup does not stop automation.
+Benches that remain usable in the game also keep refilling while their parent
+building upgrades. This applies to both Repeat and Auto-all at forges, crafting
+stations and breweries.
 
 On the first update, existing global crafting settings are copied to each built
 equipment station, including paused/running status. Breweries keep repeating

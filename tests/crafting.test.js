@@ -85,12 +85,30 @@ test("pause, menus, transitions, invalid facilities, and inactive native groups 
     f => f.objects.二级页面背景.push({}), f => f.objects.转场云.push({}), f => f.objects.世界地图.push({}),
     f => f.objects.黑幕.push({ isVisible: true }), f => f.objects.设施搬迁拖动点.push({}),
     f => { f.tiles[0].instVars.资源类型 = "失效"; }, f => { f.tiles[0].instVars.资源类型 = "满仓"; },
-    f => { f.tiles[0].instVars.有效解锁 = false; }, f => f.save.setAt(20, 6, 4, 1),
+    f => { f.tiles[0].instVars.有效解锁 = false; }, f => f.save.setAt(0, 6, 1, 1),
     f => { f.groups.get("加入锻造队列function").active = false; }];
   for (const block of blocks) {
     const f = fixture(); await f.tick(); f.start(0); f.finish(0); block(f); await f.tick();
     assert.equal(f.queue(0), 0); assert.deepEqual(f.balance(), [10000, 10000]);
   }
+});
+test("unlocked forge, crafting and brewery benches repeat while their parent buildings upgrade", async () => {
+  const f = fixture(); await f.tick();
+  for (let index = 0; index < 3; index++) {
+    f.start(index); f.finish(index); f.save.setAt(1500000, 6 + index, 4, 1);
+  }
+  await f.tick();
+  for (let index = 0; index < 3; index++) {
+    assert.equal(f.remaining(index), 10);
+    assert.equal(f.save.getAt(6 + index, 4, 1), 1500000);
+  }
+  assert.deepEqual(f.balance(), [9940, 9910]);
+  for (let index = 0; index < 3; index++) {
+    f.finish(index); f.tiles[index].instVars.有效解锁 = false;
+  }
+  await f.tick();
+  assert.deepEqual([f.queue(0), f.queue(1), f.queue(2)], [0, 0, 0]);
+  assert.deepEqual(f.balance(), [9940, 9910]);
 });
 test("campaigns never inherit another save's recipes, including a pending storage read", async () => {
   const f = fixture(new Map([[key, { version: 1, stations: [{ id: 3, type: 21, owner: 6, recipe: 1, multiplier: 1 }] }]]));

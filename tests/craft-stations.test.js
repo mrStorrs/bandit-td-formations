@@ -13,6 +13,23 @@ function addForge(f, id = 10) {
 }
 const recipe = (f,id) => f.save.getAt(f.save.getAt(id,3,21),3,13);
 
+test("two forges reload and refill their own recipes during a shared building upgrade",async()=>{
+  const records=[
+    {id:3,type:21,owner:6,enabled:true,options:{...options,forgeOutput:"weapons"}},
+    {id:10,type:21,owner:6,enabled:true,options:{...options,loop:"research",forgeOutput:"hands"}},
+  ];
+  const f=fixture(new Map([[key,{version:1,stations:records}]]),true);addForge(f);
+  f.save.setAt(1500000,6,4,1);await f.tick();await f.tick();
+  assert.equal(recipe(f,3),2);assert.equal(recipe(f,10),15);
+  const other=f.save.getAt(10,3,21);
+  assert.equal(f.remaining(0),10);assert.equal(f.save.getAt(other,8,13),10);
+  for(let i=0;i<10;i++)f.complete(0,[72]);await f.tick();
+  assert.equal(recipe(f,3),2);assert.equal(f.remaining(0),10);
+  assert.equal(f.save.getAt(10,3,21),other);assert.equal(f.save.getAt(other,8,13),10);
+  assert.deepEqual(f.balance(),[9940,9910]);assert.equal(f.save.getAt(6,4,1),1500000);
+  assert.equal(saved(f,3).enabled,true);assert.equal(saved(f,10).enabled,true);
+});
+
 test("two forges independently choose roles, rarity, multipliers and selling, with saved reload",async()=>{
   const f=fixture(new Map(),true),second=addForge(f);await f.tick();await f.configure({loop:"forge",minimum:3});
   await f.select(second);await f.configure({loop:"research",minimum:5,multiplier:10,autoSell:false});await f.tick();

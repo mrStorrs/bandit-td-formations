@@ -63,9 +63,11 @@
         const x = v["X坐标"], y = v["Y坐标"], id = save.getAt(x - base + 150, y - base, 6);
         const owner = save.getAt(id, 2, 21);
         if (!positive(id) || save.getAt(id, 0, 21) !== id || save.getAt(id, 1, 21) !== type || !positive(owner)) continue;
+        // The parent's construction counter also tracks upgrades. Native bench
+        // availability remains valid while an existing building is upgrading.
         stations.push({ id, type, kind, owner, x, y, queue: save.getAt(id, 3, 21),
           usable: !!v["有效解锁"] && !["失效", "满仓"].includes(v["资源类型"]) &&
-            save.getAt(owner, 1, 1) > 0 && save.getAt(owner, 4, 1) <= 0 });
+            save.getAt(owner, 1, 1) > 0 });
       }
       // Soul Tower locks character movement; native station work remains allowed.
       const blocked = g["游戏暂停"] || runtime.timeScale === 0 || g["分页界面"] || g["拖动模式"] ||
