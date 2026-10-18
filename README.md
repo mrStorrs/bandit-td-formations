@@ -28,9 +28,9 @@ research and drilling mod for Bandit Simulator TD (Steam app 4267800).
   matching pieces, optionally sell new rejected crafts, and keep making more sets.
   Forge and crafting loop independently in batches of **10**.
 - **Auto research and drill:** enabled by default in **Automation**. Research
-  prioritizes regular unlocks, then finishes each advanced tree in category
-  order. Drilling finishes unlocked classes in tier order. Manual choices take
-  priority until the chosen target reaches its current cap.
+  prioritizes the Research bonus, then regular unlocks and advanced trees in
+  category order. Each tree finishes to its current cap. Drilling finishes
+  unlocked classes in tier order. Manual choices take priority until their cap.
 - **Job outfits:** select a character, choose their job priority, equip their
   gear, and click **Save outfit for [job]**. Choosing that job again restores
   that character's saved outfit. Jobs without an outfit keep current equipment.
@@ -374,15 +374,18 @@ under **Research & drilling** in the lower-right **Automation** panel. Workers
 still perform the work normally; automation selects the next target and pays
 the game's normal copper cost. It waits when funds are insufficient.
 
-Research selects an unlocked, unfinished **regular research** first. When none
-is free, it follows **Team → Gather → Growth → Cultivate → Craft**, using the
-game's topic order within each category. Each selected tree continues to its
-**current building cap** before the mod chooses another tree. Native Repeat
-handles the levels within a tree, such as displayed levels 1 through 60; the
-mod no longer interrupts it after each level or switches to a lower-level
-topic. Newly available regular research takes priority after the current tree
-finishes. Native prerequisites, category unlocks and building caps still apply.
-Other research stations can take different available trees independently.
+When selecting a new tree, research first chooses the **Research bonus** in
+Growth if it is unlocked, below the station's cap and not assigned elsewhere.
+This improves research output for the remaining trees. Next come unfinished
+**regular research** unlocks, then **Team → Gather → Growth → Cultivate → Craft**,
+using the game's topic order within each category.
+
+Each selected tree continues to its **current building cap** before the mod
+chooses another tree. Native Repeat handles its levels, such as displayed
+levels 1 through 60. A newly available Research bonus waits for the active tree
+to finish, including manual choices. Native prerequisites, category unlocks and
+building caps still apply. Other research stations can take different available
+trees independently.
 
 The current tree is remembered through copper shortages and restarts. If
 native Repeat is off, the mod resumes the same tree until its cap. A building
@@ -662,6 +665,13 @@ priority. It passes 233 JavaScript tests and four installer tests. In isolated
 build 25975458, 143 native research completions verified displayed levels 1–60
 without mod reselection, correct native repeat costs, all five categories,
 manual takeover, reloads and resuming the same tree after copper shortages.
+
+Version 1.12.3 prioritizes the Research bonus whenever selecting a new tree,
+before regular unlocks and other advanced topics. Active trees and manual
+choices still finish to their caps. It passes 236 JavaScript tests and four
+installer tests. In isolated build 25975458, 69 native research completions
+verified Research through levels 1–60, priority after a building upgrade,
+manual overrides and unlocking the Research tree.
 
 To check the controls in-game:
 

@@ -20,6 +20,7 @@ function fixture(stored = new Map()) {
     [37,"制造"],[38,"制造"],[39,"制造"],[40,"发展"],[41,"发展"],[42,"修炼"],[43,"发展"],[44,"修炼"]]) {
     research[id] = {0:id,1:`Topic ${id}`,2:category,5:300};
   }
+  research[40][15] = "研究";
   for (const [id, rank, prerequisite, family] of [[1,1,0,1],[2,2,1,1],[3,2,1,1],[4,3,2,1],[5,3,2,2],
     [8,4,4,1],[9,4,4,1],[16,5,8,1]]) classes[id] = {0:id,1:`Class ${id}`,3:rank,4:family,10:prerequisite};
   const kj = { width: 50, getAt: (id, field) => research[id]?.[field] ?? 0 };

@@ -18,9 +18,11 @@
       const level = save.getAt(id, 4, 0), maximum = regular ? 1 : cap(id);
       if (!levelOK(level) || !levelOK(maximum) || level >= maximum) continue;
       targets.push({ id, level, maximum, regular, order,
+        researchBonus: !regular && kj.getAt(id, 15) === "研究",
         category: regular ? "Regular" : researchCategories[order][1] });
     }
-    return targets.sort((a, b) => Number(b.regular) - Number(a.regular) ||
+    return targets.sort((a, b) => Number(b.researchBonus) - Number(a.researchBonus) ||
+      Number(b.regular) - Number(a.regular) ||
       (a.regular ? a.id - b.id : a.order - b.order || a.id - b.id));
   }
 
