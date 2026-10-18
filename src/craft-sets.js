@@ -9,7 +9,7 @@
     ["combat-str", "Combat — STR", 1, 43, 19], ["combat-agi", "Combat — AGI", 2, 44, 20],
     ["combat-int", "Combat — INT", 3, 47, 21],
   ].map(([id, name, stat, power, bonus]) => ({ id, name, stat, power, bonus, combat: id.startsWith("combat-") }));
-  const craftDefaults = { mode: "repeat", loop: "all", roles: craftRoles.map(r => r.id), tier: 1, minimum: 3, multiplier: 1, autoSell: true };
+  const craftDefaults = { mode: "repeat", loop: "all", roles: craftRoles.map(r => r.id), tier: 1, minimum: 3, multiplier: 1, autoSell: true, forgeOutput: "all" };
   function validateCraftOptions(value) {
     if (!value || !["repeat", "sets"].includes(value.mode) ||
         !["all", ...craftRoles.map(r => r.id)].includes(value.loop) ||
@@ -17,11 +17,12 @@
         new Set(value.roles).size !== value.roles.length || value.roles.some(id => !craftRoles.some(r => r.id === id)) ||
         !Number.isInteger(value.tier) || value.tier < 1 || value.tier > 9 ||
         !Number.isInteger(value.minimum) || value.minimum < 1 || value.minimum > 6 ||
-        ![1, 10, 100].includes(value.multiplier) || typeof value.autoSell !== "boolean") {
+        ![1, 10, 100].includes(value.multiplier) || typeof value.autoSell !== "boolean" ||
+        (value.forgeOutput !== undefined && !["all", "weapons", "hands"].includes(value.forgeOutput))) {
       throw new Error("Invalid crafting settings.");
     }
     return { mode: value.mode, loop: value.loop, roles: [...value.roles], tier: value.tier,
-      minimum: value.minimum, multiplier: value.multiplier, autoSell: value.autoSell };
+      minimum: value.minimum, multiplier: value.multiplier, autoSell: value.autoSell, forgeOutput: value.forgeOutput ?? "all" };
   }
   const selectedCraftRoles = options => craftRoles.filter(role => options.loop === "all" ? options.roles.includes(role.id) : options.loop === role.id);
   function craftRecipes(wp, role, tier) {
@@ -62,7 +63,7 @@
       const role = roles.reduce((best, i) => counts[i][slot] < counts[best][slot] ? i : best);
       counts[role][slot]++;
     }
-    const cycles = [[4, "Forge", [0, 1]], [5, "Crafting", [2, 3]]].map(([kind, name, slots]) => {
+    const cycles = [[4, "Forge", options.forgeOutput === "weapons" ? [0] : options.forgeOutput === "hands" ? [1] : [0, 1]], [5, "Crafting", [2, 3]]].map(([kind, name, slots]) => {
       const round = targets.length ? Math.min(...counts.flatMap(row => slots.map(slot => row[slot]))) + 1 : 1;
       const index = counts.findIndex(row => slots.some(slot => row[slot] < round));
       return { kind, name, slots, round, index, target: targets[index] || null,

@@ -313,6 +313,18 @@ to that station. The dropdown offers:
 These selections control what gets crafted. Matching equipment for all twelve
 roles is kept and locked, including unchecked roles and when looping one role.
 
+Forges also offer a **Forge output** dropdown in Auto-all mode:
+
+- **All:** weapons and hand gear, the default.
+- **Weapon only:** skip gloves and bracers.
+- **No weapon:** make only gloves or bracers for the selected work/combat roles.
+
+Click **Apply / Start** to save the choice for that forge. Restricted loops advance
+to the next role and round using only their chosen slot. Other stations keep their
+own settings. Paid batches finish before the change takes effect, and useful gear
+for any role is still kept and locked. Repeat current ×10 still repeats the
+manually chosen recipe.
+
 Each target contains four ordinary craftable pieces. Work sets use the job's
 weapon, gloves, belt and necklace; combat sets use a weapon, bracers, headband
 and ring. Cores, treasures and special set upgrades are outside this loop.
@@ -459,7 +471,7 @@ python3 manage.py install --game-dir "/path/to/Steam/steamapps/common/塔防山�
 
 On Windows, use `py -3` in place of `python3` if appropriate. Restart the game
 after installing. Look for the “Formations ready” message on startup.
-The startup message includes the installed version number (currently 1.14.0).
+The startup message includes the installed version number (currently 1.14.1).
 
 The installer backs up the input archive in `cjs-formations-backups/` beside the
 game, verifies the result, then replaces `package.nw` atomically. It does not
@@ -708,6 +720,12 @@ In isolated build 25975458, native station clicks, popup mouse/keyboard input,
 different-tier queues, keeper locking, separate selling choices and reloads
 passed. Controls were also exercised at 1000×700. Steam/NW.js remains the manual
 check after restarting the installed game.
+
+Version 1.14.1 adds the per-forge **All / Weapon only / No weapon** dropdown.
+Tests cover old settings, slot-specific roles and rounds, per-station persistence,
+paid batches and keeping useful off-target gear. In isolated build 25975458,
+all three choices were exercised through the popup, including reloads and
+switching back to full sets after restricted crafting.
 
 To check the controls in-game:
 

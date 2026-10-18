@@ -90,6 +90,10 @@
         const gearSelect = (title, id, options) => select(title, id, options, this.craftGear);
         this.craftLoop = gearSelect("Loop", "cjs-craft-loop", [["all", "Cycle checked roles"], ...state.roles.map(r => [r.id, r.name])]);
         make("div", "Choose a single role to repeat only that set. Combat weapons: STR spear, AGI bow, INT fan.", this.craftGear).style.cssText = "margin:-3px 0 10px;color:#c5ced1;font-size:12px";
+        this.craftForgeLabel = make("label", "Forge output ", this.craftGear); this.craftForgeLabel.style.cssText = "display:block;margin-bottom:10px";
+        this.craftForgeOutput = make("select", "", this.craftForgeLabel); this.craftForgeOutput.id = "cjs-craft-forge-output";
+        this.craftForgeOutput.style.cssText = "font:inherit;max-width:100%";
+        for (const [value, text] of [["all", "All"], ["weapons", "Weapon only"], ["hands", "No weapon"]]) make("option", text, this.craftForgeOutput).value = value;
         this.craftTier = gearSelect("Tier", "cjs-craft-tier", Array.from({ length: 9 }, (_, i) => [i + 1, `T${i + 1}`]));
         this.craftMinimum = gearSelect("Minimum rarity", "cjs-craft-minimum", ["White", "Green", "Blue", "Purple", "Gold", "Red"].map((name, i) => [i + 1, `${i + 1} · ${name} or better`]));
         this.craftMultiplier = gearSelect("Materials per craft", "cjs-craft-multiplier", [1, 10, 100].map(n => [n, `×${n}`]));
@@ -118,6 +122,8 @@
           const sets = gear && this.craftMode.value === "sets";
           this.craftMode.disabled = this.craftState.busy || !gear;
           this.craftGear.hidden = !gear;
+          this.craftForgeLabel.hidden = this.craftState.station.kind !== 4;
+          this.craftForgeOutput.disabled = this.craftState.busy || !sets || this.craftState.station.kind !== 4;
           for (const input of [this.craftLoop, this.craftTier, this.craftMinimum, this.craftMultiplier]) input.disabled = this.craftState.busy || !sets;
           for (const input of Object.values(this.craftRoles)) input.disabled = this.craftState.busy || !sets || this.craftLoop.value !== "all";
           this.craftSell.disabled = busy || !sets;
@@ -136,6 +142,7 @@
           this.PostToRuntime("craft-configure", { token: this.craftState.token, options: {
             mode: this.craftMode.value, loop: this.craftLoop.value, roles: Object.keys(this.craftRoles).filter(id => this.craftRoles[id].checked),
             tier: Number(this.craftTier.value), minimum: Number(this.craftMinimum.value), multiplier: Number(this.craftMultiplier.value), autoSell: this.craftSell.checked,
+            forgeOutput: this.craftState.station.kind === 4 ? this.craftForgeOutput.value : "all",
           } });
         });
         this.craftPause.addEventListener("click", () => {
@@ -160,6 +167,7 @@
         const o = state.options;
         this.craftMode.value = o.mode; this.craftLoop.value = o.loop; this.craftTier.value = String(o.tier);
         this.craftMinimum.value = String(o.minimum); this.craftMultiplier.value = String(o.multiplier); this.craftSell.checked = o.autoSell;
+        this.craftForgeOutput.value = o.forgeOutput || "all";
         for (const [id, input] of Object.entries(this.craftRoles)) input.checked = o.roles.includes(id);
       }
       this.updateCraftControls();

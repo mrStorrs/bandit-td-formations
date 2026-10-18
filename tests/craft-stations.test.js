@@ -53,7 +53,7 @@ test("old global settings migrate once to existing gear stations, with new stati
     const legacy={version:1,enabled,options:{...options,loop:"combat-int",minimum:5,autoSell:false}};
     const f=fixture(new Map([["cjs-formations:craft-sets:v1:12345678",legacy]]),true);
     await f.tick();await f.tick();
-    for(const id of [3,4]){assert.deepEqual(saved(f,id).options,legacy.options);assert.equal(saved(f,id).enabled,enabled);}
+    for(const id of [3,4]){assert.deepEqual(saved(f,id).options,{...legacy.options,forgeOutput:"all"});assert.equal(saved(f,id).enabled,enabled);}
     assert.equal(saved(f,5).options.mode,"repeat");assert.equal(saved(f,5).enabled,true);
     const index=addForge(f);await f.select(index);assert.equal(f.status().options.mode,"repeat");
     assert.equal(saved(f,10).options.mode,"repeat");assert.deepEqual(f.stored.get("cjs-formations:craft-sets:v1:12345678"),legacy);
@@ -105,4 +105,35 @@ test("manual changes and demolition during a pending settings read win over save
     if(removed)assert.equal(saved(f,3),undefined);
     else {assert.equal(saved(f,3).enabled,false);assert.equal(recipe(f,3),3);}
   }
+});
+test("both restricted forge outputs cycle roles and rounds, persist locally, and resume all gear",async()=>{
+  for(const [output,recipes,label] of [["weapons",[2,7],"weapon"],["hands",[13,15],"hand piece"]]) {
+    const f=fixture(new Map(),true),second=addForge(f);await f.tick();
+    await f.configure({forgeOutput:output});await f.tick();
+    for(const [expected,bonus] of [[recipes[0],59],[recipes[1],63],[recipes[0],59]]) {
+      assert.equal(recipe(f,3),expected);assert.equal(f.remaining(0),10);
+      for(let i=0;i<10;i++)f.complete(0,[i===0?bonus:72]);
+      await f.tick();
+    }
+    assert.ok(f.status().message.includes(`Round 2 · Researcher · 0/1 ${label}`));
+    assert.equal(saved(f,3).options.forgeOutput,output);assert.equal(saved(f,10).options.forgeOutput,"all");
+    const next=fixture(f.stored,true);addForge(next);await next.tick();await next.tick();
+    assert.equal(next.status().options.forgeOutput,output);assert.equal(recipe(next,3),recipes[0]);
+    await next.select(second);assert.equal(next.status().options.forgeOutput,"all");
+    const q=f.queue(0);await f.configure({forgeOutput:"all"});assert.equal(f.queue(0),q);
+    for(let i=0;i<10;i++)f.complete(0,[63]);await f.tick();
+    assert.equal(recipe(f,3),output==="weapons"?13:2);assert.match(f.status().message,/Round 1 · Forger · 1\/2 pieces/);
+  }
+});
+test("enabling weapons-only finishes and protects a paid hand-gear batch before switching",async()=>{
+  const f=fixture(new Map(),true);await f.tick();await f.configure({loop:"forge"});await f.tick();
+  for(let i=0;i<10;i++)f.complete(0,[i===0?59:72]);await f.tick();
+  assert.equal(recipe(f,3),13);const q=f.queue(0),balance=f.balance();
+  await f.configure({loop:"forge",forgeOutput:"weapons"});await f.tick();
+  assert.equal(f.queue(0),q);assert.equal(f.remaining(0),10);assert.deepEqual(f.balance(),balance);
+  f.save.setAt(6,9,1,0);
+  for(let i=0;i<10;i++)f.complete(0,[62]);await f.tick();
+  const gloves=[];for(let row=1;row<f.save.width;row++)if(f.save.getAt(row,1,7)===13)gloves.push(f.save.getAt(row,22,7));
+  assert.deepEqual(gloves,Array(10).fill(1));assert.equal(recipe(f,3),2);
+  assert.match(f.status().message,/Round 2 · Forger · 0\/1 weapon/);
 });

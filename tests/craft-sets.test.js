@@ -25,11 +25,16 @@ test("single-role dropdown overrides checkboxes without losing their choices", (
 });
 test("invalid crafting preferences are rejected before any crafting or selling", () => {
   for (const bad of [{ mode:"anything" }, { loop:"missing" }, { roles:["forge","forge"] }, { roles:["missing"] },
-    { tier:0 }, { tier:10 }, { tier:1.5 }, { minimum:0 }, { minimum:7 }, { multiplier:2 }, { autoSell:"true" }]) {
+    { tier:0 }, { tier:10 }, { tier:1.5 }, { minimum:0 }, { minimum:7 }, { multiplier:2 }, { autoSell:"true" }, {forgeOutput:"invalid"}, {forgeOutput:null}]) {
     assert.throws(() => api.validateCraftOptions(options(bad)), /Invalid/);
   }
   const o = options(); const valid = api.validateCraftOptions(o); o.roles.length = 0;
   assert.equal(valid.roles.length, 12);
+});
+test("older crafting settings default to full sets", () => {
+  const old=options();delete old.forgeOutput;
+  assert.equal(api.validateCraftOptions(old).forgeOutput,"all");
+  assert.equal(api.validateCraftOptions(options({forgeOutput:"weapons"})).forgeOutput,"weapons");
 });
 test("a match requires the exact recipe/stat variant and tier, minimum quality and the specific rolled bonus", () => {
   const t = target("forge"), o = options();
@@ -71,6 +76,21 @@ test("forge and crafting select roles and rounds using only their respective slo
     plan = api.planCraftSets([...forge,...research],targets,o);
     assert.equal(plan.cycles[active].round,2);assert.equal(plan.cycles[active].target.id,"forge");
     assert.equal(plan.cycles[other].round,1);assert.equal(plan.cycles[other].complete,0);
+  }
+});
+test("restricted forge rounds advance using their chosen slot and leave crafting slots intact", () => {
+  for(const [output,slot] of [["weapons",1],["hands",2]]) {
+    const targets=[target("forge"),target("research",[5,6,7,8])],o=options({forgeOutput:output});
+    const forge=item(slot,[59]),research=item(slot,[63],{recipe:slot+4});
+    let plan=api.planCraftSets([forge],targets,o);
+    assert.deepEqual(clone(plan.cycles[0].slots),[slot-1]);assert.equal(plan.cycles[0].target.id,"research");
+    assert.deepEqual(clone(plan.cycles[1].slots),[2,3]);assert.equal(plan.cycles[1].target.id,"forge");
+    plan=api.planCraftSets([forge,research],targets,o);
+    assert.equal(plan.cycles[0].round,2);assert.equal(plan.cycles[0].target.id,"forge");
+    assert.equal(plan.cycles[1].round,1);
+    plan=api.planCraftSets([forge,research],targets,{...o,forgeOutput:"all"});
+    assert.equal(plan.cycles[0].round,1);assert.equal(plan.cycles[0].target.id,"forge");
+    assert.deepEqual(clone(plan.cycles[0].slots),[0,1]);assert.equal(plan.cycles[0].complete,1);
   }
 });
 test("recipe selection uses the chosen tier, stat and work/combat family", () => {

@@ -237,7 +237,7 @@
       if (current.blocked || runtime.globalVars["装备穿戴中"]) { state.message = "Waiting for gameplay to resume…"; return; }
       const plan = planCraftSets(inventory, targets, state.options), cycle = plan.cycles.find(c => c.kind === station.kind);
       for (const item of inventory) if (isCraftKeeper(item, current.wp, state.options)) current.save.setAt(1, item.row, 22, item.location);
-      state.message = `${cycle.name}: Round ${cycle.round} · ${cycle.target.name} · ${cycle.complete}/2 pieces` +
+      state.message = `${cycle.name}: Round ${cycle.round} · ${cycle.target.name} · ${cycle.complete}/${cycle.slots.length} ${cycle.slots.length === 2 ? "pieces" : cycle.slots[0] === 0 ? "weapon" : "hand piece"}` +
         `\nT${state.options.tier} · Batches of ${batchSize}`;
       if (!station.usable || current.save.getAt(station.id, 3, 21) !== 0) return;
       const capacity = runtime.callFunction("背包容量上限");

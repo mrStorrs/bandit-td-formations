@@ -264,7 +264,7 @@ test("crafting controls offer mode, role checkboxes, single-role override, tier,
   f.dom.craftTier.value="2";f.dom.craftMinimum.value="5";f.dom.craftMultiplier.value="10";f.dom.craftSell.checked=false;
   f.dom.craftButton.dispatch("click");
   assert.deepEqual(JSON.parse(JSON.stringify(f.messages.at(-1))),["craft-configure",{token:craftState.token,options:{
-    mode:"sets",loop:"combat-agi",roles:["forge","research"],tier:2,minimum:5,multiplier:10,autoSell:false,
+    mode:"sets",loop:"combat-agi",roles:["forge","research"],tier:2,minimum:5,multiplier:10,autoSell:false,forgeOutput:"all",
   }}]);
 });
 test("crafting status preserves unsaved edits and permits disabling sales during an active loop",()=>{
@@ -310,4 +310,21 @@ test("breweries show repeat and pause without irrelevant equipment controls",()=
   f.dom.craftPause.dispatch("click");assert.equal(f.messages.at(-1)[0],"craft-pause");
   f.handlers["craft-status"]({...craftState,station:{id:3,kind:4,name:"Forge"}});
   assert.equal(f.dom.craftGear.hidden,false);assert.equal(f.dom.craftMode.disabled,false);
+});
+test("forge output offers All, Weapon only and No weapon, and is saved only for forges",()=>{
+  const f=fixture();f.handlers["craft-status"](craftState);
+  assert.equal(f.dom.craftForgeLabel.hidden,false);assert.equal(f.dom.craftForgeOutput.disabled,true);assert.equal(f.dom.craftForgeOutput.value,"all");
+  assert.deepEqual(Array.from(f.dom.craftForgeOutput.children,c=>c.textContent),["All","Weapon only","No weapon"]);
+  f.dom.craftMode.value="sets";f.dom.craftMode.dispatch("change");assert.equal(f.dom.craftForgeOutput.disabled,false);
+  for(const output of ["weapons","hands","all"]) {
+    f.dom.craftForgeOutput.value=output;f.handlers["craft-status"]({...craftState,message:"Updated"});
+    assert.equal(f.dom.craftForgeOutput.value,output);f.dom.craftButton.dispatch("click");assert.equal(f.messages.at(-1)[1].options.forgeOutput,output);
+  }
+  const stored={...craftState,options:{...craftState.options,mode:"sets",forgeOutput:"hands"}};
+  f.handlers["craft-status"](stored);assert.equal(f.dom.craftForgeOutput.value,"hands");
+  for(const kind of [5,6]) {
+    f.handlers["craft-status"]({...stored,token:`station:${kind}`,station:{id:kind,kind,name:"Station"}});
+    assert.equal(f.dom.craftForgeLabel.hidden,true);assert.equal(f.dom.craftForgeOutput.disabled,true);
+    f.dom.craftButton.dispatch("click");assert.equal(f.messages.at(-1)[1].options.forgeOutput,"all");
+  }
 });
