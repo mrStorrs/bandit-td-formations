@@ -10,7 +10,7 @@ import tempfile
 import zipfile
 
 ROOT = Path(__file__).resolve().parent
-VERSION = "1.12.3"
+VERSION = "1.14.0"
 MANIFEST = "cjs-formations.json"
 BEGIN = b"\n/* CJS_FORMATIONS_BEGIN */\n"
 END = b"\n/* CJS_FORMATIONS_END */\n"

@@ -252,12 +252,12 @@ test("outfit controls block game input and stale or busy actions and hide outsid
   assert.equal(f.dom.outfitPanel.hidden, true); assert.equal(f.messages.length, count);
 });
 
-const craftState = { visible:true,token:"campaign:layout",running:false,busy:false,message:"Ready",kept:0,sold:0,
+const craftState = { visible:true,token:"campaign:layout:3",station:{id:3,kind:4,name:"Forge"},enabled:true,running:false,busy:false,message:"Ready",kept:0,sold:0,
   options:{mode:"repeat",loop:"all",roles:["forge","research"],tier:1,minimum:3,multiplier:1,autoSell:true},
   roles:[{id:"forge",name:"Forger",stat:1},{id:"research",name:"Researcher",stat:3},{id:"combat-agi",name:"Combat — AGI",stat:2,combat:true}] };
 test("crafting controls offer mode, role checkboxes, single-role override, tier, rarity and material multiplier",()=>{
   const f=fixture();f.handlers["craft-status"](craftState);
-  assert.equal(f.dom.craftBody.hidden,true);f.dom.craftToggle.dispatch("click");assert.equal(f.dom.craftBody.hidden,false);
+  assert.equal(f.dom.craftBody.hidden,false);assert.match(f.dom.craftToggle.textContent,/Forge #3/);
   f.dom.craftMode.value="sets";f.dom.craftMode.dispatch("change");
   f.dom.craftLoop.value="combat-agi";f.dom.craftLoop.dispatch("change");
   assert.ok(Object.values(f.dom.craftRoles).every(i=>i.disabled));
@@ -271,19 +271,19 @@ test("crafting status preserves unsaved edits and permits disabling sales during
   const f=fixture();f.handlers["craft-status"](craftState);f.dom.craftTier.value="4";
   f.handlers["craft-status"]({...craftState,message:"Updated"});assert.equal(f.dom.craftTier.value,"4");
   const active={...craftState,running:true,options:{...craftState.options,mode:"sets"}};
-  f.handlers["craft-status"](active);assert.equal(f.dom.craftTier.disabled,true);assert.equal(f.dom.craftSell.disabled,false);
+  f.handlers["craft-status"](active);assert.equal(f.dom.craftTier.disabled,false);assert.equal(f.dom.craftSell.disabled,false);
   f.dom.craftSell.checked=false;f.dom.craftSell.dispatch("change");assert.deepEqual(f.messages.at(-1),["craft-sell",{token:craftState.token,autoSell:false}]);
-  f.dom.craftButton.dispatch("click");assert.deepEqual(f.messages.at(-1),["craft-pause",{token:craftState.token}]);
+  f.dom.craftPause.dispatch("click");assert.deepEqual(f.messages.at(-1),["craft-pause",{token:craftState.token}]);
   f.document.activeElement=f.dom.craftButton;f.window.dispatch("keydown",{code:"KeyC"});assert.equal(f.messages.at(-1)[0],"cancel");
   for(const event of ["pointerdown","pointermove","pointerup","wheel","keydown"])assert.equal(f.dom.craftPanel.dispatch(event).stopped,true);
   f.handlers["craft-status"]({visible:false});assert.equal(f.dom.craftPanel.hidden,true);
   const count=f.messages.length;f.dom.craftButton.dispatch("click");assert.equal(f.messages.length,count);
 });
 
-test("research and drill toggles stay independent and share the Automation panel",()=>{
+test("research and drill toggles work without a crafting station panel",()=>{
   const f=fixture(),state={visible:true,token:"campaign:study",enabled:{research:true,drill:true},busy:false,error:false,message:"Research: Manual · Team"};
-  f.handlers["study-status"](state);f.handlers["craft-status"](craftState);
-  assert.equal(f.dom.craftToggle.textContent,"Automation ▸");
+  f.handlers["study-status"](state);f.handlers["craft-status"]({visible:false});
+  assert.equal(f.dom.studyToggle.textContent,"Research & drilling ▸");assert.equal(f.dom.craftPanel,undefined);
   assert.equal(f.dom.studyInputs.research.checked,true);assert.equal(f.dom.studyInputs.drill.checked,true);
   f.dom.studyInputs.research.checked=false;f.dom.studyInputs.research.dispatch("change");
   assert.deepEqual(f.messages.at(-1),["study-enabled",{token:state.token,kind:"research",enabled:false}]);
@@ -291,5 +291,23 @@ test("research and drill toggles stay independent and share the Automation panel
   f.handlers["study-status"]({...state,busy:true});const count=f.messages.length;
   f.dom.studyInputs.drill.dispatch("change");assert.equal(f.messages.length,count);assert.equal(f.dom.studyInputs.drill.disabled,true);
   f.handlers["study-status"]({visible:false});f.dom.studyInputs.drill.dispatch("change");
-  assert.equal(f.messages.length,count);assert.equal(f.dom.studySection.hidden,true);
+  assert.equal(f.messages.length,count);assert.equal(f.dom.studyPanel.hidden,true);
+});
+
+test("selecting another station opens its own settings and discards unapplied edits",()=>{
+  const f=fixture();f.handlers["craft-status"](craftState);f.dom.craftTier.value="9";
+  f.dom.craftToggle.dispatch("click");assert.equal(f.dom.craftBody.hidden,true);
+  const second={...craftState,token:"campaign:layout:4",station:{id:4,kind:5,name:"Crafting station"},options:{...craftState.options,tier:2}};
+  f.handlers["craft-status"](second);assert.equal(f.dom.craftBody.hidden,false);assert.equal(f.dom.craftTier.value,"2");
+  assert.match(f.dom.craftToggle.textContent,/Crafting station #4/);
+  f.dom.craftButton.dispatch("click");assert.equal(f.messages.at(-1)[1].token,second.token);
+  f.dom.craftTier.value="7";f.handlers["craft-status"]({visible:false});f.handlers["craft-status"](second);
+  assert.equal(f.dom.craftTier.value,"2");assert.equal(f.dom.craftBody.hidden,false);
+});
+test("breweries show repeat and pause without irrelevant equipment controls",()=>{
+  const f=fixture();f.handlers["craft-status"]({...craftState,station:{id:5,kind:6,name:"Brewery"}});
+  assert.equal(f.dom.craftGear.hidden,true);assert.equal(f.dom.craftMode.disabled,true);assert.equal(f.dom.craftPause.disabled,false);
+  f.dom.craftPause.dispatch("click");assert.equal(f.messages.at(-1)[0],"craft-pause");
+  f.handlers["craft-status"]({...craftState,station:{id:3,kind:4,name:"Forge"}});
+  assert.equal(f.dom.craftGear.hidden,false);assert.equal(f.dom.craftMode.disabled,false);
 });

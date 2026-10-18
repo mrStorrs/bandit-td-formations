@@ -28,7 +28,7 @@ function fixture(stored = new Map(), extended = false) {
   catalog[30] = {3:1,4:"普通丹药",5:"丹药",6:0};
   const ss = { getAt: (id, field) => field === 30 ? ({ 21: 4, 31: 5, 41: 6 })[id] : 0 };
   const wp = { width:64, getAt: (id, field) => (extended ? catalog[id]?.[field] : recipes[id]?.[field - 3]) ?? 0 };
-  const objects = { save: [save], ss: [ss], wp: [wp], 地面: tiles, 二级页面背景: [], 转场云: [], 世界地图: [], 黑幕: [], 设施搬迁拖动点: [] };
+  const objects = { save: [save], ss: [ss], wp: [wp], 地面: tiles, 二级页面背景: [], 转场云: [], 世界地图: [], 黑幕: [], 设施搬迁拖动点: [], 底部菜单背景: [{ instVars: { 功能:"设施", X坐标:10020, Y坐标:10010 } }] };
   const runtime = { layout: { name: "主界面" }, timeScale: 1, globalVars: g,
     objects: Object.fromEntries(Object.entries(objects).map(([name, items]) => [name, { getAllInstances: () => items, getFirstInstance: () => items[0] }])),
     storage: { getItem: async k => clone(stored.get(k)), setItem: async (k, v) => { stored.set(k, clone(v)); } },
@@ -49,6 +49,7 @@ function fixture(stored = new Map(), extended = false) {
   native("锻造材料数量", (_, tier, index, multiplier) => (index === 1 ? 2 : 3) * multiplier);
   native("失去材料", (amount, id) => { if (!f.refusePayment || id === 1) save.setAt(save.getAt(id, 6, 0) - amount, id, 6, 0); });
   native("生成单体设施", () => {});
+  native("刷新底部菜单", () => {});
   native("背包容量上限", () => f.capacity ?? 60);
   native("出售物品", row => {
     if (f.refuseSale) return;
@@ -118,6 +119,20 @@ function fixture(stored = new Map(), extended = false) {
   }
   const f = { save, runtime, engine, g, values, stored, calls, notifications, tiles, objects, methods, groups, handlers, messages, wp, catalog, loop, flushes: 0,
     status: () => messages.filter(m=>m[0]==="craft-status").at(-1)?.[1],
+    async select(index) {
+      const v = tiles[index].instVars;
+      objects.底部菜单背景.splice(0, objects.底部菜单背景.length, { instVars: { 功能:"设施", X坐标:v.X坐标, Y坐标:v.Y坐标 } });
+      await this.tick();
+    },
+    async configureAll(changes={}) {
+      const selected = objects.底部菜单背景[0], paused = g.游戏暂停;
+      g.游戏暂停 = true;
+      for (let index = 0; index < tiles.length; index++) if ([4,5].includes(ss.getAt(tiles[index].instVars.设施编号,30))) {
+        await this.select(index); await this.configure(changes);
+      }
+      objects.底部菜单背景.splice(0, objects.底部菜单背景.length, selected);
+      await this.tick(); g.游戏暂停 = paused;
+    },
     async configure(changes={}) { await handlers["craft-configure"]({token:this.status().token, options:{...this.status().options,mode:"sets",roles:["forge","research"],...changes}}); },
     complete(index, bonuses=[], quality=3) { this.bonuses=bonuses;this.quality=quality;runtime.callFunction("采集核心碰撞",1,tiles[index].uid,0,0,0,0,0,0); },
     balance: () => [save.getAt(1, 6, 0), save.getAt(2, 6, 0)],

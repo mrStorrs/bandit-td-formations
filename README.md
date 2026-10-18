@@ -23,11 +23,12 @@ research and drilling mod for Bandit Simulator TD (Steam app 4267800).
 - **Automatic repeat crafting:** forging, crafting, and alchemy stations remember
   their last started recipe and material multiplier. Each empty station queues
   another batch of **10**, waiting for materials when necessary.
-- **Auto-all gear sets:** open **Automation** at the lower right to cycle checked
-  work/combat roles or loop one role. Choose tier and minimum rarity, lock
-  matching pieces, optionally sell new rejected crafts, and keep making more sets.
-  Forge and crafting loop independently in batches of **10**.
-- **Auto research and drill:** enabled by default in **Automation**. Research
+- **Crafting controls per station:** select a forge, crafting station or brewery
+  to open its automation popup. Each station saves its own mode and pause state.
+  Equipment stations can cycle checked work/combat roles or loop one role, with
+  their own tier, minimum rarity, material multiplier and auto-sell setting.
+  They keep and lock useful gear and craft in batches of **10**.
+- **Auto research and drill:** enabled by default in **Research & drilling**. Research
   prioritizes the Research bonus, then regular unlocks and advanced trees in
   category order. Each tree finishes to its current cap. Drilling finishes
   unlocked classes in tier order. Manual choices take priority until their cap.
@@ -245,6 +246,26 @@ can inspect it. A match is locked before these systems resume.
 Talent filters are not included yet. The matching code accepts typed criteria
 combined with OR, so more targets can be added without rewriting the rolling controls.
 
+## Station crafting controls
+
+Select a forge, crafting station or brewery on the map. Its **Automation** popup
+opens at the upper right, labeled with the station type and number. Switching
+stations displays that station's saved settings; closing the native station
+panel hides the popup. Unapplied edits are discarded when switching stations.
+
+Each physical station has independent settings, even two forges beside each
+other. Choose **Repeat current ×10** or, for equipment stations, **Auto-all sets**.
+Click **Apply / Start** to save and enable that station. **Pause** stops its new
+orders and mod sales while its paid queue finishes. You can change settings and
+apply them while running; new recipes start after the current queue finishes.
+Closing or collapsing the popup does not stop automation.
+
+On the first update, existing global crafting settings are copied to each built
+equipment station, including paused/running status. Breweries keep repeating
+normally. Newly built stations default to Repeat current ×10 and wait for a
+remembered recipe. Settings survive moving stations, changing maps and restarting;
+demolition clears them. They are saved locally per campaign, outside Steam Cloud.
+
 ## Repeat crafting
 
 Start a recipe at a forging, crafting, or alchemy station normally. When that
@@ -254,14 +275,15 @@ one busy station does not hold up the others. Existing active queues are learned
 automatically when the mod loads. An empty station with no remembered recipe
 stays idle until you start something there.
 
-**Repeat current ×10** is the default crafting mode in the lower-right
-**Automation** panel. It uses the game's material costs and requires enough
+**Repeat current ×10** is the default mode in each station's popup.
+It uses the game's material costs and requires enough
 materials for all 10 crafts. If supplies are short, it
 waits and checks again about once per second. It never adds to an unfinished
 queue or grants completed items directly; workers still do the crafting normally.
 
 Use the station's normal **Cancel** action to stop its repeat. Start another
-recipe to enable it again and replace the remembered choice. Moving a station
+recipe to replace the remembered choice. If you also pressed **Pause** in the
+popup, use **Apply repeat ×10** to resume. Moving a station
 keeps its remembered recipe; demolishing it clears that choice. Repeat waits
 while the game is paused, menus or transitions are open, or the station is
 unavailable. Full inventory keeps the native queue unfinished and prevents a
@@ -277,9 +299,10 @@ once at those empty stations to teach the mod what to repeat.
 
 ## Auto-all gear sets
 
-Open **Automation** at the lower right and select **Auto-all sets**. Choose a tier
-(T1–T9), minimum rarity (the game's six color grades), and the native material
-multiplier (×1, ×10 or ×100). Click **Apply / Start**. The dropdown offers:
+Select an equipment station and choose **Auto-all sets** in its popup. Choose a
+tier (T1–T9), minimum rarity (the game's six color grades), and native material
+multiplier (×1, ×10 or ×100). Click **Apply / Start**. These settings apply only
+to that station. The dropdown offers:
 
 - **Cycle checked roles:** use the checked jobs, prioritizing Forger, Researcher,
   then Logger, Miner, Planter, Crafter, Alchemist, Builder, Trainer and the three
@@ -320,8 +343,10 @@ the same recipe per batch** and paying the full native material cost up front.
 The forge covers weapons and hand gear; crafting covers head/belt gear and
 accessories. Each loop advances to the next checked role once its own two pieces
 are covered, then starts its next round without waiting for the other loop.
-The panel shows each loop's role and round separately. Multiple stations of
-the same kind split that loop's missing slots.
+The selected station's popup shows its role, round and progress. Stations with
+the same role, tier and rarity target split missing slots; different targets
+run independently. For example, one forge can make T1 Forger equipment while
+another makes T3 combat gear, and a crafting station can focus on Researcher.
 
 A paid batch finishes all ten attempts before that station changes recipe,
 even if an early craft matches. Every result is checked individually. Each
@@ -335,8 +360,8 @@ Qualifying equipment is automatically locked, including existing matches.
 Each result is checked against every job and combat role, regardless of the
 checkboxes or single-role dropdown. With only Forger selected, STR work gloves
 with Build Bonus are kept for Builder, but only Forger sets drive the loop.
-Keepers still need the selected tier, minimum rarity, correct stat and a
-matching role bonus. Work weapons need the job's specific work power. Combat
+Keepers still need that station's selected tier, minimum rarity, correct stat
+and a matching role bonus. Work weapons need the job's specific work power. Combat
 weapons can be any ordinary weapon with the matching attack type and primary
 stat: a sword with AGI, Pierce attack and Pierce Bonus is protected even though
 the AGI loop crafts bows. These alternatives do not replace the chosen weapon
@@ -354,23 +379,24 @@ Queues already present when loading or changing maps are not claimed for mod
 selling: their matching results are protected while Auto-all is active, and
 their rejects follow the game's existing native sale preferences.
 
-**Pause sets** stops new orders and mod sales while paid queues finish. Pause
-before changing roles, tier, rarity or multiplier, then click **Apply / Start**.
-Manual equipment recipe changes or cancellations also pause the set loop.
-Switching back to **Repeat current ×10** restores normal repeat behavior.
-Brewing stations continue their existing repeat-10 behavior in either mode;
-the Alchemist target crafts equipment for that worker.
+**Pause** stops new orders and mod sales at this station while its paid queue
+finishes. Manual equipment recipe changes or cancellations also pause only that
+station's set loop. Changing targets preserves useful results from the old queue
+and stops mod sales of its rejects. Switching back to **Repeat current ×10**
+restores that station's remembered manual recipe. Breweries have their own
+repeat/pause controls; the Alchemist target makes equipment for that worker.
 
 The loop waits for materials, unlocked recipes, usable stations and inventory
 space, and while gameplay is paused or menus/transitions are open. It also
 waits for outfit swaps before counting or locking existing equipment. Settings
-and the running/paused choice persist per campaign across maps and restarts,
-locally rather than through Steam Cloud. The panel can be collapsed while it runs.
+and the running/paused choice persist per station and campaign across maps and
+restarts, locally rather than through Steam Cloud. The popup can be collapsed
+while it runs.
 
 ## Research and drilling
 
 **Auto research** and **Auto drill** start enabled. Each has its own checkbox
-under **Research & drilling** in the lower-right **Automation** panel. Workers
+in the lower-right **Research & drilling** panel. Workers
 still perform the work normally; automation selects the next target and pays
 the game's normal copper cost. It waits when funds are insufficient.
 
@@ -433,7 +459,7 @@ python3 manage.py install --game-dir "/path/to/Steam/steamapps/common/塔防山�
 
 On Windows, use `py -3` in place of `python3` if appropriate. Restart the game
 after installing. Look for the “Formations ready” message on startup.
-The startup message includes the installed version number (currently 1.12.0).
+The startup message includes the installed version number (currently 1.14.0).
 
 The installer backs up the input archive in `cjs-formations-backups/` beside the
 game, verifies the result, then replaces `package.nw` atomically. It does not
@@ -673,6 +699,16 @@ installer tests. In isolated build 25975458, 69 native research completions
 verified Research through levels 1–60, priority after a building upgrade,
 manual overrides and unlocking the Research tree.
 
+Version 1.14.0 moves crafting into a popup for each selected station. Settings,
+pausing, manual overrides and selling are independent per physical station;
+old global preferences migrate to existing stations once. Regression coverage
+includes two forges with different targets, storage races, demolition and
+relocation, stale selection messages, breweries and the separate research UI.
+In isolated build 25975458, native station clicks, popup mouse/keyboard input,
+different-tier queues, keeper locking, separate selling choices and reloads
+passed. Controls were also exercised at 1000×700. Steam/NW.js remains the manual
+check after restarting the installed game.
+
 To check the controls in-game:
 
 1. Arrange your characters, choose their jobs and priority work targets, then
@@ -713,12 +749,13 @@ To check the controls in-game:
     normal costs. Try insufficient materials, then replenish them. Cancel one
     station and confirm it stays stopped; start a new recipe to resume. Restart
     the game and check that remembered recipes still repeat.
-13. Open **Automation**, choose **Auto-all sets**, check the desired work/combat
-    roles and choose tier/rarity, then **Apply / Start**. Confirm batches of ten,
+13. Select a crafting station, choose **Auto-all sets** in its popup, check the
+    desired work/combat roles and choose tier/rarity, then **Apply / Start**. Confirm batches of ten,
     correct stat variants and rolled bonuses, and locked keepers for any role,
     including unchecked jobs. Let one station get ahead: it should advance roles
     and rounds for its own two slots while the other continues, with separate
-    progress in the panel.
+    progress in each station's popup. Give two stations different roles, tiers,
+    rarities and selling options. Pause or cancel one and verify the other continues.
     Disable auto-sell while running and verify rejects remain. Pause, select one
     role in **Loop**, then start and verify only that role repeats while matches
     for other roles are still locked. Verify STR crafts spears, AGI bows and INT
@@ -755,7 +792,8 @@ locks, and event groups.
 station recipes, and refills empty queues through the native crafting functions.
 `src/craft-sets.js` selects role recipes, matches gear and counts separate sets.
 `src/craft-sets-runtime.js` schedules batches of ten, identifies their native
-completion results, locks keepers and handles settings and native sales.
+completion results, locks keepers and handles per-station settings, selection,
+legacy settings migration and native sales.
 `src/study.js` orders unlocked research and drill targets by category or
 class tier. `src/study-runtime.js` selects targets through native functions,
 preserves current targets until their caps, and respects native Repeat.

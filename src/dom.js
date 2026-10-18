@@ -19,7 +19,7 @@
       ]);
     }
     Attach() {
-      const editable = element => element?.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(element?.tagName) || this.recruitPanel?.contains(element) || this.outfitPanel?.contains(element) || this.craftPanel?.contains(element);
+      const editable = element => element?.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(element?.tagName) || this.recruitPanel?.contains(element) || this.outfitPanel?.contains(element) || this.craftPanel?.contains(element) || this.studyPanel?.contains(element);
       const cancel = () => {
         this.held.clear();
         if (this.ready) this.PostToRuntime("cancel", {});
@@ -59,7 +59,7 @@
     }
     craftStatus(state) {
       this.craftState = state;
-      if (!state.visible) { if (this.craftPanel) this.craftPanel.hidden = true; return; }
+      if (!state.visible) { if (this.craftPanel) this.craftPanel.hidden = true; this.craftSelection = null; this.craftSettings = null; return; }
       if (!this.craftPanel) {
         const make = (tag, text, parent) => {
           const element = document.createElement(tag); element.textContent = text;
@@ -67,34 +67,33 @@
           return element;
         };
         const panel = this.craftPanel = make("section", "");
-        panel.id = "cjs-crafting"; panel.setAttribute("aria-label", "Automation");
-        panel.style.cssText = "position:fixed;bottom:12px;right:12px;z-index:2147483646;background:#152025f5;color:#fff;padding:10px 14px;border:1px solid #c0a35b;border-radius:6px;font:14px sans-serif;max-width:calc(100vw - 60px);box-shadow:0 3px 16px #0008";
-        const toggle = this.craftToggle = make("button", "Automation ▸", panel);
-        toggle.id = "cjs-craft-open"; toggle.type = "button"; toggle.setAttribute("aria-expanded", "false");
+        panel.id = "cjs-crafting"; panel.setAttribute("aria-label", "Station crafting");
+        panel.style.cssText = "position:fixed;top:64px;right:12px;z-index:2147483646;background:#152025f5;color:#fff;padding:10px 14px;border:1px solid #c0a35b;border-radius:6px;font:14px sans-serif;max-width:calc(100vw - 60px);box-shadow:0 3px 16px #0008";
+        const toggle = this.craftToggle = make("button", "", panel);
+        toggle.id = "cjs-craft-open"; toggle.type = "button"; toggle.setAttribute("aria-expanded", "true");
         toggle.style.cssText = "background:transparent;color:#fff;border:0;padding:3px;cursor:pointer;font:inherit";
         const body = this.craftBody = make("div", "", panel);
-        body.hidden = true; body.style.cssText = "width:330px;max-width:100%;max-height:calc(100vh - 110px);overflow:auto;padding-top:10px";
+        body.hidden = false; body.style.cssText = "width:330px;max-width:100%;max-height:calc(100vh - 260px);overflow:auto;padding-top:10px";
         toggle.addEventListener("click", () => {
-          body.hidden = !body.hidden; toggle.textContent = body.hidden ? "Automation ▸" : "Automation ▾";
+          body.hidden = !body.hidden; toggle.textContent = `${this.craftTitle} ${body.hidden ? "▸" : "▾"}`;
           toggle.setAttribute("aria-expanded", String(!body.hidden));
         });
-        const select = (title, id, options) => {
-          const label = make("label", title + " ", body); label.style.cssText = "display:block;margin:0 0 9px";
+        const select = (title, id, options, parent = body) => {
+          const label = make("label", title + " ", parent); label.style.cssText = "display:block;margin:0 0 9px";
           const input = make("select", "", label); input.id = id; input.style.cssText = "font:inherit;max-width:100%";
           for (const [value, text] of options) make("option", text, input).value = String(value);
           return input;
         };
-        this.studySection = make("fieldset", "", body);
-        this.studySection.style.cssText = "border:1px solid #5a676d;margin:0 0 12px;padding:8px";
-        this.studyStatus(this.studyState || { visible: false });
-        make("strong", "Crafting", body).style.cssText = "display:block;margin-bottom:10px";
+        make("div", "Settings apply only to this station.", body).style.cssText = "margin-bottom:10px;color:#c5ced1";
         this.craftMode = select("Mode", "cjs-craft-mode", [["repeat", "Repeat current ×10"], ["sets", "Auto-all sets"]]);
-        this.craftLoop = select("Loop", "cjs-craft-loop", [["all", "Cycle checked roles"], ...state.roles.map(r => [r.id, r.name])]);
-        make("div", "Choose a single role to repeat only that set. Combat weapons: STR spear, AGI bow, INT fan.", body).style.cssText = "margin:-3px 0 10px;color:#c5ced1;font-size:12px";
-        this.craftTier = select("Tier", "cjs-craft-tier", Array.from({ length: 9 }, (_, i) => [i + 1, `T${i + 1}`]));
-        this.craftMinimum = select("Minimum rarity", "cjs-craft-minimum", ["White", "Green", "Blue", "Purple", "Gold", "Red"].map((name, i) => [i + 1, `${i + 1} · ${name} or better`]));
-        this.craftMultiplier = select("Materials per craft", "cjs-craft-multiplier", [1, 10, 100].map(n => [n, `×${n}`]));
-        const roles = make("fieldset", "", body);
+        this.craftGear = make("div", "", body);
+        const gearSelect = (title, id, options) => select(title, id, options, this.craftGear);
+        this.craftLoop = gearSelect("Loop", "cjs-craft-loop", [["all", "Cycle checked roles"], ...state.roles.map(r => [r.id, r.name])]);
+        make("div", "Choose a single role to repeat only that set. Combat weapons: STR spear, AGI bow, INT fan.", this.craftGear).style.cssText = "margin:-3px 0 10px;color:#c5ced1;font-size:12px";
+        this.craftTier = gearSelect("Tier", "cjs-craft-tier", Array.from({ length: 9 }, (_, i) => [i + 1, `T${i + 1}`]));
+        this.craftMinimum = gearSelect("Minimum rarity", "cjs-craft-minimum", ["White", "Green", "Blue", "Purple", "Gold", "Red"].map((name, i) => [i + 1, `${i + 1} · ${name} or better`]));
+        this.craftMultiplier = gearSelect("Materials per craft", "cjs-craft-multiplier", [1, 10, 100].map(n => [n, `×${n}`]));
+        const roles = make("fieldset", "", this.craftGear);
         roles.style.cssText = "border:1px solid #5a676d;margin:0 0 10px;padding:8px";
         make("legend", "Roles to cycle", roles);
         const grid = make("div", "", roles); grid.style.cssText = "display:grid;grid-template-columns:1fr 1fr;gap:7px";
@@ -104,40 +103,56 @@
           input.type = "checkbox"; input.id = `cjs-craft-role-${role.id}`; this.craftRoles[role.id] = input;
           make("span", ` ${role.name}${role.combat ? "" : " · " + ["", "STR", "AGI", "INT"][role.stat]}`, label);
         }
-        const sellLabel = make("label", "", body); sellLabel.style.cssText = "display:block;margin-bottom:10px";
+        const sellLabel = make("label", "", this.craftGear); sellLabel.style.cssText = "display:block;margin-bottom:10px";
         this.craftSell = make("input", "", sellLabel); this.craftSell.type = "checkbox"; this.craftSell.id = "cjs-craft-sell";
         make("span", " Auto-sell non-matching crafts", sellLabel);
         this.craftButton = make("button", "Apply / Start", body); this.craftButton.id = "cjs-craft-apply"; this.craftButton.type = "button";
         this.craftButton.style.cssText = "background:#c0a35b;color:#10191d;border:0;border-radius:4px;padding:7px 12px;cursor:pointer;font:inherit";
+        this.craftPause = make("button", "Pause", body); this.craftPause.id = "cjs-craft-pause"; this.craftPause.type = "button";
+        this.craftPause.style.cssText = "margin-left:8px;padding:7px 12px;cursor:pointer;font:inherit";
         this.craftInfo = make("div", "", body); this.craftInfo.setAttribute("role", "status");
         this.craftInfo.style.cssText = "margin-top:10px;line-height:1.4;white-space:pre-line";
-        make("div", "Forge and crafting loop independently, in batches of 10. Checked roles and Loop choose what to craft. Items matching any job or combat role at your tier and minimum rarity are kept and locked, including unchecked roles and compatible combat weapons. Each piece needs the correct stats and a matching role bonus. Selling affects only new Auto-all crafts. Brewing keeps repeating its last recipe ×10.", body).style.cssText = "margin-top:8px;color:#c5ced1;font-size:12px;line-height:1.4";
+        make("div", "This station makes its own pieces in batches of 10. Checked roles and Loop choose what to craft. Gear matching any job or combat role at this tier and minimum rarity is kept and locked, including unchecked roles. Auto-sell affects only this station’s new Auto-all crafts. Changes apply after the current queue finishes.", this.craftGear).style.cssText = "margin-top:8px;color:#c5ced1;font-size:12px;line-height:1.4";
         const controls = () => {
-          const busy = this.craftState.busy, running = this.craftState.running, sets = this.craftMode.value === "sets";
-          this.craftMode.disabled = busy || running;
-          for (const input of [this.craftLoop, this.craftTier, this.craftMinimum, this.craftMultiplier]) input.disabled = busy || running || !sets;
-          for (const input of Object.values(this.craftRoles)) input.disabled = busy || running || !sets || this.craftLoop.value !== "all";
+          const busy = this.craftState.busy || this.craftState.error, gear = this.craftState.station.kind !== 6;
+          const sets = gear && this.craftMode.value === "sets";
+          this.craftMode.disabled = this.craftState.busy || !gear;
+          this.craftGear.hidden = !gear;
+          for (const input of [this.craftLoop, this.craftTier, this.craftMinimum, this.craftMultiplier]) input.disabled = this.craftState.busy || !sets;
+          for (const input of Object.values(this.craftRoles)) input.disabled = this.craftState.busy || !sets || this.craftLoop.value !== "all";
           this.craftSell.disabled = busy || !sets;
-          this.craftButton.disabled = busy;
-          this.craftButton.textContent = running ? "Pause sets" : sets ? "Apply / Start" : "Apply repeat ×10";
+          this.craftButton.disabled = this.craftState.busy;
+          this.craftButton.textContent = sets ? "Apply / Start" : "Apply repeat ×10";
+          this.craftPause.disabled = busy || !this.craftState.enabled;
         };
         this.updateCraftControls = controls;
         this.craftMode.addEventListener("change", controls); this.craftLoop.addEventListener("change", controls);
         this.craftSell.addEventListener("change", () => {
-          if (this.craftState.running && !this.craftState.busy) this.PostToRuntime("craft-sell", { token: this.craftState.token, autoSell: this.craftSell.checked });
+          if (this.craftState.visible && this.craftState.running && !this.craftState.busy) this.PostToRuntime("craft-sell", { token: this.craftState.token, autoSell: this.craftSell.checked });
         });
         this.craftButton.addEventListener("click", () => {
           if (!this.craftState.visible || this.craftState.busy) return;
           this.PostToRuntime("cancel", {});
-          if (this.craftState.running) this.PostToRuntime("craft-pause", { token: this.craftState.token });
-          else this.PostToRuntime("craft-configure", { token: this.craftState.token, options: {
+          this.PostToRuntime("craft-configure", { token: this.craftState.token, options: {
             mode: this.craftMode.value, loop: this.craftLoop.value, roles: Object.keys(this.craftRoles).filter(id => this.craftRoles[id].checked),
             tier: Number(this.craftTier.value), minimum: Number(this.craftMinimum.value), multiplier: Number(this.craftMultiplier.value), autoSell: this.craftSell.checked,
           } });
         });
+        this.craftPause.addEventListener("click", () => {
+          if (!this.craftState.visible || this.craftState.busy || !this.craftState.enabled) return;
+          this.PostToRuntime("cancel", {});
+          this.PostToRuntime("craft-pause", { token: this.craftState.token });
+        });
         for (const event of ["pointerdown", "pointerup", "pointermove", "pointerrawupdate", "pointercancel", "mousedown", "mouseup", "mousemove", "click", "dblclick", "touchstart", "touchend", "touchmove", "touchcancel", "keydown", "keyup", "wheel"]) panel.addEventListener(event, e => e.stopPropagation());
         document.body.appendChild(panel);
       }
+      if (this.craftSelection !== state.token) {
+        this.craftSelection = state.token; this.craftBody.hidden = false; this.craftBody.scrollTop = 0;
+        if (this.studyBody) { this.studyBody.hidden = true; this.studyToggle.textContent = "Research & drilling ▸"; this.studyToggle.setAttribute("aria-expanded", "false"); }
+      }
+      this.craftTitle = `${state.station.name} #${state.station.id} · Automation`;
+      this.craftToggle.textContent = `${this.craftTitle} ${this.craftBody.hidden ? "▸" : "▾"}`;
+      this.craftToggle.setAttribute("aria-expanded", String(!this.craftBody.hidden));
       this.craftPanel.hidden = false;
       const settings = JSON.stringify([state.token, state.options]);
       if (settings !== this.craftSettings) {
@@ -152,9 +167,29 @@
     }
     studyStatus(state) {
       this.studyState = state;
-      if (!this.studySection) return;
-      this.studySection.hidden = !state.visible;
-      if (!state.visible) return;
+      if (!state.visible) { if (this.studyPanel) this.studyPanel.hidden = true; return; }
+      if (!this.studyPanel) {
+        const panel = this.studyPanel = document.createElement("section");
+        panel.id = "cjs-study"; panel.setAttribute("aria-label", "Research and drilling");
+        panel.style.cssText = "position:fixed;bottom:12px;right:12px;z-index:2147483646;background:#152025f5;color:#fff;padding:10px 14px;border:1px solid #c0a35b;border-radius:6px;font:14px sans-serif;max-width:calc(100vw - 60px);box-shadow:0 3px 16px #0008";
+        const toggle = this.studyToggle = document.createElement("button");
+        toggle.id = "cjs-study-open"; toggle.type = "button"; toggle.textContent = "Research & drilling ▸"; toggle.setAttribute("aria-expanded", "false");
+        toggle.style.cssText = "background:transparent;color:#fff;border:0;padding:3px;cursor:pointer;font:inherit";
+        panel.appendChild(toggle);
+        const body = this.studyBody = document.createElement("div");
+        body.hidden = true; body.style.cssText = "width:330px;max-width:100%;max-height:calc(100vh - 110px);overflow:auto;padding-top:10px";
+        panel.appendChild(body);
+        toggle.addEventListener("click", () => {
+          body.hidden = !body.hidden; toggle.textContent = body.hidden ? "Research & drilling ▸" : "Research & drilling ▾";
+          toggle.setAttribute("aria-expanded", String(!body.hidden));
+          if (!body.hidden && this.craftBody) { this.craftBody.hidden = true; this.craftToggle.textContent = `${this.craftTitle} ▸`; this.craftToggle.setAttribute("aria-expanded", "false"); }
+        });
+        this.studySection = document.createElement("fieldset"); this.studySection.style.cssText = "border:1px solid #5a676d;margin:0;padding:8px";
+        body.appendChild(this.studySection);
+        for (const event of ["pointerdown", "pointerup", "pointermove", "pointerrawupdate", "pointercancel", "mousedown", "mouseup", "mousemove", "click", "dblclick", "touchstart", "touchend", "touchmove", "touchcancel", "keydown", "keyup", "wheel"]) panel.addEventListener(event, e => e.stopPropagation());
+        document.body.appendChild(panel);
+      }
+      this.studyPanel.hidden = false;
       if (!this.studyInputs) {
         const make = (tag, text, parent = this.studySection) => {
           const element = document.createElement(tag); element.textContent = text;

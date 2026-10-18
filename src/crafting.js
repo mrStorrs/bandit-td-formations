@@ -101,7 +101,7 @@
                 station = current.stations.find(st => st.x === x && st.y === y);
                 if (index === 3) moving = !!params[7];
                 if (station && index === 1 && (!params[1] || moving) && !sets.owns(current, station) &&
-                    (station.kind === 6 || !sets.controls(current))) observe(current, station, params[0]);
+                    !sets.controls(current, station)) observe(current, station, params[0]);
               }
             } catch (error) { fail(error); }
           }
@@ -113,8 +113,9 @@
                   observe(current, station, variables[2].GetValue());
                   if (station.kind !== 6) sets.cancel(current, station, true);
                 }
-                if (index !== 0) sets.cancel(current, station, station.kind !== 6 && !moving &&
-                  (index === 1 ? !!params[1] : index === 2 || index === 3));
+                if (index !== 0) sets.cancel(current, station, !moving &&
+                  (index === 1 ? !!params[1] : index === 2 || index === 3),
+                  index === 3 && !moving && current.save.getAt(station.id, 0, 21) === 0);
                 if (index === 1 && params[1] && !moving && current.save.getAt(params[0], 0, 13) === 0) forget(current, station.id);
                 if (index === 2 && !moving && current.save.getAt(station.id, 3, 21) === 0) forget(current, station.id);
                 if (index === 3 && !moving && current.save.getAt(station.id, 0, 21) === 0) forget(current, station.id);
@@ -202,10 +203,13 @@
           if (!current) { sets.tick(null); return; }
           if (!hooked) installHooks();
           const state = campaign(current.saveId);
-          const gearControlled = sets.tick(current);
+          sets.tick(current);
           for (const station of current.stations) {
-            if (station.queue > 0) { if (!sets.owns(current, station) && (station.kind === 6 || !gearControlled)) observe(current, station); continue; }
-            if (gearControlled && station.kind !== 6) continue;
+            if (current.save.getAt(station.id, 3, 21) > 0) {
+              if (!sets.owns(current, station) && !sets.controls(current, station)) observe(current, station);
+              continue;
+            }
+            if (sets.controls(current, station)) continue;
             const entry = state.entries.get(station.id);
             if (!state.ready || current.blocked || station.queue !== 0 || !station.usable || !valid(entry)) continue;
             if (entry.type !== station.type || entry.owner !== station.owner) { forget(current, station.id); continue; }
