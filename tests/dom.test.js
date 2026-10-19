@@ -264,7 +264,7 @@ test("crafting controls offer mode, role checkboxes, single-role override, tier,
   f.dom.craftTier.value="2";f.dom.craftMinimum.value="5";f.dom.craftMultiplier.value="10";f.dom.craftSell.checked=false;
   f.dom.craftButton.dispatch("click");
   assert.deepEqual(JSON.parse(JSON.stringify(f.messages.at(-1))),["craft-configure",{token:craftState.token,options:{
-    mode:"sets",loop:"combat-agi",roles:["forge","research"],tier:2,minimum:5,multiplier:10,autoSell:false,forgeOutput:"all",
+    mode:"sets",loop:"combat-agi",roles:["forge","research"],tier:2,minimum:5,multiplier:10,autoSell:false,keepLimit:null,forgeOutput:"all",
   }}]);
 });
 test("crafting status preserves unsaved edits and permits disabling sales during an active loop",()=>{
@@ -278,6 +278,22 @@ test("crafting status preserves unsaved edits and permits disabling sales during
   for(const event of ["pointerdown","pointermove","pointerup","wheel","keydown"])assert.equal(f.dom.craftPanel.dispatch(event).stopped,true);
   f.handlers["craft-status"]({visible:false});assert.equal(f.dom.craftPanel.hidden,true);
   const count=f.messages.length;f.dom.craftButton.dispatch("click");assert.equal(f.messages.length,count);
+});
+
+test("station output controls save limits in either mode without applying draft recipe changes",()=>{
+  const f=fixture();f.handlers["craft-status"](craftState);
+  assert.equal(f.dom.craftOutput.value,"normal");assert.equal(f.dom.craftKeepLabel.hidden,true);
+  f.dom.craftTier.value="4";f.dom.craftOutput.value="surplus";f.dom.craftKeep.value="3";f.dom.craftOutput.dispatch("change");
+  assert.deepEqual(f.messages.at(-1),["craft-output",{token:craftState.token,keepLimit:3}]);
+  const saved={...craftState,options:{...craftState.options,keepLimit:3}};f.handlers["craft-status"](saved);
+  assert.equal(f.dom.craftTier.value,"4");assert.equal(f.dom.craftKeep.value,"3");assert.equal(f.dom.craftKeepLabel.hidden,false);
+  f.dom.craftKeep.value="1.5";const count=f.messages.length;f.dom.craftKeep.dispatch("change");assert.equal(f.messages.length,count);
+  f.dom.craftKeep.value="2";f.dom.craftKeep.dispatch("change");assert.equal(f.messages.at(-1)[1].keepLimit,2);
+  f.dom.craftOutput.value="all";f.dom.craftOutput.dispatch("change");assert.equal(f.messages.at(-1)[1].keepLimit,0);
+  for(const change of [{busy:true},{error:true},{visible:false},{station:{id:5,kind:6,name:"Brewery"}}]){
+    f.handlers["craft-status"]({...saved,...change});const count=f.messages.length;f.dom.craftOutput.dispatch("change");assert.equal(f.messages.length,count);
+  }
+  f.handlers["craft-status"]({...craftState,token:"station:other"});assert.equal(f.dom.craftOutput.value,"normal");
 });
 
 test("research and drill toggles work without a crafting station panel",()=>{

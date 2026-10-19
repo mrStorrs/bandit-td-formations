@@ -50,6 +50,7 @@ function fixture(stored = new Map(), extended = false) {
   native("失去材料", (amount, id) => { if (!f.refusePayment || id === 1) save.setAt(save.getAt(id, 6, 0) - amount, id, 6, 0); });
   native("生成单体设施", () => {});
   native("刷新底部菜单", () => {});
+  native("刷新物品", () => {});
   native("背包容量上限", () => f.capacity ?? 60);
   native("出售物品", row => {
     if (f.refuseSale) return;
@@ -62,6 +63,7 @@ function fixture(stored = new Map(), extended = false) {
     save.setAt(row,row,0,7);save.setAt(recipe,row,1,7);save.setAt(1,row,2,7);save.setAt(tier,row,3,7);
     save.setAt(quality,row,5,7);save.setAt(level,row,6,7);save.setAt(coefficient,row,8,7);
     for(let i=0;i<6;i++)save.setAt(f.bonuses?.[i]??0,row,9+i,7);
+    for(let i=0;i<6;i++)save.setAt(f.rolls?.[i]??0,row,15+i,7);
     if(autoSell&&quality<=save.getAt(9,1,0)) runtime.callFunction("出售物品",row,false,true);
   });
   native("采集核心碰撞", (character, uid) => {

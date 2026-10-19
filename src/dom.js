@@ -59,7 +59,7 @@
     }
     craftStatus(state) {
       this.craftState = state;
-      if (!state.visible) { if (this.craftPanel) this.craftPanel.hidden = true; this.craftSelection = null; this.craftSettings = null; return; }
+      if (!state.visible) { if (this.craftPanel) this.craftPanel.hidden = true; this.craftSelection = null; this.craftSettings = null; this.craftOutputSettings = null; return; }
       if (!this.craftPanel) {
         const make = (tag, text, parent) => {
           const element = document.createElement(tag); element.textContent = text;
@@ -86,6 +86,14 @@
         };
         make("div", "Settings apply only to this station.", body).style.cssText = "margin-bottom:10px;color:#c5ced1";
         this.craftMode = select("Mode", "cjs-craft-mode", [["repeat", "Repeat current ×10"], ["sets", "Auto-all sets"]]);
+        this.craftOutputBox = make("div", "", body);
+        this.craftOutput = select("Sell output", "cjs-craft-output", [["normal", "Normal"], ["all", "Sell all"], ["surplus", "Sell over limit"]], this.craftOutputBox);
+        this.craftKeepLabel = make("label", "Keep per item / bonus ", this.craftOutputBox);
+        this.craftKeepLabel.style.cssText = "display:block;margin-bottom:9px";
+        this.craftKeep = make("input", "", this.craftKeepLabel); this.craftKeep.type = "number"; this.craftKeep.id = "cjs-craft-keep";
+        this.craftKeep.min = "1"; this.craftKeep.max = "999"; this.craftKeep.step = "1"; this.craftKeep.value = "1"; this.craftKeep.required = true;
+        this.craftKeep.style.cssText = "width:65px;font:inherit";
+        make("div", "Selling changes apply immediately in either mode. Sell over limit keeps the best N of each item variant, tier and work/combat bonus: rarity → matching bonus rolls → main roll → level. Equipped gear and existing locks count but are protected. This mode can replace its own auto-locked crafts. Pause stops selling.", this.craftOutputBox).style.cssText = "margin:0 0 10px;color:#c5ced1;font-size:12px;line-height:1.4";
         this.craftGear = make("div", "", body);
         const gearSelect = (title, id, options) => select(title, id, options, this.craftGear);
         this.craftLoop = gearSelect("Loop", "cjs-craft-loop", [["all", "Cycle checked roles"], ...state.roles.map(r => [r.id, r.name])]);
@@ -116,32 +124,56 @@
         this.craftPause.style.cssText = "margin-left:8px;padding:7px 12px;cursor:pointer;font:inherit";
         this.craftInfo = make("div", "", body); this.craftInfo.setAttribute("role", "status");
         this.craftInfo.style.cssText = "margin-top:10px;line-height:1.4;white-space:pre-line";
-        make("div", "This station makes its own pieces in batches of 10. Checked roles and Loop choose what to craft. Gear matching any job or combat role at this tier and minimum rarity is kept and locked, including unchecked roles. Auto-sell affects only this station’s new Auto-all crafts. Changes apply after the current queue finishes.", this.craftGear).style.cssText = "margin-top:8px;color:#c5ced1;font-size:12px;line-height:1.4";
+        make("div", "This station makes its own pieces in batches of 10. Checked roles and Loop choose what to craft. Normally, matching gear is kept and locked for every role, including unchecked roles. Sell all overrides keeping; Sell over limit removes weaker duplicates. Non-matches follow the checkbox above. Recipe changes apply after the current queue finishes.", this.craftGear).style.cssText = "margin-top:8px;color:#c5ced1;font-size:12px;line-height:1.4";
         const controls = () => {
           const busy = this.craftState.busy || this.craftState.error, gear = this.craftState.station.kind !== 6;
           const sets = gear && this.craftMode.value === "sets";
+          const surplus = gear && this.craftOutput.value === "surplus";
           this.craftMode.disabled = this.craftState.busy || !gear;
+          this.craftOutputBox.hidden = !gear;
+          this.craftOutput.disabled = busy || !gear;
+          this.craftKeepLabel.hidden = !surplus;
+          this.craftKeep.disabled = busy || !surplus;
           this.craftGear.hidden = !gear;
           this.craftForgeLabel.hidden = this.craftState.station.kind !== 4;
           this.craftForgeOutput.disabled = this.craftState.busy || !sets || this.craftState.station.kind !== 4;
           for (const input of [this.craftLoop, this.craftTier, this.craftMinimum, this.craftMultiplier]) input.disabled = this.craftState.busy || !sets;
+          this.craftMinimum.disabled = this.craftState.busy || !(sets || surplus);
           for (const input of Object.values(this.craftRoles)) input.disabled = this.craftState.busy || !sets || this.craftLoop.value !== "all";
-          this.craftSell.disabled = busy || !sets;
+          this.craftSell.disabled = busy || !(sets || surplus) || this.craftOutput.value === "all";
           this.craftButton.disabled = this.craftState.busy;
           this.craftButton.textContent = sets ? "Apply / Start" : "Apply repeat ×10";
           this.craftPause.disabled = busy || !this.craftState.enabled;
         };
         this.updateCraftControls = controls;
         this.craftMode.addEventListener("change", controls); this.craftLoop.addEventListener("change", controls);
+        const outputLimit = () => {
+          if (this.craftState.station.kind === 6 || this.craftOutput.value === "normal") return null;
+          if (this.craftOutput.value === "all") return 0;
+          const limit = Number(this.craftKeep.value);
+          if (!this.craftKeep.checkValidity() || !Number.isSafeInteger(limit) || limit < 1 || limit > 999) {
+            this.craftKeep.reportValidity(); return undefined;
+          }
+          return limit;
+        };
+        const saveOutput = () => {
+          controls();
+          if (!this.craftState.visible || this.craftState.busy || this.craftState.error || this.craftState.station.kind === 6) return;
+          const keepLimit = outputLimit(); if (keepLimit === undefined) return;
+          this.PostToRuntime("cancel", {});
+          this.PostToRuntime("craft-output", { token: this.craftState.token, keepLimit });
+        };
+        this.craftOutput.addEventListener("change", saveOutput); this.craftKeep.addEventListener("change", saveOutput);
         this.craftSell.addEventListener("change", () => {
-          if (this.craftState.visible && this.craftState.running && !this.craftState.busy) this.PostToRuntime("craft-sell", { token: this.craftState.token, autoSell: this.craftSell.checked });
+          if (this.craftState.visible && (this.craftState.running || this.craftState.options.keepLimit > 0) && !this.craftState.busy) this.PostToRuntime("craft-sell", { token: this.craftState.token, autoSell: this.craftSell.checked });
         });
         this.craftButton.addEventListener("click", () => {
           if (!this.craftState.visible || this.craftState.busy) return;
+          const keepLimit = outputLimit(); if (keepLimit === undefined) return;
           this.PostToRuntime("cancel", {});
           this.PostToRuntime("craft-configure", { token: this.craftState.token, options: {
             mode: this.craftMode.value, loop: this.craftLoop.value, roles: Object.keys(this.craftRoles).filter(id => this.craftRoles[id].checked),
-            tier: Number(this.craftTier.value), minimum: Number(this.craftMinimum.value), multiplier: Number(this.craftMultiplier.value), autoSell: this.craftSell.checked,
+            tier: Number(this.craftTier.value), minimum: Number(this.craftMinimum.value), multiplier: Number(this.craftMultiplier.value), autoSell: this.craftSell.checked, keepLimit,
             forgeOutput: this.craftState.station.kind === 4 ? this.craftForgeOutput.value : "all",
           } });
         });
@@ -161,7 +193,14 @@
       this.craftToggle.textContent = `${this.craftTitle} ${this.craftBody.hidden ? "▸" : "▾"}`;
       this.craftToggle.setAttribute("aria-expanded", String(!this.craftBody.hidden));
       this.craftPanel.hidden = false;
-      const settings = JSON.stringify([state.token, state.options]);
+      const outputSettings = JSON.stringify([state.token, state.options.keepLimit ?? null]);
+      if (outputSettings !== this.craftOutputSettings) {
+        this.craftOutputSettings = outputSettings;
+        const limit = state.options.keepLimit;
+        this.craftOutput.value = limit == null ? "normal" : limit === 0 ? "all" : "surplus";
+        this.craftKeep.value = String(limit > 0 ? limit : 1);
+      }
+      const settings = JSON.stringify([state.token, { ...state.options, keepLimit: null }]);
       if (settings !== this.craftSettings) {
         this.craftSettings = settings;
         const o = state.options;

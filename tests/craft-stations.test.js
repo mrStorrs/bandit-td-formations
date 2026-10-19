@@ -70,7 +70,7 @@ test("old global settings migrate once to existing gear stations, with new stati
     const legacy={version:1,enabled,options:{...options,loop:"combat-int",minimum:5,autoSell:false}};
     const f=fixture(new Map([["cjs-formations:craft-sets:v1:12345678",legacy]]),true);
     await f.tick();await f.tick();
-    for(const id of [3,4]){assert.deepEqual(saved(f,id).options,{...legacy.options,forgeOutput:"all"});assert.equal(saved(f,id).enabled,enabled);}
+    for(const id of [3,4]){assert.deepEqual(saved(f,id).options,{...legacy.options,keepLimit:null,forgeOutput:"all"});assert.equal(saved(f,id).enabled,enabled);}
     assert.equal(saved(f,5).options.mode,"repeat");assert.equal(saved(f,5).enabled,true);
     const index=addForge(f);await f.select(index);assert.equal(f.status().options.mode,"repeat");
     assert.equal(saved(f,10).options.mode,"repeat");assert.deepEqual(f.stored.get("cjs-formations:craft-sets:v1:12345678"),legacy);

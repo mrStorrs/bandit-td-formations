@@ -25,7 +25,8 @@ test("single-role dropdown overrides checkboxes without losing their choices", (
 });
 test("invalid crafting preferences are rejected before any crafting or selling", () => {
   for (const bad of [{ mode:"anything" }, { loop:"missing" }, { roles:["forge","forge"] }, { roles:["missing"] },
-    { tier:0 }, { tier:10 }, { tier:1.5 }, { minimum:0 }, { minimum:7 }, { multiplier:2 }, { autoSell:"true" }, {forgeOutput:"invalid"}, {forgeOutput:null}]) {
+    { tier:0 }, { tier:10 }, { tier:1.5 }, { minimum:0 }, { minimum:7 }, { multiplier:2 }, { autoSell:"true" },
+    {keepLimit:-1}, {keepLimit:1.5}, {keepLimit:"2"}, {keepLimit:1000}, {forgeOutput:"invalid"}, {forgeOutput:null}]) {
     assert.throws(() => api.validateCraftOptions(options(bad)), /Invalid/);
   }
   const o = options(); const valid = api.validateCraftOptions(o); o.roles.length = 0;
@@ -35,6 +36,7 @@ test("older crafting settings default to full sets", () => {
   const old=options();delete old.forgeOutput;
   assert.equal(api.validateCraftOptions(old).forgeOutput,"all");
   assert.equal(api.validateCraftOptions(options({forgeOutput:"weapons"})).forgeOutput,"weapons");
+  delete old.keepLimit; assert.equal(api.validateCraftOptions(old).keepLimit,null);
 });
 test("a match requires the exact recipe/stat variant and tier, minimum quality and the specific rolled bonus", () => {
   const t = target("forge"), o = options();

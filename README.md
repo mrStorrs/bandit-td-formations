@@ -346,8 +346,9 @@ to that station. The dropdown offers:
 - **A single job or combat role:** repeatedly make that role's sets. This
   overrides the crafting checkboxes without clearing their selections.
 
-These selections control what gets crafted. Matching equipment for all twelve
-roles is kept and locked, including unchecked roles and when looping one role.
+These selections control what gets crafted. With **Sell output: Normal**, matching
+equipment for all twelve roles is kept and locked, including unchecked roles
+and when looping one role.
 
 Forges also offer a **Forge output** dropdown in Auto-all mode:
 
@@ -400,16 +401,16 @@ come from the shared campaign.
 
 A paid batch finishes all ten attempts before that station changes recipe,
 even if an early craft matches. Every result is checked individually. Each
-new round needs another copy of that loop's pieces for every selected role.
-Existing inventory and worn gear count, and any physical piece counts only
-once even if it has several useful bonuses. Extra matches are retained for
-later rounds. Progress is recomputed from gear you still own; selling a keeper
+new round in Normal mode needs another copy of that loop's pieces for every
+selected role. Existing inventory and worn gear count, and any physical piece
+counts only once even if it has several useful bonuses. Extra matches are
+retained for later rounds. Progress is recomputed from gear you still own; selling a keeper
 or changing its rolls makes that piece missing again.
 
-Qualifying equipment is automatically locked, including existing matches.
-Each result is checked against every job and combat role, regardless of the
-checkboxes or single-role dropdown. With only Forger selected, STR work gloves
-with Build Bonus are kept for Builder, but only Forger sets drive the loop.
+In Normal mode, qualifying equipment is automatically locked, including
+existing matches. Each result is checked against every job and combat role,
+regardless of the checkboxes or single-role dropdown. With only Forger selected,
+STR work gloves with Build Bonus are kept for Builder, but only Forger sets drive the loop.
 Keepers still need that station's selected tier, minimum rarity, correct stat
 and a matching role bonus. Work weapons need the job's specific work power. Combat
 weapons can be any ordinary weapon with the matching attack type and primary
@@ -418,16 +419,63 @@ the AGI loop crafts bows. These alternatives do not replace the chosen weapon
 recipe in set progress.
 
 **Auto-sell non-matching crafts** starts checked and can be disabled while
-running. It sells only newly completed Auto-all crafts that qualify for no
-role, using the native equipment sale function. Unchecking it keeps rejects
-unlocked. Existing items, locked items, equipped gear, unrelated loot and
+running. In Normal mode, it sells only newly completed Auto-all crafts that
+qualify for no role, using the native equipment sale function. Unchecking it
+keeps rejects unlocked. Existing items, locked items, equipped gear, unrelated loot and
 brewing outputs are never swept for sale.
 
-For owned Auto-all queues, this decision takes priority over the game's native
-quality-based automatic sale. The native sale preferences are preserved.
-Queues already present when loading or changing maps are not claimed for mod
-selling: their matching results are protected while Auto-all is active, and
-their rejects follow the game's existing native sale preferences.
+### Station output selling
+
+Every forge and crafting station has its own **Sell output** dropdown. Changes
+apply immediately to subsequent completions in either **Repeat current ×10**
+or **Auto-all sets**, including the remaining crafts in an existing queue:
+
+- **Normal** (default): retain the existing keep/lock and reject-selling rules.
+- **Sell all:** sell every new piece that station completes, including matches.
+  Existing gear is untouched.
+- **Sell over limit:** set **Keep per item / bonus** to 1–999. Compare each new
+  piece with the same item variant and tier already in your bag or equipped,
+  keeping the strongest N per work/combat bonus and selling surplus duplicates.
+
+For example, Keep 2 allows two T1 STR work gloves with Forge Bonus and two
+with Build Bonus; AGI gloves, weapons, belts and other tiers have separate
+counts. Unchecked jobs still get their own bonus groups. A multi-bonus piece
+is retained if any of its groups needs it, so such overlaps can leave more
+than N pieces showing a particular bonus. Nonmatching gear follows the
+**Auto-sell non-matching crafts** checkbox; with it off, surplus comparisons
+group nonmatches by their exact set of bonus types.
+
+Strength is ordered by **rarity**, then **total matching bonus roll values**,
+then **main stat roll**, then **equipment level**. Ties keep the existing piece.
+This is a gear comparison rule, not a character-specific damage calculation.
+
+Equipped gear and pre-existing locks count toward the limit but are never
+sold. That includes locks made by older mod versions. Unlock an old item if
+you want it eligible for replacement. New matching crafts retained by this
+mode are auto-locked and tracked by their full item identity, so this station
+can replace its own weaker keepers later. Manually unlocking and relocking an
+item, or upgrading it, removes that automatic replacement permission. Another
+station's tracked locks remain protected. Ambiguous identities are kept.
+
+Comparison is triggered by a new craft and only trims that item variant/tier
+and the bonus groups it touches. It can sell weaker, unlocked duplicates
+already in the bag. It does not sweep unrelated inventory when enabled.
+Settings and tracked locks survive map changes and restarts. **Pause** stops
+both crafting automation and these sales at the selected station.
+Crafts completed while a setting is being saved are retained without selling.
+
+With Sell over limit, Auto-all first fills each chosen recipe/bonus group to
+the keep limit. Once stocked, it cycles upgrade attempts through its selected
+roles and slots in batches of ten, retaining improvements and selling weaker
+duplicates. Sell all also cycles recipes by batch. Both modes honor the forge's
+All / Weapon only / No weapon choice and keep stations independent.
+
+For owned Auto-all queues in Normal mode, the keep/reject decision takes
+priority over the game's native quality-based automatic sale. The native
+sale preferences are preserved. In Normal mode, queues already present when
+loading or changing maps are not claimed for mod selling: their matching
+results are protected while Auto-all is active, and their rejects follow the
+game's existing native sale preferences.
 
 **Pause** stops new orders and mod sales at this station while its paid queue
 finishes. Manual equipment recipe changes or cancellations also pause only that
@@ -824,6 +872,16 @@ refunded its pending level without losing progress, manual training reached
 level 20 with no paths selected, and the crafting branch finished at levels
 10 / 1 after save/load. The panel groups all 16 end jobs by native family.
 
+Version 1.17.0 adds per-station Sell all and Sell over limit. Tests cover
+independent bonus groups, strength ranking, protected gear, managed locks,
+pending/failed settings writes, reloads, station isolation, and upgrade cycles.
+In isolated build 25975458, the real dropdown enabled selling in Repeat,
+Forger and Builder gloves kept separate limits, a crafting station kept its
+best two belts, native sales credited copper, and reload preserved replacement
+permission. Manual unlock/relock protected a keeper. Native Auto-all filled
+four recipe/bonus groups and continued cycling upgrade batches of ten;
+Sell all also cycled weapons-only batches without touching existing gear.
+
 To check the controls in-game:
 
 1. Arrange your characters, choose their jobs and priority work targets, then
@@ -909,7 +967,8 @@ station recipes, and refills empty queues through the native crafting functions.
 queue's paid cost in the unused queue field 12 for correct native refunds.
 `src/gathering.js` focuses gatherers on the weakest remaining resources through
 native production turrets, checking work range, remaining harvests and jobs.
-`src/craft-sets.js` selects role recipes, matches gear and counts separate sets.
+`src/craft-sets.js` selects role recipes, matches gear, counts separate sets,
+and ranks surplus items independently by their recipe, tier and bonus groups.
 `src/craft-sets-runtime.js` schedules batches of ten, identifies their native
 completion results, locks keepers and handles per-station settings, selection,
 legacy settings migration and native sales.
@@ -941,10 +1000,16 @@ from the matching criteria. It applies to every paid roll regardless of targets.
 Crafting memory uses `cjs-formations:crafting:v1:<saveId>` in runtime storage.
 Each entry contains a facility slot, facility type, parent building slot, recipe,
 and material multiplier. Queue progress and materials remain in the game save.
-Set crafting uses `cjs-formations:craft-sets:v1:<saveId>` with validated options
-and an enabled flag. Queue ownership for selling is session-only; it is never
-inferred from inventory changes or persisted queue numbers. Completion hooks
-protect qualifying inherited crafts without claiming them for mod sales.
+Station crafting uses `cjs-formations:craft-stations:v1:<saveId>` with validated
+options, enabled flags and managed keeper identities per station. `keepLimit`
+is null for Normal, zero for Sell all, or 1–999 for Sell over limit. Older
+preferences default to Normal. `cjs-formations:craft-sets:v1:<saveId>` is the
+legacy source used only for migration. Normal-mode queue ownership for selling
+is session-only; qualifying inherited crafts are protected without claiming
+their rejects for mod sales. Explicit output policies apply to newly created
+results of the station's live queue, including after reload. Managed identities
+ignore owner, lock and new-item markers but include level and rolled stats;
+they are not written into native item records.
 Research and drilling use `cjs-formations:study:v1:<saveId>` with separate
 enabled flags, selected end-job IDs, and station/target ownership records.
 Missing/null end-job selections retain the old all-jobs behavior; an empty
