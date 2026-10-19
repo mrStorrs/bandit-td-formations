@@ -467,14 +467,27 @@ The current tree is remembered through copper shortages and restarts. If
 native Repeat is off, the mod resumes the same tree until its cap. A building
 upgrade extends the current tree's cap before another tree is selected.
 
-Drilling chooses the **lowest unlocked class tier** that still needs training
-to unlock the next job, using the game's class order within a tier. It stops
+Under **Drill toward these end jobs**, check the final jobs you want to unlock.
+The 16 end jobs are grouped into **STR, AGI, INT, and Production**, using the
+game's job names. All start checked, including when upgrading older settings.
+Selections are saved per campaign. Uncheck every job to leave automatic
+drilling idle; manual training still works.
+
+Drilling follows **only the checked jobs and their prerequisite paths**. Shared
+prerequisites count toward every selected branch that needs them; unrelated
+jobs are skipped. It chooses the **lowest unlocked class tier** that still needs
+training, using the game's class order within a tier. It stops
 at the native promotion requirement: **level 5 for the starting job, level 10
 for later prerequisite jobs**. Jobs at the end of a branch stop at **level 1**
 to unlock them. Native Repeat stops at that boundary without paying for another
 level; the mod then selects the next unfinished job. Building/class caps still
 apply, and a building upgrade lets an unmet unlock requirement resume.
 Classes already assigned to another drill station are skipped.
+
+Unchecking a branch cancels and refunds an active automatic order if no selected
+job still needs it, once gameplay resumes. Progress is retained, and native
+Repeat cannot buy another level on an unchecked path. Manual targets keep their
+normal priority and training cap, even if they lead to an unchecked job.
 
 Existing automatic orders already at or above their unlock level are canceled
 with the native refund for the pending level, preserving progress. Manually
@@ -491,7 +504,7 @@ for your next choice while its menu remains selected. Queues already running
 when first installing this feature are treated as manual choices.
 
 Settings and current targets persist locally per campaign across map changes
-and restarts. Turning a checkbox off stops new mod orders; current research can
+and restarts. Turning **Auto research** or **Auto drill** off stops new mod orders; current research can
 finish its tree and an active automatic drill stops at its unlock level.
 The game's Repeat preference is preserved.
 New selections wait during pause, menus, dragging and transitions, and for a
@@ -802,6 +815,15 @@ and refunds after reload. In isolated build 25975458, all three pills charged
 and refunded roots, Repeat paid for ten pills, and a saved partially completed
 batch refunded only its remaining nine pills.
 
+Version 1.16.0 adds end-job checkboxes for automatic drilling. Tests cover
+branch ancestry, shared prerequisites, excluded-order refunds, manual overrides,
+empty selections, multiple stations, legacy settings, and persistence. In
+isolated build 25975458, real checkbox changes restricted drilling to the
+forging branch's six jobs across 46 native level completions. An excluded order
+refunded its pending level without losing progress, manual training reached
+level 20 with no paths selected, and the crafting branch finished at levels
+10 / 1 after save/load. The panel groups all 16 end jobs by native family.
+
 To check the controls in-game:
 
 1. Arrange your characters, choose their jobs and priority work targets, then
@@ -892,7 +914,8 @@ native production turrets, checking work range, remaining harvests and jobs.
 completion results, locks keepers and handles per-station settings, selection,
 legacy settings migration and native sales.
 `src/study.js` orders unlocked research and drill targets by category or
-class tier and calculates the drill levels needed for further job unlocks.
+class tier, traces prerequisite paths from selected end jobs, and calculates
+the drill levels needed for further job unlocks.
 `src/study-runtime.js` selects targets through native functions, preserves
 manual training to its cap, and bounds automatic drilling without changing
 the player's native Repeat preference.
@@ -923,7 +946,9 @@ and an enabled flag. Queue ownership for selling is session-only; it is never
 inferred from inventory changes or persisted queue numbers. Completion hooks
 protect qualifying inherited crafts without claiming them for mod sales.
 Research and drilling use `cjs-formations:study:v1:<saveId>` with separate
-enabled flags and station/target ownership records. The records distinguish
+enabled flags, selected end-job IDs, and station/target ownership records.
+Missing/null end-job selections retain the old all-jobs behavior; an empty
+list selects no paths. The records distinguish
 automatic research from manual targets across reloads. Native queues, levels,
 progress and copper remain in the game save; cancellation preserves progress.
 Job outfits use `cjs-formations:outfits:v1:<saveId>` in runtime storage, with an

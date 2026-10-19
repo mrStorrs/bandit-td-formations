@@ -35,13 +35,35 @@
     return 1;
   }
 
-  function drillTargets(zy, save, maximum, requirement, familyOpen, unlockOnly = true) {
+  function drillEndJobs(zy) {
+    const jobs = [], parents = new Set();
+    for (let id = 1; id < zy.width; id++) {
+      if (zy.getAt(id, 0) !== id || !Number.isSafeInteger(zy.getAt(id, 3)) || zy.getAt(id, 3) < 1) continue;
+      jobs.push(id);
+      for (const field of [10, 11, 12]) parents.add(zy.getAt(id, field));
+    }
+    return jobs.filter(id => !parents.has(id));
+  }
+
+  function drillPaths(zy, selected = null) {
+    const ends = drillEndJobs(zy), allowed = new Set(), pending = selected === null ? ends.slice() : selected.filter(id => ends.includes(id));
+    while (pending.length) {
+      const id = pending.pop();
+      if (allowed.has(id) || !Number.isSafeInteger(id) || id <= 0 || zy.getAt(id, 0) !== id) continue;
+      allowed.add(id);
+      for (const field of [10, 11, 12]) pending.push(zy.getAt(id, field));
+    }
+    return allowed;
+  }
+
+  function drillTargets(zy, save, maximum, requirement, familyOpen, unlockOnly = true, selected = null) {
     const targets = [];
     if (!levelOK(maximum) || maximum === 0) return targets;
+    const allowed = unlockOnly ? drillPaths(zy, selected) : null;
     for (let id = 1; id < zy.width; id++) {
       const rank = zy.getAt(id, 3), level = save.getAt(id, 5, 0), prerequisite = zy.getAt(id, 10);
       if (zy.getAt(id, 0) !== id || !Number.isSafeInteger(rank) || rank < 1 ||
-          !levelOK(level) || level >= maximum) continue;
+          !levelOK(level) || level >= maximum || (allowed && !allowed.has(id))) continue;
       if (prerequisite > 0 && save.getAt(prerequisite, 5, 0) < requirement(prerequisite)) continue;
       if (rank > 4 && !familyOpen(zy.getAt(id, 4))) continue;
       const limit = unlockOnly ? Math.min(maximum, drillUnlockLevel(zy, id, requirement)) : maximum;
@@ -54,7 +76,7 @@
     return targets.find(t => !occupied(t.id));
   }
 
-  const api = { researchTargets, drillUnlockLevel, drillTargets, nextResearch };
+  const api = { researchTargets, drillUnlockLevel, drillEndJobs, drillPaths, drillTargets, nextResearch };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   globalThis.BanditFormations = Object.assign(globalThis.BanditFormations || {}, api);
 })();

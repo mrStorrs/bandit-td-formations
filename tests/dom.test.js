@@ -294,6 +294,28 @@ test("research and drill toggles work without a crafting station panel",()=>{
   assert.equal(f.messages.length,count);assert.equal(f.dom.studyPanel.hidden,true);
 });
 
+test("drill end-job checkboxes send individual selections and refresh on campaign changes",()=>{
+  const f=fixture(),state={visible:true,token:"campaign:study",enabled:{research:true,drill:true},busy:false,error:false,message:"Drill: Auto",
+    drillJobs:[{id:32,name:"Blade master",family:1,selected:true},{id:44,name:"Forge master",family:4,selected:false}]};
+  f.handlers["study-status"](state);
+  const inputs=f.dom.studyJobInputs;
+  assert.equal(inputs[32].checked,true);assert.equal(inputs[44].checked,false);
+  inputs[44].checked=true;inputs[44].dispatch("change");
+  assert.deepEqual(f.messages.at(-1),["study-drill-job",{token:state.token,id:44,enabled:true}]);
+  f.handlers["study-status"]({...state,token:"another:study",enabled:{research:false,drill:false},
+    drillJobs:state.drillJobs.map(job=>({...job,selected:job.id===44}))});
+  assert.equal(f.dom.studyJobInputs,inputs,"status updates preserve focused controls");
+  assert.equal(inputs[32].checked,false);assert.equal(inputs[44].checked,true);assert.equal(inputs[32].disabled,false);
+  inputs[44].checked=false;inputs[44].dispatch("change");
+  assert.equal(f.messages.at(-1)[1].token,"another:study");
+  for(const change of [{busy:true},{error:true},{visible:false}]){
+    f.handlers["study-status"]({...state,...change});const count=f.messages.length;inputs[32].dispatch("change");
+    assert.equal(f.messages.length,count);
+  }
+  f.handlers["study-status"]({...state,drillJobs:[{id:45,name:"Artisan",family:4,selected:true}]});
+  assert.deepEqual(Object.keys(f.dom.studyJobInputs),["45"]);assert.equal(f.dom.studyJobInputs[45].checked,true);
+});
+
 test("selecting another station opens its own settings and discards unapplied edits",()=>{
   const f=fixture();f.handlers["craft-status"](craftState);f.dom.craftTier.value="9";
   f.dom.craftToggle.dispatch("click");assert.equal(f.dom.craftBody.hidden,true);

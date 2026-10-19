@@ -215,14 +215,44 @@
             this.PostToRuntime("study-enabled", { token: this.studyState.token, kind, enabled: input.checked });
           });
         }
+        this.studyJobsBox = make("div", "");
         this.studyInfo = make("div", ""); this.studyInfo.setAttribute("role", "status");
         this.studyInfo.style.cssText = "white-space:pre-line;line-height:1.4;margin:8px 0";
-        make("div", "Research: finish the current tree, then prioritize the Research bonus, regular unlocks, and Team → Gather → Growth → Cultivate → Craft. Each tree runs to its current cap. Drill: lowest unlocked class tier first, stopping at the level needed to unlock the next job. End-of-branch jobs stop at level 1. Manual choices train to their normal cap. Turning off stops new selections; active auto drills still stop at their unlock level.").style.cssText = "color:#c5ced1;font-size:12px;line-height:1.4";
+        make("div", "Research: finish the current tree, then prioritize the Research bonus, regular unlocks, and Team → Gather → Growth → Cultivate → Craft. Each tree runs to its current cap. Drill: follow the checked end jobs, lowest unlocked class tier first. Train prerequisites only to the next job's unlock level; end jobs stop at level 1. Manual choices train to their normal cap. Turning off Auto drill stops new selections; active auto drills still stop at their unlock level.").style.cssText = "color:#c5ced1;font-size:12px;line-height:1.4";
       }
       for (const [kind, input] of Object.entries(this.studyInputs)) {
         input.checked = state.enabled[kind]; input.disabled = state.busy || state.error;
       }
+      this.updateStudyJobs(state);
       this.studyInfo.textContent = state.message;
+    }
+    updateStudyJobs(state) {
+      const jobs = state.drillJobs || [], catalog = JSON.stringify(jobs.map(({ id, name, family }) => [id, name, family]));
+      if (catalog !== this.studyJobCatalog) {
+        this.studyJobCatalog = catalog; this.studyJobsBox.replaceChildren(); this.studyJobInputs = {};
+        const make = (tag, text, parent = this.studyJobsBox) => {
+          const element = document.createElement(tag); element.textContent = text; parent.appendChild(element); return element;
+        };
+        make("div", "Drill toward these end jobs").style.cssText = "font-weight:bold;margin:10px 0 6px";
+        make("div", "Only checked jobs and their prerequisites are trained. Unchecking a path refunds its unused auto order; manual training continues. Select none to leave auto drilling idle.").style.cssText = "color:#c5ced1;font-size:12px;line-height:1.4;margin-bottom:8px";
+        for (const family of [...new Set(jobs.map(job => job.family))].sort((a, b) => a - b)) {
+          const group = make("fieldset", ""); group.style.cssText = "border:1px solid #5a676d;margin:6px 0;padding:6px 8px";
+          make("legend", ({ 1: "STR", 2: "AGI", 3: "INT", 4: "Production" })[family] || "Other jobs", group);
+          for (const job of jobs.filter(job => job.family === family)) {
+            const label = make("label", "", group); label.style.cssText = "display:flex;align-items:center;gap:6px;margin:5px 0";
+            const input = make("input", "", label); input.type = "checkbox"; input.id = `cjs-drill-job-${job.id}`;
+            this.studyJobInputs[job.id] = input; make("span", job.name, label);
+            input.addEventListener("change", () => {
+              if (!this.studyState.visible || this.studyState.busy || this.studyState.error) return;
+              this.PostToRuntime("cancel", {});
+              this.PostToRuntime("study-drill-job", { token: this.studyState.token, id: job.id, enabled: input.checked });
+            });
+          }
+        }
+      }
+      for (const job of jobs) {
+        const input = this.studyJobInputs[job.id]; input.checked = job.selected; input.disabled = state.busy || state.error;
+      }
     }
     outfitStatus(state) {
       this.outfitState = state;

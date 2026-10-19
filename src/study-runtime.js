@@ -1,7 +1,7 @@
 (() => {
   "use strict";
   function attachStudy(runtime, engine, notify) {
-    const { researchTargets, drillUnlockLevel, drillTargets, nextResearch } = globalThis.BanditFormations;
+    const { researchTargets, drillUnlockLevel, drillEndJobs, drillPaths, drillTargets, nextResearch } = globalThis.BanditFormations;
     const prefix = "cjs-formations:study:v1:", states = new Map(), cooldowns = new Map();
     const first = name => runtime.objects[name]?.getFirstInstance();
     const all = name => runtime.objects[name]?.getAllInstances() || [];
@@ -24,19 +24,23 @@
     }
     function persist(state) {
       if (!state.ready || state.error) return;
-      const data = { version: 1, enabled: { ...state.enabled }, stations: [...state.entries.values()].filter(Boolean) };
+      const data = { version: 1, enabled: { ...state.enabled }, drillJobs: state.drillJobs?.slice() ?? null,
+        stations: [...state.entries.values()].filter(Boolean) };
       state.writes = state.writes.then(() => runtime.storage.setItem(prefix + state.id, data)).catch(error => fail(state, error));
     }
     function load(id) {
       if (states.has(id)) return states.get(id);
-      const state = { id, ready: false, error: "", enabled: { research: true, drill: true }, entries: new Map(), writes: Promise.resolve() };
+      const state = { id, ready: false, error: "", enabled: { research: true, drill: true }, drillJobs: null, entries: new Map(), writes: Promise.resolve() };
       states.set(id, state);
       state.loading = Promise.resolve().then(() => runtime.storage.getItem(prefix + id)).then(data => {
         const changed = state.entries.size > 0;
         if (data != null) {
           if (data.version !== 1 || typeof data.enabled?.research !== "boolean" || typeof data.enabled?.drill !== "boolean" ||
               !Array.isArray(data.stations) || !data.stations.every(valid)) throw new Error("Saved research / drilling settings could not be read.");
+          if (data.drillJobs != null && (!Array.isArray(data.drillJobs) || !data.drillJobs.every(positive) ||
+              new Set(data.drillJobs).size !== data.drillJobs.length)) throw new Error("Saved drill job selections could not be read.");
           state.enabled = { ...data.enabled };
+          state.drillJobs = data.drillJobs?.slice() ?? null;
           for (const entry of data.stations) if (!state.entries.has(entry.id)) state.entries.set(entry.id, entry);
         }
         state.ready = true;
@@ -148,7 +152,8 @@
             state = load(current.saveId);
             const entry = state.entries.get(station.id), limit = drillLimit(current, station.target);
             if (state.ready && !state.error && sameStation(entry, station) && entry.mode === "auto" &&
-                entry.target === station.target && limit > 0 && current.save.getAt(station.target, 5, 0) + 1 >= limit) {
+                entry.target === station.target && (!drillPaths(current.zy, state.drillJobs).has(station.target) ||
+                (limit > 0 && current.save.getAt(station.target, 5, 0) + 1 >= limit))) {
               // Native completion pays for the next level immediately. Suppress
               // that repeat at the unlock boundary, then restore the preference.
               repeat = current.save.getAt(station.id, 5, 21);
@@ -167,12 +172,12 @@
       hooked = true;
     }
     const drillLimit = (current, id) => drillUnlockLevel(current.zy, id, target => runtime.callFunction("转职等级要求", target));
-    function targets(current, station, mode = "auto") {
+    function targets(current, station, mode = "auto", drillJobs = null) {
       const { save, kj, zy } = current;
       if (station.kind === 8) return researchTargets(kj, save, id => runtime.callFunction("科技等级上限", id, station.level));
       const maximum = Math.min(runtime.globalVars["职业等级上限"], runtime.callFunction("操练等级上限", station.level));
       return drillTargets(zy, save, maximum, id => runtime.callFunction("转职等级要求", id),
-        family => runtime.callFunction("操练按钮解锁判断", ["", "力量系", "敏捷系", "智力系", "生产系"][family]) === 1, mode !== "manual");
+        family => runtime.callFunction("操练按钮解锁判断", ["", "力量系", "敏捷系", "智力系", "生产系"][family]) === 1, mode !== "manual", drillJobs);
     }
     function occupied(current, kind, target) {
       const s = current.save;
@@ -204,6 +209,8 @@
     function publish(current, state, messages = []) {
       const data = current ? { visible: !all("二级页面背景").length && !all("转场云").length && !all("世界地图").length,
         token: token(current), enabled: state.enabled, busy: !state.ready, error: !!state.error,
+        drillJobs: drillEndJobs(current.zy).map(id => ({ id, name: runtime.callFunction("文本", current.zy.getAt(id, 1), 0),
+          family: current.zy.getAt(id, 4), selected: state.drillJobs === null || state.drillJobs.includes(id) })),
         message: state.error || (!state.ready ? "Loading research / drilling…" : messages.join("\n") || "Waiting for research / drill stations.") } : { visible: false };
       const text = JSON.stringify(data);
       if (lastStatus !== text) { lastStatus = text; engine.PostComponentMessageToDOM("cjs-formations", "study-status", data); }
@@ -214,6 +221,17 @@
       const state = load(current.saveId);
       if (!state.ready || state.error) return;
       state.enabled[payload.kind] = payload.enabled; persist(state); next = 0;
+    });
+    engine.AddDOMComponentMessageHandler("cjs-formations", "study-drill-job", payload => {
+      const current = context();
+      if (!current || payload?.token !== token(current) || typeof payload.enabled !== "boolean") return;
+      const ends = drillEndJobs(current.zy);
+      if (!ends.includes(payload.id)) return;
+      const state = load(current.saveId);
+      if (!state.ready || state.error) return;
+      const chosen = new Set(state.drillJobs ?? ends);
+      if (payload.enabled) chosen.add(payload.id); else chosen.delete(payload.id);
+      state.drillJobs = ends.filter(id => chosen.has(id)); persist(state); next = 0;
     });
     return {
       leave() { epoch++; next = 0; cooldowns.clear(); publish(null); },
@@ -235,14 +253,16 @@
             }
             const describe = (target, mode) => `${label}: ${mode === "manual" ? "Manual" : "Auto"} · ${runtime.callFunction("文本", (station.kind === 8 ? current.kj : current.zy).getAt(target, 1), 0)}`;
             const limit = station.kind === 9 && station.target > 0 && entry?.mode === "auto" ? drillLimit(current, station.target) : 0;
-            if (limit > 0 && !current.blocked && s.getAt(station.target, 5, 0) >= limit) {
+            const excluded = station.kind === 9 && station.target > 0 && entry?.mode === "auto" &&
+              !drillPaths(current.zy, state.drillJobs).has(station.target);
+            if (!current.blocked && (excluded || (limit > 0 && s.getAt(station.target, 5, 0) >= limit))) {
               const manager = engine.GetEventSheetManager();
               if (!["取消设施进程function", "获得铜钱function", "操练货币需求function"]
                 .every(name => manager.GetEventGroupByName(name)?.IsGroupActive())) continue;
               automatic = true;
               try { runtime.callFunction("取消设施进程", station.x, station.y, false, 0); engine.FlushPendingInstances(); }
               finally { automatic = false; }
-              if (s.getAt(station.id, 3, 21) !== 0) throw new Error("The game refused to stop a completed automatic drill target.");
+              if (s.getAt(station.id, 3, 21) !== 0) throw new Error("The game refused to stop an automatic drill target.");
               forget(state, station.id); entry = null; station.target = 0;
             }
             if (station.target > 0) { messages.push(describe(station.target, entry?.mode)); continue; }
@@ -254,14 +274,20 @@
               if (cooldown > performance.now() || selected(station)) { messages.push(`${label}: Waiting for your selection`); continue; }
               cooldowns.delete(`${state.id}:${station.id}`);
             }
-            const available = targets(current, station);
+            const available = targets(current, station, "auto", state.drillJobs);
             let target;
             if (entry) target = (entry.mode === "manual" ? targets(current, station, "manual") : available)
               .find(t => t.id === entry.target);
             if (entry && !target) { forget(state, station.id); entry = null; }
             if (!target) target = station.kind === 8 ? nextResearch(available, id => occupied(current, 8, id)) :
               available.find(t => !occupied(current, 9, t.id));
-            if (!target) { messages.push(`${label}: Waiting for unlocks, levels or a building upgrade`); continue; }
+            if (!target) {
+              const jobs = station.kind === 9 ? drillEndJobs(current.zy).filter(id => state.drillJobs === null || state.drillJobs.includes(id)) : null;
+              messages.push(jobs?.length === 0 ? "Drill: No end jobs selected" :
+                jobs?.every(id => s.getAt(id, 5, 0) >= 1) ? "Drill: Selected jobs unlocked" :
+                  `${label}: Waiting for unlocks, levels or a building upgrade`);
+              continue;
+            }
             const mode = entry?.mode || "auto";
             const started = start(current, state, station, target, mode);
             messages.push(describe(target.id, mode) + (started ? "" : " · Waiting for copper or target"));
