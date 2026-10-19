@@ -41,14 +41,17 @@
   }
   const eligibleCraftItem = (item, options) => item.slot >= 1 && item.slot <= 4 &&
     item.tier === options.tier && item.quality >= options.minimum && item.quality <= 6;
+  const hasWorkCrit = (item, wp) => (wp ? wp.getAt(item.recipe, 9) : item.mainStat) === 51 || item.bonuses.includes(51);
   function matchesCraftItem(item, target, options) {
-    return eligibleCraftItem(item, options) && item.recipe === target.recipes[item.slot - 1] && item.bonuses.includes(target.bonus);
+    return eligibleCraftItem(item, options) && item.recipe === target.recipes[item.slot - 1] &&
+      (item.bonuses.includes(target.bonus) || !target.combat && hasWorkCrit(item));
   }
   function matchingCraftRoles(item, wp) {
     if (item.slot < 1 || item.slot > 4 || wp.getAt(item.recipe, 5) !== "装备" || wp.getAt(item.recipe, 4) !== "普通" ||
         wp.getAt(item.recipe, 3) !== item.tier || wp.getAt(item.recipe, 6) !== item.slot) return [];
     return craftRoles.filter(role => {
-      if (wp.getAt(item.recipe, 10) !== role.stat || !item.bonuses.includes(role.bonus)) return false;
+      if (wp.getAt(item.recipe, 10) !== role.stat ||
+          !(item.bonuses.includes(role.bonus) || !role.combat && hasWorkCrit(item, wp))) return false;
       if (item.slot !== 1) return wp.getAt(item.recipe, 23) === (role.combat ? "战斗" : "生产");
       return role.combat ? wp.getAt(item.recipe, 8) === role.stat + 3 : wp.getAt(item.recipe, 9) === role.power;
     });
@@ -58,10 +61,10 @@
     const bonuses = matchingCraftRoles(item, wp).map(role => role.bonus);
     return bonuses.length ? [...new Set(bonuses)] : ["other:" + [...new Set(item.bonuses.filter(n => n > 0))].sort((a, b) => a - b).join(",")];
   }
-  function planCraftSurplus(inventory, incoming, limit, wp) {
+  function planCraftSurplus(inventory, incoming, limit, wp, minimum = 1) {
     if (!Number.isSafeInteger(limit) || limit < 1) throw new Error("Invalid equipment keep limit.");
     const pool = inventory.filter(item => item.recipe === incoming.recipe && item.tier === incoming.tier);
-    if (pool.some(item => ![item.quality, item.level, item.mainRoll, ...item.bonuses, ...item.rolls].every(Number.isFinite))) {
+    if (pool.some(item => ![item.quality, item.level, item.mainRoll, item.workCritValue, ...item.bonuses, ...item.rolls].every(Number.isFinite))) {
       throw new Error("Equipment stats could not be compared. No items were sold.");
     }
     const groups = new Map(), keep = new Set(), touched = craftSaleGroups(incoming, wp);
@@ -71,10 +74,16 @@
     }
     const bonus = (item, group) => item.bonuses.reduce((sum, id, i) => sum +
       ((typeof group === "string" || id === group) ? item.rolls[i] : 0), 0);
+    const workRank = (item, group) => 2 * Number(hasWorkCrit(item, wp)) + Number(item.bonuses.includes(group));
+    const meetsMinimum = item => item.quality >= minimum && item.quality <= 6;
     for (const [group, items] of groups) {
+      const work = craftRoles.some(role => !role.combat && role.bonus === group);
       const protectedItems = items.filter(item => item.protected);
       for (const item of protectedItems) keep.add(item);
-      const ranked = items.filter(item => !item.protected).sort((a, b) => b.quality - a.quality ||
+      const ranked = items.filter(item => !item.protected).sort((a, b) =>
+        Number(meetsMinimum(b)) - Number(meetsMinimum(a)) ||
+        (work ? workRank(b, group) - workRank(a, group) || b.workCritValue - a.workCritValue || bonus(b, group) - bonus(a, group) : 0) ||
+        b.quality - a.quality ||
         bonus(b, group) - bonus(a, group) || b.mainRoll - a.mainRoll || b.level - a.level ||
         Number(a === incoming) - Number(b === incoming) || a.location - b.location || a.row - b.row);
       for (const item of ranked.slice(0, Math.max(0, limit - protectedItems.length))) keep.add(item);
@@ -84,10 +93,12 @@
   }
   function planCraftSets(items, targets, options, cursor = 0) {
     const counts = targets.map(() => [0, 0, 0, 0]);
-    const eligible = items.map(item => ({ item, roles: targets.map((t, i) => matchesCraftItem(item, t, options) ? i : -1).filter(i => i >= 0) }))
-      .filter(entry => entry.roles.length).sort((a, b) => a.roles.length - b.roles.length);
+    const eligible = items.map(item => ({ item, roles: targets.map((t, i) => matchesCraftItem(item, t, options) ? i : -1).filter(i => i >= 0)
+      .sort((a, b) => Number(item.bonuses.includes(targets[b].bonus)) - Number(item.bonuses.includes(targets[a].bonus))) }))
+      .filter(entry => entry.roles.length).sort((a, b) => a.roles.length - b.roles.length ||
+        Number(b.item.bonuses.includes(targets[b.roles[0]].bonus)) - Number(a.item.bonuses.includes(targets[a.roles[0]].bonus)));
     // Normal sets assign each physical item once. Reserve specialized rolls
-    // before flexible ones, then fill the least-stocked role, breaking ties by role order.
+    // before flexible ones, then fill the least-stocked role; a matching job bonus breaks ties.
     for (const { item, roles } of eligible) {
       const slot = item.slot - 1;
       if (options.keepLimit == null) {

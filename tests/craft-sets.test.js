@@ -67,6 +67,17 @@ test("multi-job rolls count once and spare matches feed future rounds", () => {
   const mixed = api.planCraftSets([...both,...[1,2,3,4].map(s=>item(s,[59]))],targets,o);
   assert.ok(mixed.cycles.every(c=>c.round===2));
 });
+test("work crit fills compatible work sets, with a job combination allocated to its matching job first", () => {
+  const targets=[target("forge"),target("building")],o=options({forgeOutput:"hands"});
+  const combo=item(2,[51,62]);
+  let plan=api.planCraftSets([combo],targets,o);
+  assert.deepEqual(clone(plan.counts),[[0,0,0,0],[0,1,0,0]]);
+  plan=api.planCraftSets([item(2,[51]),combo],targets,o);
+  assert.deepEqual(clone(plan.counts),[[0,1,0,0],[0,1,0,0]]);
+  assert.equal(api.matchesCraftItem(item(2,[51]),target("combat-str"),o),false);
+  assert.equal(api.matchesCraftItem(item(3,[],{mainStat:51}),target("forge"),o),true);
+  for(const bonuses of [[12],[52],[72]])assert.equal(api.matchesCraftItem(item(2,bonuses),target("forge"),o),false);
+});
 test("forge and crafting select roles and rounds using only their respective slots", () => {
   const targets = [target("forge"), target("research",[5,6,7,8])], o = options();
   for(const slots of [[1,2],[3,4]]){

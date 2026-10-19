@@ -47,6 +47,11 @@ function fixture(stored = new Map(), extended = false) {
   function stationAt(x, y) { return save.getAt(x - g.主地图编号起始 + 150, y - g.主地图编号起始, 6); }
   native("锻造材料编号", (_, index) => index);
   native("锻造材料数量", (_, tier, index, multiplier) => (index === 1 ? 2 : 3) * multiplier);
+  native("装备主属性", (level, tier, stat, roll, coefficient, type) => {
+    assert.equal(stat,51,"the ranking adapter only requests Work Crit values");
+    if(type === "副词条")level=0;
+    return Math.floor((2+tier*0.75+level*0.01)*(roll/100)*100)/100;
+  });
   native("失去材料", (amount, id) => { if (!f.refusePayment || id === 1) save.setAt(save.getAt(id, 6, 0) - amount, id, 6, 0); });
   native("生成单体设施", () => {});
   native("刷新底部菜单", () => {});

@@ -374,7 +374,7 @@ Each target contains four ordinary craftable pieces. Work sets use the job's
 weapon, gloves, belt and necklace; combat sets use a weapon, bracers, headband
 and ring. Cores, treasures and special set upgrades are outside this loop.
 
-| Role | Gear stat | Required rolled bonus |
+| Role | Gear stat | Job / combat bonus |
 | --- | --- | --- |
 | Forger | STR | Forge Bonus |
 | Researcher | INT | Tech Bonus |
@@ -391,9 +391,12 @@ and ring. Cores, treasures and special set upgrades are outside this loop.
 
 The combat roles craft the tier's ordinary spear, bow and fan respectively.
 Every piece must be the correct recipe/stat variant, exactly the chosen tier,
-at least the minimum rarity, and have at least one roll of that role's bonus.
-General Work Bonus does not satisfy a specific job bonus. Quality and rolls
-still come from the game; selecting a minimum does not guarantee that rarity.
+and at least the minimum rarity. Work gear qualifies with **Work Crit** (rate),
+the job bonus above, or both. Built-in Work Crit on belts counts too. Combat
+gear still requires its matching combat bonus. General Work Bonus, Work Crit
+DMG and combat crit do not substitute for Work Crit or a specific job bonus.
+Quality and rolls still come from the game; selecting a minimum does not
+guarantee that rarity.
 
 Forging and crafting stations run **independent loops**, queuing **10 crafts of
 the same recipe per batch** and paying the full native material cost up front.
@@ -423,8 +426,9 @@ existing matches. Each result is checked against every job and combat role,
 regardless of the checkboxes or single-role dropdown. With only Forger selected,
 STR work gloves with Build Bonus are kept for Builder, but only Forger sets drive the loop.
 Keepers still need that station's selected tier, minimum rarity, correct stat
-and a matching role bonus. Work weapons need the job's specific work power. Combat
-weapons can be any ordinary weapon with the matching attack type and primary
+and a matching role bonus or, for work gear, Work Crit. Work weapons need the
+job's specific work power. Combat weapons can be any ordinary weapon with the
+matching attack type and primary
 stat: a sword with AGI, Pierce attack and Pierce Bonus is protected even though
 the AGI loop crafts bows. These alternatives do not replace the chosen weapon
 recipe in set progress.
@@ -456,9 +460,25 @@ than N pieces showing a particular bonus. Nonmatching gear follows the
 **Auto-sell non-matching crafts** checkbox; with it off, surplus comparisons
 group nonmatches by their exact set of bonus types.
 
-Strength is ordered by **rarity**, then **total matching bonus roll values**,
-then **main stat roll**, then **equipment level**. Ties keep the existing piece.
-This is a gear comparison rule, not a character-specific damage calculation.
+Work gear is ranked in this order, within the minimum rarity:
+
+1. **Work Crit + the relevant job bonus** — best.
+2. **Work Crit alone**.
+3. **The relevant job bonus alone**.
+
+Within each category, compare actual **Work Crit %**, then total **matching job
+bonus rolls**, then **rarity**, **main stat roll** and **equipment level**.
+Work Crit includes its rolled bonuses and a belt's built-in main stat, using
+the game's values. For a Forger, the combination needs Forge Bonus; for a
+Crafter, Craft Bonus; for a Researcher, Tech Bonus, and so on. A lower-rarity
+combination beats higher-rarity crit-only gear as long as it meets the minimum.
+Generic Work Crit gear can serve each compatible job with the same stat and
+equipment type; it survives if one of those groups still needs it. Normal
+mode counts each physical piece once, preferring its specific job when stocks tie.
+
+Combat gear keeps **rarity**, **total matching bonus roll values**, **main stat
+roll**, then **equipment level** as its ranking. Exact ties keep the existing
+piece in both cases. These comparisons do not change saved job outfits.
 
 Equipped gear and pre-existing locks count toward the limit but are never
 sold. That includes locks made by older mod versions. Unlock an old item if
@@ -477,8 +497,9 @@ Crafts completed while a setting is being saved are retained without selling.
 
 With Sell over limit, Auto-all fills the lowest-stock chosen recipe/bonus group
 first until every group reaches the keep limit. Stock counts only gear matching
-the chosen recipe, bonus, tier and minimum rarity, including worn gear. Once
-stocked, it continues upgrade attempts with the lowest-stock groups, rotating
+the chosen recipe, role, tier and minimum rarity, including worn gear and the
+Work Crit alternatives above. Once stocked, it continues upgrade attempts with
+the lowest-stock groups, rotating
 ties in batches of ten, retaining improvements and selling weaker duplicates.
 Sell all keeps cycling recipes by batch because its output does not build stock.
 Both modes honor the forge's
@@ -923,6 +944,14 @@ Researcher gloves before Forger gear at 2/5 stock, while crafting independently
 chose a missing Forger necklace. After all ten attempts, the forge selected the
 next shortage without interrupting the crafting queue. Normal mode, No weapon,
 unchecked roles, surplus sales and the updated station UI also passed.
+
+Version 1.18.0 prioritizes work gear with Work Crit plus its job bonus, then
+Work Crit alone, then the job bonus alone. Tests cover actual crit values,
+built-in belt crit, rarity thresholds, multi-job stock allocation, protected
+locks, native calculation failures, and unchanged combat ranking. In isolated
+build 25975458, stronger work combinations replaced higher-rarity gear, sales
+paid native copper, belts qualified on built-in crit, and Normal Auto-all kept
+and locked crit-only gear. The updated station help also passed.
 
 To check the controls in-game:
 
