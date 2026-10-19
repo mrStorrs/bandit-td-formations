@@ -301,22 +301,24 @@ map changes and game restarts. They are not part of Steam Cloud. Recipes that
 finished before this feature was installed cannot be recovered: start a batch
 once at those empty stations to teach the mod what to repeat.
 
-## Realm 2 crafting and brewing costs
+## Realm 2 recipe costs
 
-Realm 2 (T2) crafting-station equipment uses **1,000 roots per piece** in place
-of the 17,000-herb ingredient. This covers headgear, belts and accessories for
-work and combat. The recipe screen, manual crafting, Repeat and Auto-all all
-use the adjusted cost. Material multipliers still apply: ten pieces at ×1 cost
-10,000 roots; ten pieces at ×10 cost 100,000 roots.
+Every realm 2 (T2) recipe ingredient that normally costs **17,000 of a realm 1
+resource** now costs **1,000 of its realm 2 equivalent**. Forge weapons,
+bracers and gloves replace stone with iron ore. Crafting headgear, belts and
+accessories, and STR/AGI/INT brewing pills, replace herbs with roots. The rule
+checks the native ingredient and price, including matching special recipes;
+it also handles realm 1 wood if a recipe requires it. Existing realm 2
+ingredients and recipes from other realms keep their normal costs.
 
-Realm 2 STR, AGI and INT brewing pills also replace their herb ingredient with
-**1,000 roots per pill**. Manual brewing and Repeat use the same cost, including
-material multipliers: a ten-pill batch at ×1 costs 10,000 roots. The other
-ingredient keeps its normal cost, as do pills from other realms.
+Recipe screens, manual purchases, Repeat and Auto-all all use the adjusted
+cost. Material multipliers still apply: a ten-piece batch at ×1 uses 10,000
+of each adjusted ingredient; at ×10 it uses 100,000.
 
-Canceling a new batch refunds roots for its remaining pieces, including after
-saving and reloading. Queues paid for before this update retain their original
-herb refunds. The paid-cost marker travels with the queue in the game save.
+Canceling a batch refunds the materials paid for its remaining pieces,
+including after saving and reloading. Unmarked older queues retain their
+original stone/herb refunds, and queues from the earlier roots update still
+refund roots. The paid-cost marker travels with the queue in the game save.
 
 ## Gatherer focus
 
@@ -896,6 +898,16 @@ With the fix, groups of three miners, planters and loggers stayed together,
 depleted their shared plot, switched targets, and handled native regrowth and
 a returning worker without splitting or extending work range.
 
+Version 1.17.2 extends the realm 2 cost adjustment to every native ingredient
+costing 17,000 of a realm 1 resource, including forge stone → iron ore.
+Regression tests cover resource families, both ingredient positions, material
+multipliers, unaffected costs, queue reuse, and both earlier refund formats.
+In isolated build 25975458, all 88 T2 item definitions returned the matching
+T2 material prices. Native forge, crafting and brewing purchases and Repeat
+batches used the new costs; forge and crafting Auto-all paid and refunded
+ten-piece batches at ×10. The forge screen displayed 1,000 iron ore, and a
+saved/reloaded partial batch refunded only its remaining nine crafts.
+
 To check the controls in-game:
 
 1. Arrange your characters, choose their jobs and priority work targets, then
@@ -977,7 +989,7 @@ relocation and flushes pending object creation/destruction between moves.
 locks, and event groups.
 `src/crafting.js` observes native queue creation and cancellation, remembers
 station recipes, and refills empty queues through the native crafting functions.
-`src/recipe-costs.js` adjusts realm 2 crafting ingredients and records each new
+`src/recipe-costs.js` adjusts realm 2 recipe ingredients and records each new
 queue's paid cost in the unused queue field 12 for correct native refunds.
 `src/gathering.js` focuses gatherers on the weakest remaining resources through
 native production turrets, checking work range, remaining harvests and jobs.
