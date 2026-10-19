@@ -6,10 +6,12 @@
     // so cancellation after a reload refunds roots, while older queues refund herbs.
     const costField = 12, rootCost = "cjs-roots-v1";
     let hooked = false, failed = false, legacyRefund = false;
-    const usesRoots = recipe => {
+    const rootIngredient = recipe => {
       const wp = first("wp");
-      return wp?.getAt(recipe, 3) === 2 && wp.getAt(recipe, 4) === "普通" &&
-        wp.getAt(recipe, 5) === "装备" && [3, 4].includes(wp.getAt(recipe, 6));
+      if (wp?.getAt(recipe, 3) !== 2) return 0;
+      if (wp.getAt(recipe, 4) === "普通丹药" && wp.getAt(recipe, 5) === "丹药") return 1;
+      return wp.getAt(recipe, 4) === "普通" && wp.getAt(recipe, 5) === "装备" &&
+        [3, 4].includes(wp.getAt(recipe, 6)) ? 2 : 0;
     };
     return {
       tick() {
@@ -29,15 +31,17 @@
               if (index === 3) legacyRefund = save?.getAt(params[0], costField, 13) !== rootCost;
               try {
                 const result = run.apply(this, args);
-                if (index <= 1 && !legacyRefund && usesRoots(params[0]) &&
-                    params[index === 0 ? 1 : 2] === 2) {
-                  const value = index === 0 ? 22 : 1000 * params[3];
-                  engine.GetEventStack().GetCurrentExpFuncStackFrame().SetFunctionReturnValue(value);
+                if (index <= 1 && !legacyRefund) {
+                  const part = rootIngredient(params[0]);
+                  if (part && params[index === 0 ? 1 : 2] === part) {
+                    const value = index === 0 ? 22 : 1000 * params[3];
+                    engine.GetEventStack().GetCurrentExpFuncStackFrame().SetFunctionReturnValue(value);
+                  }
                 }
                 if (index === 2 && save) {
                   const id = queueId.GetValue();
                   if (id > 0 && save.getAt(id, 0, 13) === id) {
-                    save.setAt(usesRoots(save.getAt(id, 3, 13)) ? rootCost : 0, id, costField, 13);
+                    save.setAt(rootIngredient(save.getAt(id, 3, 13)) ? rootCost : 0, id, costField, 13);
                   }
                 }
                 if (index === 3 && save?.getAt(params[0], 0, 13) === 0) save.setAt(0, params[0], costField, 13);

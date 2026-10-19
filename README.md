@@ -301,13 +301,18 @@ map changes and game restarts. They are not part of Steam Cloud. Recipes that
 finished before this feature was installed cannot be recovered: start a batch
 once at those empty stations to teach the mod what to repeat.
 
-## Realm 2 crafting costs
+## Realm 2 crafting and brewing costs
 
 Realm 2 (T2) crafting-station equipment uses **1,000 roots per piece** in place
 of the 17,000-herb ingredient. This covers headgear, belts and accessories for
 work and combat. The recipe screen, manual crafting, Repeat and Auto-all all
 use the adjusted cost. Material multipliers still apply: ten pieces at ×1 cost
 10,000 roots; ten pieces at ×10 cost 100,000 roots.
+
+Realm 2 STR, AGI and INT brewing pills also replace their herb ingredient with
+**1,000 roots per pill**. Manual brewing and Repeat use the same cost, including
+material multipliers: a ten-pill batch at ×1 costs 10,000 roots. The other
+ingredient keeps its normal cost, as do pills from other realms.
 
 Canceling a new batch refunds roots for its remaining pieces, including after
 saving and reloading. Queues paid for before this update retain their original
@@ -790,6 +795,12 @@ and refunds for older automatic orders already past the limit. In isolated
 build 25975458, native drilling stopped at levels 5 and 10 without charging for
 another level, manual training continued to level 20, loaded orders refunded
 their pending level, and terminal jobs stopped at level 1.
+
+Version 1.15.3 extends the root-cost adjustment to realm 2 STR, AGI and INT
+brewing pills. Tests cover both ingredient positions, multipliers, old queues
+and refunds after reload. In isolated build 25975458, all three pills charged
+and refunded roots, Repeat paid for ten pills, and a saved partially completed
+batch refunded only its remaining nine pills.
 
 To check the controls in-game:
 

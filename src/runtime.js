@@ -178,7 +178,7 @@
     engine.AddDOMComponentMessageHandler(component, "cancel", cancelKeys);
     runtime.addEventListener("tick", () => { recipeCosts.tick(); gathering.tick(); outfits.tick(); recruitment.tick(); crafting.tick(); study.tick(); return hotkeys.tick() || buildingHotkeys.tick() || forest.tick(); });
     runtime.addEventListener("beforelayoutstart", () => { cancelKeys(); gathering.leave(); forest.leave(); recruitment.leave(); outfits.leave(); crafting.leave(); study.leave(); });
-    engine.PostComponentMessageToDOM(component, "ready", { version: "1.15.2" });
-    console.info("[Bandit TD Formations] v1.15.2 ready: hold 1–4 to save positions and jobs, tap to restore; Shift + 1–4 for buildings; C toggles combat; Beast realm loop on, F6 toggles; auto recruit controls on the recruitment screen; crafting controls on each selected station; Research & drilling controls at the lower right; realm 2 crafting uses roots; gatherers finish the weakest resource first; per-job outfits on the character panel.");
+    engine.PostComponentMessageToDOM(component, "ready", { version: "1.15.3" });
+    console.info("[Bandit TD Formations] v1.15.3 ready: hold 1–4 to save positions and jobs, tap to restore; Shift + 1–4 for buildings; C toggles combat; Beast realm loop on, F6 toggles; auto recruit controls on the recruitment screen; crafting controls on each selected station; Research & drilling controls at the lower right; realm 2 crafting and brewing use roots; gatherers finish the weakest resource first; per-job outfits on the character panel.");
   });
 })();
