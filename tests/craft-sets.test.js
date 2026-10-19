@@ -95,6 +95,38 @@ test("restricted forge rounds advance using their chosen slot and leave crafting
     assert.deepEqual(clone(plan.cycles[0].slots),[0,1]);assert.equal(plan.cycles[0].complete,1);
   }
 });
+test("lowest-stock selection compares item and bonus groups before checkbox order", () => {
+  const targets = [target("forge"), target("research", [5,6,7,8])];
+  const inventory = [item(1,[59]), item(1,[59]), item(2,[59]), item(2,[59]),
+    item(1,[63],{recipe:5}), item(3,[63],{recipe:7}), item(4,[63],{recipe:8})];
+  for (const keepLimit of [null, 5]) {
+    const { cycles } = api.planCraftSets(inventory, targets, options({keepLimit}));
+    assert.equal(cycles[0].target.id, "research"); assert.equal(cycles[0].slot, 1); assert.equal(cycles[0].stock, 0);
+    assert.equal(cycles[1].target.id, "forge"); assert.equal(cycles[1].stock, 0);
+  }
+});
+test("equal stock rotates by batch while lower stock always wins over the cursor", () => {
+  const targets = [target("forge"), target("research", [5,6,7,8])];
+  for (const keepLimit of [null, 5]) {
+    const o = options({keepLimit});
+    let cursor = 0;
+    for (const [role, slot] of [["forge",0],["forge",1],["research",0],["research",1],["forge",0]]) {
+      const cycle = api.planCraftSets([], targets, o, cursor).cycles[0];
+      assert.equal(cycle.target.id, role); assert.equal(cycle.slot, slot); cursor = cycle.nextCursor;
+    }
+    const inventory = [item(1,[59]), item(1,[63],{recipe:5}), item(2,[63],{recipe:6})];
+    const cycle = api.planCraftSets(inventory, targets, o, 2).cycles[0];
+    assert.equal(cycle.target.id, "forge"); assert.equal(cycle.slot, 1); assert.equal(cycle.stock, 0);
+  }
+});
+test("lowest-stock normal sets still allocate each multi-bonus item once; sell limits count each bonus", () => {
+  const targets = [target("forge"), target("building")], inventory = [item(2,[59,62])];
+  const o = options({forgeOutput:"hands"});
+  let cycle = api.planCraftSets(inventory, targets, o).cycles[0];
+  assert.equal(cycle.target.id, "building"); assert.equal(cycle.stock, 0);
+  cycle = api.planCraftSets(inventory, targets, {...o,keepLimit:2}).cycles[0];
+  assert.equal(cycle.target.id, "forge"); assert.equal(cycle.stock, 1);
+});
 test("recipe selection uses the chosen tier, stat and work/combat family", () => {
   const rows = {
     1:{3:1,4:"普通",5:"装备",6:1,9:43,10:1,23:"通用"},

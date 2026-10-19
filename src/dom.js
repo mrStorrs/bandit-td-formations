@@ -96,8 +96,8 @@
         make("div", "Selling changes apply immediately in either mode. Sell over limit keeps the best N of each item variant, tier and work/combat bonus: rarity → matching bonus rolls → main roll → level. Equipped gear and existing locks count but are protected. This mode can replace its own auto-locked crafts. Pause stops selling.", this.craftOutputBox).style.cssText = "margin:0 0 10px;color:#c5ced1;font-size:12px;line-height:1.4";
         this.craftGear = make("div", "", body);
         const gearSelect = (title, id, options) => select(title, id, options, this.craftGear);
-        this.craftLoop = gearSelect("Loop", "cjs-craft-loop", [["all", "Cycle checked roles"], ...state.roles.map(r => [r.id, r.name])]);
-        make("div", "Choose a single role to repeat only that set. Combat weapons: STR spear, AGI bow, INT fan.", this.craftGear).style.cssText = "margin:-3px 0 10px;color:#c5ced1;font-size:12px";
+        this.craftLoop = gearSelect("Loop", "cjs-craft-loop", [["all", "Checked roles · lowest stock"], ...state.roles.map(r => [r.id, r.name])]);
+        make("div", "Normal and Sell over limit start with the lowest-stock item / bonus; equal stocks take turns. Choose a single role to repeat only that set. Combat weapons: STR spear, AGI bow, INT fan.", this.craftGear).style.cssText = "margin:-3px 0 10px;color:#c5ced1;font-size:12px";
         this.craftForgeLabel = make("label", "Forge output ", this.craftGear); this.craftForgeLabel.style.cssText = "display:block;margin-bottom:10px";
         this.craftForgeOutput = make("select", "", this.craftForgeLabel); this.craftForgeOutput.id = "cjs-craft-forge-output";
         this.craftForgeOutput.style.cssText = "font:inherit;max-width:100%";

@@ -1,7 +1,7 @@
 (() => {
   "use strict";
   function attachCraftSets(runtime, engine, notify, bridge) {
-    const { craftRoles, craftDefaults, validateCraftOptions, craftTargets, matchesCraftItem, isCraftKeeper, planCraftSurplus, planCraftSets } = globalThis.BanditFormations;
+    const { craftRoles, craftDefaults, validateCraftOptions, craftTargets, isCraftKeeper, planCraftSurplus, planCraftSets } = globalThis.BanditFormations;
     const prefix = "cjs-formations:craft-stations:v1:", legacyPrefix = "cjs-formations:craft-sets:v1:";
     const batchSize = 10, campaigns = new Map(), tickets = new Map();
     let hooked = false, activeWork = null, creating = null, epoch = 0, lastStatus = "";
@@ -328,19 +328,14 @@
       const targets = craftTargets(current.wp, state.options);
       if (!targets.length) throw new Error("Choose at least one crafting role.");
       if (current.blocked || runtime.globalVars["装备穿戴中"]) { state.message = "Waiting for gameplay to resume…"; return; }
-      const plan = planCraftSets(inventory, targets, state.options), cycle = plan.cycles.find(c => c.kind === station.kind);
+      const plan = planCraftSets(inventory, targets, state.options, state.outputCursor), cycle = plan.cycles.find(c => c.kind === station.kind);
       if (state.options.keepLimit === null) for (const item of inventory) if (isCraftKeeper(item, current.wp, state.options)) current.save.setAt(1, item.row, 22, item.location);
-      let role = cycle.target, slot = cycle.slots.find(i => plan.counts[cycle.index][i] < cycle.round), nextCursor;
+      const { target: role, slot, nextCursor } = cycle;
       state.message = `${cycle.name}: Round ${cycle.round} · ${cycle.target.name} · ${cycle.complete}/${cycle.slots.length} ${cycle.slots.length === 2 ? "pieces" : cycle.slots[0] === 0 ? "weapon" : "hand piece"}` +
-        `\nT${state.options.tier} · Batches of ${batchSize}`;
+        `\nStock ${cycle.stock} · T${state.options.tier} · Batches of ${batchSize}`;
       if (state.options.keepLimit !== null) {
-        const choices = targets.flatMap(target => cycle.slots.map(slot => ({ role: target, slot,
-          count: inventory.filter(item => item.slot === slot + 1 && matchesCraftItem(item, target, state.options)).length })));
-        const missing = choices.find(choice => choice.count < state.options.keepLimit);
-        const index = state.outputCursor % choices.length, choice = missing || choices[index];
-        role = choice.role; slot = choice.slot;
-        if (!missing) nextCursor = (index + 1) % choices.length;
-        state.message = `${cycle.name}: ${role.name} · ${missing ? `Stock ${choice.count}/${state.options.keepLimit}` : state.options.keepLimit === 0 ? "Sell-all cycle" : "Upgrade cycle"}` +
+        const missing = cycle.stock < state.options.keepLimit;
+        state.message = `${cycle.name}: ${role.name} · ${missing ? `Stock ${cycle.stock}/${state.options.keepLimit}` : state.options.keepLimit === 0 ? "Sell-all cycle" : `Stock ${cycle.stock} · Upgrade cycle`}` +
           `\nT${state.options.tier} · Batches of ${batchSize}`;
       }
       if (!station.usable || current.save.getAt(station.id, 3, 21) !== 0) return;

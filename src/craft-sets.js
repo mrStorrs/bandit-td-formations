@@ -82,21 +82,35 @@
     // A multi-bonus piece survives if any one of its groups still needs it.
     return pool.filter(item => !keep.has(item) && !item.protected && craftSaleGroups(item, wp).some(group => touched.includes(group)));
   }
-  function planCraftSets(items, targets, options) {
+  function planCraftSets(items, targets, options, cursor = 0) {
     const counts = targets.map(() => [0, 0, 0, 0]);
     const eligible = items.map(item => ({ item, roles: targets.map((t, i) => matchesCraftItem(item, t, options) ? i : -1).filter(i => i >= 0) }))
       .filter(entry => entry.roles.length).sort((a, b) => a.roles.length - b.roles.length);
-    // Assign each physical item once. Reserve specialized rolls before flexible
-    // ones, then fill the least-stocked role with priority order breaking ties.
+    // Normal sets assign each physical item once. Reserve specialized rolls
+    // before flexible ones, then fill the least-stocked role, breaking ties by role order.
     for (const { item, roles } of eligible) {
       const slot = item.slot - 1;
-      const role = roles.reduce((best, i) => counts[i][slot] < counts[best][slot] ? i : best);
-      counts[role][slot]++;
+      if (options.keepLimit == null) {
+        const role = roles.reduce((best, i) => counts[i][slot] < counts[best][slot] ? i : best);
+        counts[role][slot]++;
+      } else {
+        // Sell limits track each bonus group, so a multi-bonus piece serves both.
+        for (const role of roles) counts[role][slot]++;
+      }
     }
     const cycles = [[4, "Forge", options.forgeOutput === "weapons" ? [0] : options.forgeOutput === "hands" ? [1] : [0, 1]], [5, "Crafting", [2, 3]]].map(([kind, name, slots]) => {
       const round = targets.length ? Math.min(...counts.flatMap(row => slots.map(slot => row[slot]))) + 1 : 1;
-      const index = counts.findIndex(row => slots.some(slot => row[slot] < round));
+      const choices = counts.flatMap((row, index) => slots.map(slot => ({ index, slot, stock: row[slot] })));
+      let choice, position;
+      // Stock wins first; start ties after the previous completed batch.
+      // Sell-all cannot build stock, so it keeps cycling every selected recipe.
+      for (let offset = 0; offset < choices.length; offset++) {
+        const i = (cursor + offset) % choices.length, candidate = choices[i];
+        if (!choice || options.keepLimit !== 0 && candidate.stock < choice.stock) { choice = candidate; position = i; }
+      }
+      const index = choice?.index ?? -1;
       return { kind, name, slots, round, index, target: targets[index] || null,
+        slot: choice?.slot, stock: choice?.stock, nextCursor: choice ? (position + 1) % choices.length : undefined,
         complete: index < 0 ? 0 : slots.filter(slot => counts[index][slot] >= round).length };
     });
     return { counts, cycles };

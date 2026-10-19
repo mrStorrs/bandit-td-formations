@@ -20,6 +20,58 @@ function batch(f,index,bonus) {
   for(let i=0;i<count;i++)f.complete(index,[i===0?bonus:72]);
 }
 
+test("Auto-all starts with the least-stocked checked item even when an earlier role is below its keep limit", async()=>{
+  for(const keepLimit of [5,null]) {
+    const f=fixture(new Map(),true);await f.tick();
+    give(f,2,59);give(f,2,59);give(f,13,59);give(f,13,59);give(f,7,63);
+    await f.configure({roles:["forge","research"],keepLimit});await f.tick();
+    assert.equal(f.save.getAt(f.queue(0),3,13),15);assert.equal(f.remaining(0),10);
+    assert.match(f.status().message,/Researcher/);assert.match(f.status().message,/Stock 0/);
+    for(let n=0;n<10;n++)f.complete(0,[63]);await f.tick();
+    assert.equal(f.save.getAt(f.queue(0),3,13),7,"recount after a full batch instead of finishing the first checkbox's quota");
+    assert.equal(f.notifications.length,0);
+  }
+});
+test("failed batches rotate tied stocks without replacing paid work or coordinating station queues", async()=>{
+  const f=await start(),other=f.queue(1),paid=f.queue(0),balance=f.balance();
+  f.complete(0,[72]);await f.tick();
+  assert.equal(f.queue(0),paid);assert.equal(f.remaining(0),9);assert.deepEqual(f.balance(),balance);
+  for(let n=0;n<9;n++)f.complete(0,[72]);await f.tick();
+  assert.equal(f.save.getAt(f.queue(0),3,13),13,"next equally scarce item gets a turn");
+  assert.equal(f.queue(1),other);assert.equal(f.remaining(1),10);
+});
+test("stock priority counts worn matches and ignores wrong quality, tier, bonus and unchecked roles", async()=>{
+  const f=fixture(new Map(),true);await f.tick();
+  for(const [recipe,bonus] of [[2,59],[13,59],[15,63]])give(f,recipe,bonus);
+  give(f,7,63,2);give(f,7,59);give(f,7,63);f.save.setAt(2,6,3,7);
+  give(f,3,62);give(f,7,63);
+  for(let field=0;field<50;field++)f.save.setAt(f.save.getAt(8,field,7),1,field,9);
+  f.save.setAt(1,1,7,9);f.save.setAt(0,8,1,7);
+  await f.configure({roles:["forge","research"],forgeOutput:"weapons",keepLimit:5});await f.tick();
+  assert.equal(f.save.getAt(f.queue(0),3,13),2,"one equipped Researcher fan ties one valid Forger spear");
+  for(let n=0;n<10;n++)f.complete(0,[59]);await f.tick();
+  assert.equal(f.save.getAt(f.queue(0),3,13),7,"invalid fans do not inflate Researcher stock");
+});
+test("forge and crafting choose their own lowest-stock items and honor separate role selections", async()=>{
+  const f=fixture(new Map(),true);await f.tick();
+  for(const recipe of [2,13])give(f,recipe,59);
+  for(const recipe of [21,27])give(f,recipe,63);
+  await f.configureAll({keepLimit:5});await f.tick();
+  assert.equal(f.save.getAt(f.queue(0),3,13),7);
+  assert.equal(f.save.getAt(f.queue(1),3,13),19);
+  const craftingQueue=f.queue(1);f.cancel(0);
+  await f.configure({keepLimit:5,roles:["forge"],forgeOutput:"hands"});await f.tick();
+  assert.equal(f.save.getAt(f.queue(0),3,13),13,"unchecked Researcher stock cannot choose this station's recipe");
+  assert.equal(f.queue(1),craftingQueue);assert.equal(f.remaining(1),10);
+});
+test("stock priority is recomputed from owned items after reloading station settings", async()=>{
+  const f=fixture(new Map(),true);await f.tick();
+  await f.configure({roles:["forge","research"],keepLimit:5,forgeOutput:"hands"});
+  const next=fixture(f.stored,true);give(next,13,59);await next.tick();await next.tick();
+  assert.equal(next.save.getAt(next.queue(0),3,13),15);
+  assert.equal(next.status().options.keepLimit,5);assert.equal(next.status().options.forgeOutput,"hands");
+});
+
 test("Auto-all pays for ten crafts at each station and advances jobs and rounds", async()=>{
   const f=await start();
   assert.deepEqual([f.remaining(0),f.remaining(1)],[10,10]);

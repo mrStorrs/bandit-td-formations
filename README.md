@@ -25,7 +25,7 @@ research and drilling mod for Bandit Simulator TD (Steam app 4267800).
   another batch of **10**, waiting for materials when necessary.
 - **Crafting controls per station:** select a forge, crafting station or brewery
   to open its automation popup. Each station saves its own mode and pause state.
-  Equipment stations can cycle checked work/combat roles or loop one role, with
+  Equipment stations prioritize the lowest-stock checked work/combat gear or loop one role, with
   their own tier, minimum rarity, material multiplier and auto-sell setting.
   They keep and lock useful gear and craft in batches of **10**.
 - **Auto research and drill:** enabled by default in **Research & drilling**. Research
@@ -348,9 +348,9 @@ tier (T1–T9), minimum rarity (the game's six color grades), and native materia
 multiplier (×1, ×10 or ×100). Click **Apply / Start**. These settings apply only
 to that station. The dropdown offers:
 
-- **Cycle checked roles:** use the checked jobs, prioritizing Forger, Researcher,
-  then Logger, Miner, Planter, Crafter, Alchemist, Builder, Trainer and the three
-  combat roles, skipping unchecked entries.
+- **Checked roles · lowest stock:** before each batch, choose the item/bonus
+  group with the fewest qualifying pieces among the checked jobs and combat
+  roles. Equal stocks take turns, starting in the displayed role order.
 - **A single job or combat role:** repeatedly make that role's sets. This
   overrides the crafting checkboxes without clearing their selections.
 
@@ -398,9 +398,12 @@ still come from the game; selecting a minimum does not guarantee that rarity.
 Forging and crafting stations run **independent loops**, queuing **10 crafts of
 the same recipe per batch** and paying the full native material cost up front.
 The forge covers weapons and hand gear; crafting covers head/belt gear and
-accessories. Each loop advances to the next checked role once its own two pieces
-are covered, then starts its next round without waiting for the other loop.
-The selected station's popup shows its role, round and progress. Each station
+accessories. Each station compares only the pieces it can make, including its
+Forge output restriction, and starts with the lowest stock. A group with zero
+pieces comes before one with two, even if that earlier group is below its keep
+limit. Stock is recounted after each paid batch finishes. Each loop starts its
+next round without waiting for the other loop.
+The selected station's popup shows its role, stock, round and progress. Each station
 chooses its recipe using its own settings and queue. Stations can queue identical
 recipes simultaneously, and refill without waiting for another station's batch.
 For example, two forges can both make T1 Forger weapons, or one can make T3 combat
@@ -472,10 +475,13 @@ Settings and tracked locks survive map changes and restarts. **Pause** stops
 both crafting automation and these sales at the selected station.
 Crafts completed while a setting is being saved are retained without selling.
 
-With Sell over limit, Auto-all first fills each chosen recipe/bonus group to
-the keep limit. Once stocked, it cycles upgrade attempts through its selected
-roles and slots in batches of ten, retaining improvements and selling weaker
-duplicates. Sell all also cycles recipes by batch. Both modes honor the forge's
+With Sell over limit, Auto-all fills the lowest-stock chosen recipe/bonus group
+first until every group reaches the keep limit. Stock counts only gear matching
+the chosen recipe, bonus, tier and minimum rarity, including worn gear. Once
+stocked, it continues upgrade attempts with the lowest-stock groups, rotating
+ties in batches of ten, retaining improvements and selling weaker duplicates.
+Sell all keeps cycling recipes by batch because its output does not build stock.
+Both modes honor the forge's
 All / Weapon only / No weapon choice and keep stations independent.
 
 For owned Auto-all queues in Normal mode, the keep/reject decision takes
@@ -907,6 +913,16 @@ T2 material prices. Native forge, crafting and brewing purchases and Repeat
 batches used the new costs; forge and crafting Auto-all paid and refunded
 ten-piece batches at ×10. The forge screen displayed 1,000 iron ore, and a
 saved/reloaded partial batch refunded only its remaining nine crafts.
+
+Version 1.17.3 prioritizes the lowest-stock selected item/bonus group before
+each Auto-all batch. Equal counts rotate; each station uses its own settings
+and only its available equipment slots. Tests cover quota shortages, recounting,
+tie rotation, equipped gear, filters, multi-bonus allocation, independent
+stations and reloads. In isolated build 25975458, a forge chose missing
+Researcher gloves before Forger gear at 2/5 stock, while crafting independently
+chose a missing Forger necklace. After all ten attempts, the forge selected the
+next shortage without interrupting the crafting queue. Normal mode, No weapon,
+unchecked roles, surplus sales and the updated station UI also passed.
 
 To check the controls in-game:
 
