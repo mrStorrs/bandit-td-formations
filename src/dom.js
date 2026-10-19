@@ -187,8 +187,8 @@
       }
       if (this.craftSelection !== state.token) {
         this.craftSelection = state.token; this.craftBody.hidden = false; this.craftBody.scrollTop = 0;
-        if (this.studyBody) { this.studyBody.hidden = true; this.studyToggle.textContent = "Research & drilling ▸"; this.studyToggle.setAttribute("aria-expanded", "false"); }
       }
+      if (this.studyPanel) this.studyPanel.hidden = true;
       this.craftTitle = `${state.station.name} #${state.station.id} · Automation`;
       this.craftToggle.textContent = `${this.craftTitle} ${this.craftBody.hidden ? "▸" : "▾"}`;
       this.craftToggle.setAttribute("aria-expanded", String(!this.craftBody.hidden));
@@ -214,42 +214,50 @@
     }
     studyStatus(state) {
       this.studyState = state;
-      if (!state.visible) { if (this.studyPanel) this.studyPanel.hidden = true; return; }
+      if (!state.visible) { if (this.studyPanel) this.studyPanel.hidden = true; this.studySelection = null; return; }
       if (!this.studyPanel) {
         const panel = this.studyPanel = document.createElement("section");
-        panel.id = "cjs-study"; panel.setAttribute("aria-label", "Research and drilling");
-        panel.style.cssText = "position:fixed;bottom:12px;right:12px;z-index:2147483646;background:#152025f5;color:#fff;padding:10px 14px;border:1px solid #c0a35b;border-radius:6px;font:14px sans-serif;max-width:calc(100vw - 60px);box-shadow:0 3px 16px #0008";
+        panel.id = "cjs-study"; panel.setAttribute("aria-label", "Station research and drilling");
+        panel.style.cssText = "position:fixed;top:64px;right:12px;z-index:2147483646;background:#152025f5;color:#fff;padding:10px 14px;border:1px solid #c0a35b;border-radius:6px;font:14px sans-serif;max-width:calc(100vw - 60px);box-shadow:0 3px 16px #0008";
         const toggle = this.studyToggle = document.createElement("button");
-        toggle.id = "cjs-study-open"; toggle.type = "button"; toggle.textContent = "Research & drilling ▸"; toggle.setAttribute("aria-expanded", "false");
+        toggle.id = "cjs-study-open"; toggle.type = "button"; toggle.setAttribute("aria-expanded", "true");
         toggle.style.cssText = "background:transparent;color:#fff;border:0;padding:3px;cursor:pointer;font:inherit";
         panel.appendChild(toggle);
         const body = this.studyBody = document.createElement("div");
-        body.hidden = true; body.style.cssText = "width:330px;max-width:100%;max-height:calc(100vh - 110px);overflow:auto;padding-top:10px";
+        body.hidden = false; body.style.cssText = "width:330px;max-width:100%;max-height:calc(100vh - 260px);overflow:auto;padding-top:10px";
         panel.appendChild(body);
         toggle.addEventListener("click", () => {
-          body.hidden = !body.hidden; toggle.textContent = body.hidden ? "Research & drilling ▸" : "Research & drilling ▾";
+          body.hidden = !body.hidden; toggle.textContent = `${this.studyTitle} ${body.hidden ? "▸" : "▾"}`;
           toggle.setAttribute("aria-expanded", String(!body.hidden));
-          if (!body.hidden && this.craftBody) { this.craftBody.hidden = true; this.craftToggle.textContent = `${this.craftTitle} ▸`; this.craftToggle.setAttribute("aria-expanded", "false"); }
         });
         this.studySection = document.createElement("fieldset"); this.studySection.style.cssText = "border:1px solid #5a676d;margin:0;padding:8px";
         body.appendChild(this.studySection);
         for (const event of ["pointerdown", "pointerup", "pointermove", "pointerrawupdate", "pointercancel", "mousedown", "mouseup", "mousemove", "click", "dblclick", "touchstart", "touchend", "touchmove", "touchcancel", "keydown", "keyup", "wheel"]) panel.addEventListener(event, e => e.stopPropagation());
         document.body.appendChild(panel);
       }
+      if (this.studySelection !== state.token) {
+        this.studySelection = state.token; this.studyBody.hidden = false; this.studyBody.scrollTop = 0;
+      }
+      if (this.craftPanel) this.craftPanel.hidden = true;
+      this.studyTitle = `${state.station.name} #${state.station.id} · Automation`;
+      this.studyToggle.textContent = `${this.studyTitle} ${this.studyBody.hidden ? "▸" : "▾"}`;
+      this.studyToggle.setAttribute("aria-expanded", String(!this.studyBody.hidden));
       this.studyPanel.hidden = false;
       if (!this.studyInputs) {
         const make = (tag, text, parent = this.studySection) => {
           const element = document.createElement(tag); element.textContent = text;
           parent.appendChild(element); return element;
         };
-        make("legend", "Research & drilling");
-        this.studyInputs = {};
+        make("legend", "Automation");
+        make("div", "Settings apply only to this station.").style.cssText = "margin-bottom:10px;color:#c5ced1";
+        this.studyInputs = {}; this.studyLabels = {};
         for (const [kind, title] of [["research", "Auto research"], ["drill", "Auto drill"]]) {
           const label = make("label", ""); label.style.cssText = "display:block;margin-bottom:7px";
           const input = make("input", "", label); input.type = "checkbox"; input.id = `cjs-study-${kind}`;
-          this.studyInputs[kind] = input; make("span", " " + title, label);
+          this.studyInputs[kind] = input; this.studyLabels[kind] = label; make("span", " " + title, label);
           input.addEventListener("change", () => {
-            if (!this.studyState.visible || this.studyState.busy || this.studyState.error) return;
+            if (!this.studyState.visible || this.studyState.busy || this.studyState.error ||
+                kind !== (this.studyState.station.kind === 8 ? "research" : "drill")) return;
             this.PostToRuntime("cancel", {});
             this.PostToRuntime("study-enabled", { token: this.studyState.token, kind, enabled: input.checked });
           });
@@ -257,12 +265,19 @@
         this.studyJobsBox = make("div", "");
         this.studyInfo = make("div", ""); this.studyInfo.setAttribute("role", "status");
         this.studyInfo.style.cssText = "white-space:pre-line;line-height:1.4;margin:8px 0";
-        make("div", "Research: finish the current tree, then prioritize the Research bonus, regular unlocks, and Team → Gather → Growth → Cultivate → Craft. Each tree runs to its current cap. Drill: follow the checked end jobs, lowest unlocked class tier first. Train prerequisites only to the next job's unlock level; end jobs stop at level 1. Manual choices train to their normal cap. Turning off Auto drill stops new selections; active auto drills still stop at their unlock level.").style.cssText = "color:#c5ced1;font-size:12px;line-height:1.4";
+        this.studyHelp = make("div", ""); this.studyHelp.style.cssText = "color:#c5ced1;font-size:12px;line-height:1.4";
       }
-      for (const [kind, input] of Object.entries(this.studyInputs)) {
-        input.checked = state.enabled[kind]; input.disabled = state.busy || state.error;
+      const kind = state.station.kind === 8 ? "research" : "drill";
+      for (const [name, input] of Object.entries(this.studyInputs)) {
+        this.studyLabels[name].hidden = name !== kind;
+        this.studyLabels[name].style.display = name === kind ? "block" : "none";
+        input.checked = name === kind && state.enabled; input.disabled = name !== kind || state.busy || state.error;
       }
-      this.updateStudyJobs(state);
+      this.studyJobsBox.hidden = kind !== "drill";
+      if (kind === "drill") this.updateStudyJobs(state);
+      this.studyHelp.textContent = kind === "research" ?
+        "Finish each tree to its current cap, then choose: main Research tab → Research Tech → Logging Tech → Barracks Tech → Training Tech → Mining Tech → Great Hall Tech → Recruit Tech → everything else (Team → Gather → Growth → Cultivate → Craft). Manual choices take priority. Turning off automation stops new orders; native Repeat can finish the active tree." :
+        "Follow this station's checked end jobs, lowest unlocked class tier first. Train prerequisites only to the next job's unlock level; end jobs stop at level 1. Manual choices train to their normal cap. Turning off automation stops new selections; active auto drills still stop at their unlock level.";
       this.studyInfo.textContent = state.message;
     }
     updateStudyJobs(state) {
@@ -273,7 +288,7 @@
           const element = document.createElement(tag); element.textContent = text; parent.appendChild(element); return element;
         };
         make("div", "Drill toward these end jobs").style.cssText = "font-weight:bold;margin:10px 0 6px";
-        make("div", "Only checked jobs and their prerequisites are trained. Unchecking a path refunds its unused auto order; manual training continues. Select none to leave auto drilling idle.").style.cssText = "color:#c5ced1;font-size:12px;line-height:1.4;margin-bottom:8px";
+        make("div", "Only checked jobs and their prerequisites are trained at this station. Unchecking a path refunds its unused auto order; manual training continues. Select none to leave this station's auto drilling idle.").style.cssText = "color:#c5ced1;font-size:12px;line-height:1.4;margin-bottom:8px";
         for (const family of [...new Set(jobs.map(job => job.family))].sort((a, b) => a - b)) {
           const group = make("fieldset", ""); group.style.cssText = "border:1px solid #5a676d;margin:6px 0;padding:6px 8px";
           make("legend", ({ 1: "STR", 2: "AGI", 3: "INT", 4: "Production" })[family] || "Other jobs", group);
@@ -282,7 +297,7 @@
             const input = make("input", "", label); input.type = "checkbox"; input.id = `cjs-drill-job-${job.id}`;
             this.studyJobInputs[job.id] = input; make("span", job.name, label);
             input.addEventListener("change", () => {
-              if (!this.studyState.visible || this.studyState.busy || this.studyState.error) return;
+              if (!this.studyState.visible || this.studyState.busy || this.studyState.error || this.studyState.station.kind !== 9) return;
               this.PostToRuntime("cancel", {});
               this.PostToRuntime("study-drill-job", { token: this.studyState.token, id: job.id, enabled: input.checked });
             });

@@ -4,6 +4,7 @@
     ["团队", "Team", 11], ["采集", "Gather", 24], ["发展", "Growth", 23],
     ["修炼", "Cultivate", 25], ["制造", "Craft", 22],
   ];
+  const researchPriority = ["研究技术", "伐木技术", "营房技术", "操练技术", "采矿技术", "主堂技术", "招募技术"];
   const levelOK = value => Number.isSafeInteger(value) && value >= 0;
 
   function researchTargets(kj, save, cap) {
@@ -17,12 +18,12 @@
       if (prerequisite > 0 && save.getAt(prerequisite, 4, 0) !== 1) continue;
       const level = save.getAt(id, 4, 0), maximum = regular ? 1 : cap(id);
       if (!levelOK(level) || !levelOK(maximum) || level >= maximum) continue;
+      const priority = researchPriority.indexOf(kj.getAt(id, 1));
       targets.push({ id, level, maximum, regular, order,
-        researchBonus: !regular && kj.getAt(id, 15) === "研究",
+        priority: regular ? 0 : priority >= 0 ? priority + 1 : researchPriority.length + 1,
         category: regular ? "Regular" : researchCategories[order][1] });
     }
-    return targets.sort((a, b) => Number(b.researchBonus) - Number(a.researchBonus) ||
-      Number(b.regular) - Number(a.regular) ||
+    return targets.sort((a, b) => a.priority - b.priority ||
       (a.regular ? a.id - b.id : a.order - b.order || a.id - b.id));
   }
 

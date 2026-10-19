@@ -5,7 +5,7 @@ const { drillEndJobs, drillPaths, drillTargets } = require("../src/study.js");
 const { fixture, storageKey } = require("./helpers/study-fixture.js");
 
 const settings = jobs => ({ version: 1, enabled: { research: false, drill: true }, stations: [], drillJobs: jobs });
-const withJobs = jobs => fixture(new Map([[storageKey, settings(jobs)]]));
+const withJobs = jobs => { const f = fixture(new Map([[storageKey, settings(jobs)]])); f.select(1); return f; };
 const change = (f, id, enabled) => f.handlers["study-drill-job"]({ token: f.status().token, id, enabled });
 const selected = f => f.status().drillJobs.filter(job => job.selected).map(job => job.id);
 
@@ -54,11 +54,11 @@ test("a selected branch trains only its ancestors and terminal job, then stays i
 
 test("legacy settings select every end job and explicit choices persist across reloads", async () => {
   const data = settings(); delete data.drillJobs;
-  const stored = new Map([[storageKey, data]]), f = fixture(stored);
+  const stored = new Map([[storageKey, data]]), f = fixture(stored); f.select(1);
   await f.ready(); await f.tick(); assert.deepEqual(selected(f), [3, 5, 9, 16]);
   change(f, 3, false); change(f, 5, false); change(f, 9, false); await f.tick();
-  assert.deepEqual(selected(f), [16]); assert.deepEqual(stored.get(storageKey).drillJobs, [16]);
-  const reloaded = fixture(stored); await reloaded.ready(); await reloaded.tick();
+  assert.deepEqual(selected(f), [16]); assert.deepEqual(stored.get(storageKey).settings.find(s=>s.id===2).drillJobs, [16]);
+  const reloaded = fixture(stored); reloaded.select(1); await reloaded.ready(); await reloaded.tick();
   assert.deepEqual(selected(reloaded), [16]);
 });
 
@@ -98,7 +98,7 @@ test("manual jobs outside the selected paths finish their full cap before filter
 test("selection changes wait through blocked gameplay and cancel excluded orders after reload", async () => {
   const f = withJobs([16]); await f.ready(); await f.tick(); f.g.游戏暂停 = true;
   change(f, 16, false); await f.tick(); assert.equal(f.queue(1), 1);
-  const reload = fixture(f.stored); reload.save.setAt(1, 2, 3, 21); reload.save.setAt(1, 1, 15, 0);
+  const reload = fixture(f.stored); reload.select(1); reload.save.setAt(1, 2, 3, 21); reload.save.setAt(1, 1, 15, 0);
   await reload.ready(); await reload.tick(); assert.equal(reload.queue(1), 0);
   assert.deepEqual(selected(reload), []);
 });
@@ -107,7 +107,8 @@ test("multiple drill stations follow selected paths without reserving unrelated 
   const f = withJobs([9, 16]); f.add(9);
   for (const [id, level] of [[1, 1], [2, 2], [4, 2]]) f.save.setAt(level, id, 5, 0);
   await f.ready(); await f.tick(); assert.deepEqual([f.queue(1), f.queue(2)], [8, 9]);
-  change(f, 9, false); await f.tick(); assert.deepEqual([f.queue(1), f.queue(2)], [8, 0]);
+  change(f, 9, false); await f.tick(); assert.deepEqual([f.queue(1), f.queue(2)], [8, 9]);
+  f.select(2); await f.tick(); change(f, 9, false); await f.tick(); assert.deepEqual([f.queue(1), f.queue(2)], [8, 0]);
 });
 
 test("invalid and stale messages cannot alter selections, including across campaigns", async () => {

@@ -296,40 +296,60 @@ test("station output controls save limits in either mode without applying draft 
   f.handlers["craft-status"]({...craftState,token:"station:other"});assert.equal(f.dom.craftOutput.value,"normal");
 });
 
-test("research and drill toggles work without a crafting station panel",()=>{
-  const f=fixture(),state={visible:true,token:"campaign:study",enabled:{research:true,drill:true},busy:false,error:false,message:"Research: Manual · Team"};
+test("research controls open on their station and hide unrelated drill settings",()=>{
+  const f=fixture(),state={visible:true,token:"campaign:study:1",station:{id:1,kind:8,name:"Research station"},enabled:true,busy:false,error:false,message:"Research: Manual · Team"};
   f.handlers["study-status"](state);f.handlers["craft-status"]({visible:false});
-  assert.equal(f.dom.studyToggle.textContent,"Research & drilling ▸");assert.equal(f.dom.craftPanel,undefined);
-  assert.equal(f.dom.studyInputs.research.checked,true);assert.equal(f.dom.studyInputs.drill.checked,true);
+  assert.equal(f.dom.studyToggle.textContent,"Research station #1 · Automation ▾");assert.equal(f.dom.craftPanel,undefined);
+  assert.equal(f.dom.studyBody.hidden,false);assert.equal(f.dom.studyLabels.research.hidden,false);
+  assert.equal(f.dom.studyLabels.drill.hidden,true);assert.equal(f.dom.studyJobsBox.hidden,true);
+  assert.equal(f.dom.studyLabels.drill.style.display,"none");assert.equal(f.dom.studyLabels.research.style.display,"block");
+  assert.equal(f.dom.studyInputs.research.checked,true);assert.equal(f.dom.studyInputs.drill.disabled,true);
   f.dom.studyInputs.research.checked=false;f.dom.studyInputs.research.dispatch("change");
   assert.deepEqual(f.messages.at(-1),["study-enabled",{token:state.token,kind:"research",enabled:false}]);
-  assert.equal(f.dom.studyInputs.drill.checked,true);assert.equal(f.dom.studyInfo.textContent,state.message);
+  assert.equal(f.dom.studyInfo.textContent,state.message);
+  assert.match(f.dom.studyHelp.textContent,/main Research tab → Research Tech → Logging Tech → Barracks Tech → Training Tech → Mining Tech → Great Hall Tech → Recruit Tech/);
+  const before=f.messages.length;f.dom.studyInputs.drill.dispatch("change");assert.equal(f.messages.length,before);
   f.handlers["study-status"]({...state,busy:true});const count=f.messages.length;
-  f.dom.studyInputs.drill.dispatch("change");assert.equal(f.messages.length,count);assert.equal(f.dom.studyInputs.drill.disabled,true);
-  f.handlers["study-status"]({visible:false});f.dom.studyInputs.drill.dispatch("change");
+  f.dom.studyInputs.research.dispatch("change");assert.equal(f.messages.length,count);assert.equal(f.dom.studyInputs.research.disabled,true);
+  f.handlers["study-status"]({visible:false});f.dom.studyInputs.research.dispatch("change");
   assert.equal(f.messages.length,count);assert.equal(f.dom.studyPanel.hidden,true);
 });
 
-test("drill end-job checkboxes send individual selections and refresh on campaign changes",()=>{
-  const f=fixture(),state={visible:true,token:"campaign:study",enabled:{research:true,drill:true},busy:false,error:false,message:"Drill: Auto",
+test("switching drill stations restores their own checkboxes and ignores hidden controls",()=>{
+  const f=fixture(),state={visible:true,token:"campaign:study:2",station:{id:2,kind:9,name:"Drill station"},enabled:true,busy:false,error:false,message:"Drill: Auto",
     drillJobs:[{id:32,name:"Blade master",family:1,selected:true},{id:44,name:"Forge master",family:4,selected:false}]};
   f.handlers["study-status"](state);
   const inputs=f.dom.studyJobInputs;
-  assert.equal(inputs[32].checked,true);assert.equal(inputs[44].checked,false);
+  assert.equal(f.dom.studyLabels.research.hidden,true);assert.equal(f.dom.studyLabels.drill.hidden,false);
+  assert.equal(f.dom.studyLabels.research.style.display,"none");assert.equal(f.dom.studyLabels.drill.style.display,"block");
+  assert.equal(f.dom.studyJobsBox.hidden,false);assert.equal(inputs[32].checked,true);assert.equal(inputs[44].checked,false);
   inputs[44].checked=true;inputs[44].dispatch("change");
   assert.deepEqual(f.messages.at(-1),["study-drill-job",{token:state.token,id:44,enabled:true}]);
-  f.handlers["study-status"]({...state,token:"another:study",enabled:{research:false,drill:false},
+  f.dom.studyToggle.dispatch("click");assert.equal(f.dom.studyBody.hidden,true);
+  f.handlers["study-status"]({...state,token:"campaign:study:3",station:{...state.station,id:3},enabled:false,
     drillJobs:state.drillJobs.map(job=>({...job,selected:job.id===44}))});
+  assert.equal(f.dom.studyBody.hidden,false);assert.match(f.dom.studyToggle.textContent,/Drill station #3/);
+  assert.equal(f.dom.studyInputs.drill.checked,false);
   assert.equal(f.dom.studyJobInputs,inputs,"status updates preserve focused controls");
   assert.equal(inputs[32].checked,false);assert.equal(inputs[44].checked,true);assert.equal(inputs[32].disabled,false);
   inputs[44].checked=false;inputs[44].dispatch("change");
-  assert.equal(f.messages.at(-1)[1].token,"another:study");
-  for(const change of [{busy:true},{error:true},{visible:false}]){
+  assert.equal(f.messages.at(-1)[1].token,"campaign:study:3");
+  for(const change of [{busy:true},{error:true},{visible:false},{station:{id:1,kind:8,name:"Research station"}}]){
     f.handlers["study-status"]({...state,...change});const count=f.messages.length;inputs[32].dispatch("change");
     assert.equal(f.messages.length,count);
   }
   f.handlers["study-status"]({...state,drillJobs:[{id:45,name:"Artisan",family:4,selected:true}]});
   assert.deepEqual(Object.keys(f.dom.studyJobInputs),["45"]);assert.equal(f.dom.studyJobInputs[45].checked,true);
+});
+
+test("station study controls contain input and only one station popup is visible",()=>{
+  const f=fixture(),state={visible:true,token:"study:1",station:{id:1,kind:8,name:"Research station"},enabled:true,busy:false,error:false,message:""};
+  f.handlers["craft-status"](craftState);f.handlers["study-status"](state);
+  assert.equal(f.dom.craftPanel.hidden,true);assert.equal(f.dom.studyPanel.hidden,false);
+  for(const event of ["pointerdown","pointerup","click","keydown","keyup","wheel"]) assert.equal(f.dom.studyPanel.dispatch(event).stopped,true);
+  f.document.activeElement=f.dom.studyInputs.research;f.window.dispatch("keydown",{code:"KeyC"});
+  assert.equal(f.messages.at(-1)[0],"cancel");
+  f.handlers["craft-status"](craftState);assert.equal(f.dom.studyPanel.hidden,true);assert.equal(f.dom.craftPanel.hidden,false);
 });
 
 test("selecting another station opens its own settings and discards unapplied edits",()=>{

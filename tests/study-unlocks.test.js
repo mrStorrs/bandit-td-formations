@@ -10,7 +10,7 @@ function unlockFixture(stored) {
   f.methods.get("操练等级上限").block._RunAndBlock = () => 20;
   return f;
 }
-async function ready(f) { await f.ready(); f.enabled("research", false); await f.tick(); }
+async function ready(f) { f.select(1); await f.ready(); f.enabled("research", false); await f.tick(); }
 
 test("automatic limits come from native promotion requirements; terminal jobs need one unlock level", () => {
   const f = unlockFixture(), requirement = id => id === 1 ? 5 : 10;

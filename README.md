@@ -28,9 +28,10 @@ research and drilling mod for Bandit Simulator TD (Steam app 4267800).
   Equipment stations prioritize the lowest-stock checked work/combat gear or loop one role, with
   their own tier, minimum rarity, material multiplier and auto-sell setting.
   They keep and lock useful gear and craft in batches of **10**.
-- **Auto research and drill:** enabled by default in **Research & drilling**. Research
-  prioritizes the Research bonus, then regular unlocks and advanced trees in
-  category order. Each tree finishes to its current cap. Drilling trains the
+- **Auto research and drill:** enabled by default, with controls on each selected
+  station. Research prioritizes main-tab unlocks, then Research, Logging, Barracks,
+  Training, Mining, Great Hall and Recruit Tech. Each tree finishes to its current
+  cap. Drilling trains the
   lowest unlocked class only far enough to unlock the next job. Manual choices
   take priority and train to the normal cap.
 - **Job outfits:** select a character, choose their job priority, equip their
@@ -531,20 +532,32 @@ while it runs.
 
 ## Research and drilling
 
-**Auto research** and **Auto drill** start enabled. Each has its own checkbox
-in the lower-right **Research & drilling** panel. Workers
-still perform the work normally; automation selects the next target and pays
+Select a research or drill station to open its **Automation** popup at the upper
+right, like a crafting station. It shows only that station's settings and status;
+closing its native panel hides the popup. **Auto research** and **Auto drill**
+start enabled, and each physical station saves its own toggle. Drill stations
+also save their own end-job selections. Changes take effect immediately.
+Workers still perform the work normally; automation selects the next target and pays
 the game's normal copper cost. It waits when funds are insufficient.
 
-When selecting a new tree, research first chooses the **Research bonus** in
-Growth if it is unlocked, below the station's cap and not assigned elsewhere.
-This improves research output for the remaining trees. Next come unfinished
-**regular research** unlocks, then **Team → Gather → Growth → Cultivate → Craft**,
-using the game's topic order within each category.
+When selecting a new tree, research follows this priority:
+
+1. Anything unfinished and available in the main **Research** tab.
+2. **Research Tech**.
+3. **Logging Tech**.
+4. **Barracks Tech**.
+5. **Training Tech**.
+6. **Mining Tech**.
+7. **Great Hall Tech**.
+8. **Recruit Tech**.
+9. Everything else: **Team → Gather → Growth → Cultivate → Craft**, using
+   the game's topic order within each category.
+
+Locked, capped and already-assigned topics are skipped.
 
 Each selected tree continues to its **current building cap** before the mod
 chooses another tree. Native Repeat handles its levels, such as displayed
-levels 1 through 60. A newly available Research bonus waits for the active tree
+levels 1 through 60. A newly available higher-priority topic waits for the active tree
 to finish, including manual choices. Native prerequisites, category unlocks and
 building caps still apply. Other research stations can take different available
 trees independently.
@@ -553,11 +566,12 @@ The current tree is remembered through copper shortages and restarts. If
 native Repeat is off, the mod resumes the same tree until its cap. A building
 upgrade extends the current tree's cap before another tree is selected.
 
-Under **Drill toward these end jobs**, check the final jobs you want to unlock.
+Under **Drill toward these end jobs**, check the final jobs this station should unlock.
 The 16 end jobs are grouped into **STR, AGI, INT, and Production**, using the
-game's job names. All start checked, including when upgrading older settings.
-Selections are saved per campaign. Uncheck every job to leave automatic
-drilling idle; manual training still works.
+game's job names. All start checked on new stations. Selections are saved per
+station and campaign. Uncheck every job to leave that station's automatic
+drilling idle; manual training still works. Other drill stations retain their
+own selections.
 
 Drilling follows **only the checked jobs and their prerequisite paths**. Shared
 prerequisites count toward every selected branch that needs them; unrelated
@@ -586,11 +600,15 @@ or drill progress is retained. The mod keeps that choice until its current cap,
 including further levels when native
 Repeat is off and retries after a copper shortage. Then automatic selection
 resumes. Canceling an order releases the override and holds the idle station
-for your next choice while its menu remains selected. Queues already running
+for your next choice while its menu remains selected. Toggle automation off and
+on to resume directly from the open popup. Queues already running
 when first installing this feature are treated as manual choices.
 
-Settings and current targets persist locally per campaign across map changes
-and restarts. Turning **Auto research** or **Auto drill** off stops new mod orders; current research can
+Settings and current targets persist locally per station and campaign across
+moving stations, map changes and restarts. Existing global toggles and end-job
+choices migrate once to all existing research/drill stations, including those
+on other maps. Newly built stations use the defaults. Turning **Auto research**
+or **Auto drill** off stops new mod orders at that station; current research can
 finish its tree and an active automatic drill stops at its unlock level.
 The game's Repeat preference is preserved.
 New selections wait during pause, menus, dragging and transitions, and for a
@@ -966,6 +984,18 @@ and stronger suffixes winning despite weaker innate stats. In isolated build
 for rejects; Normal Auto-all kept and locked suffix matches while rejecting
 innate-only belts.
 
+Version 1.19.0 moves research and drilling controls onto their selected stations,
+with independent toggles and drill end-job choices. Existing global preferences
+migrate to all existing stations once. Research now chooses main-tab unlocks,
+Research, Logging, Barracks, Training, Mining, Great Hall and Recruit Tech, then
+the remaining categories. Each tree still finishes to its cap, and manual choices
+retain priority. Regression coverage includes station isolation, reloads, migration
+across maps, relocation, demolition, stale UI messages, malformed storage and
+resuming from an open popup after cancellation. The release passes 362 JavaScript
+and four installer tests. In isolated build 25975458, 134 native research/drill
+completions verified the full priority order, native Repeat, manual overrides,
+selected drill paths and unlock limits; station controls and reloads also passed.
+
 To check the controls in-game:
 
 1. Arrange your characters, choose their jobs and priority work targets, then
@@ -1056,12 +1086,13 @@ and ranks surplus items independently by their recipe, tier and bonus groups.
 `src/craft-sets-runtime.js` schedules batches of ten, identifies their native
 completion results, locks keepers and handles per-station settings, selection,
 legacy settings migration and native sales.
-`src/study.js` orders unlocked research and drill targets by category or
+`src/study.js` orders unlocked research by main-tab/named-tree priority and
+remaining category order, orders drill targets by
 class tier, traces prerequisite paths from selected end jobs, and calculates
 the drill levels needed for further job unlocks.
-`src/study-runtime.js` selects targets through native functions, preserves
-manual training to its cap, and bounds automatic drilling without changing
-the player's native Repeat preference.
+`src/study-runtime.js` manages station preferences, legacy migration and selection,
+selects targets through native functions, preserves manual training to its cap,
+and bounds automatic drilling without changing the player's native Repeat preference.
 `src/outfits.js` validates outfit snapshots and matches equipment records.
 `src/outfit-runtime.js` observes native job changes, serializes equipment swaps,
 checks inventory and equip eligibility, and manages the outfit panel and storage.
@@ -1094,10 +1125,12 @@ their rejects for mod sales. Explicit output policies apply to newly created
 results of the station's live queue, including after reload. Managed identities
 ignore owner, lock and new-item markers but include level and rolled stats;
 they are not written into native item records.
-Research and drilling use `cjs-formations:study:v1:<saveId>` with separate
-enabled flags, selected end-job IDs, and station/target ownership records.
-Missing/null end-job selections retain the old all-jobs behavior; an empty
-list selects no paths. The records distinguish
+Research and drilling retain `cjs-formations:study:v1:<saveId>` with data format
+version 2. `settings` holds enabled flags and selected end-job IDs per station,
+identified by facility slot/type, parent building slot and station kind.
+`stations` retains target ownership records. Version 1 global preferences
+migrate once to existing stations. Null end-job selections mean all jobs;
+an empty list selects no paths. The ownership records distinguish
 automatic research from manual targets across reloads. Native queues, levels,
 progress and copper remain in the game save; cancellation preserves progress.
 Job outfits use `cjs-formations:outfits:v1:<saveId>` in runtime storage, with an

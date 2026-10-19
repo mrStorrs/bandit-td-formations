@@ -21,6 +21,8 @@ function fixture(stored = new Map()) {
     research[id] = {0:id,1:`Topic ${id}`,2:category,5:300};
   }
   research[40][15] = "研究";
+  for (const [id, name] of [[31,"主堂技术"],[32,"营房技术"],[33,"招募技术"],[34,"伐木技术"],
+    [36,"采矿技术"],[40,"研究技术"],[41,"操练技术"]]) research[id][1] = name;
   for (const [id, rank, prerequisite, family] of [[1,1,0,1],[2,2,1,1],[3,2,1,1],[4,3,2,1],[5,3,2,2],
     [8,4,4,1],[9,4,4,1],[16,5,8,1]]) classes[id] = {0:id,1:`Class ${id}`,3:rank,4:family,10:prerequisite};
   const kj = { width: 50, getAt: (id, field) => research[id]?.[field] ?? 0 };
@@ -101,15 +103,19 @@ function fixture(stored = new Map()) {
     queue:index=>save.getAt(index+1,3,21),
     async tick(){clock+=1000;loop.tick();await settle();},
     async ready(){await this.tick();g.游戏暂停=false;},
-    enabled(kind,enabled){handlers["study-enabled"]({token:this.status().token,kind,enabled});},
-    choose(index,target){const v=tiles[index].instVars;g.选中地块X=v.X坐标;g.选中地块Y=v.Y坐标;runtime.callFunction(index===0?"科技研究":"职业操练",target,0);},
-    complete(index){const target=this.queue(index);save.setAt(100,target,index===0?12:14,0);runtime.callFunction("采集核心碰撞",1,tiles[index].uid);},
+    select(index){menus.length=0;if(index!=null){const v=tiles[index].instVars;menus.push({instVars:{功能:"设施",X坐标:v.X坐标,Y坐标:v.Y坐标}});}},
+    token(index){const v=tiles[index].instVars,id=index+1,epoch=this.status()?.token?.split(":")[2]||0;
+      return `${save.getAt(0,1,0)}:${save.uid}:${epoch}:${id}:${v.设施编号}:${save.getAt(id,2,21)}:${v.X坐标}:${v.Y坐标}`;},
+    enabled(kind,enabled,index=kind==="research"?0:1){const before=menus.slice();this.select(index);
+      handlers["study-enabled"]({token:this.token(index),kind,enabled});menus.splice(0,menus.length,...before);},
+    choose(index,target){const v=tiles[index].instVars;g.选中地块X=v.X坐标;g.选中地块Y=v.Y坐标;runtime.callFunction(kind(index+1)===8?"科技研究":"职业操练",target,0);},
+    complete(index){const target=this.queue(index);save.setAt(100,target,kind(index+1)===8?12:14,0);runtime.callFunction("采集核心碰撞",1,tiles[index].uid);},
     cancel(index){const v=tiles[index].instVars;runtime.callFunction("取消设施进程",v.X坐标,v.Y坐标,false,0);},
     add(kind=8){const id=tiles.length+1,owner=id+10,type=kind===8?1:11,x=10020+id,y=10010;
       const tile={uid:200+id,instVars:{用途:"主地图",设施编号:type,X坐标:x,Y坐标:y,有效解锁:true,资源类型:""}};tiles.push(tile);
       for(const [field,value] of [[0,id],[1,type],[2,owner],[3,0],[5,1]])save.setAt(value,id,field,21);
       save.setAt(id,x-10000+150,y-10000,6);save.setAt(kind===8?5:6,owner,1,1);return tile;},
   };
-  f.add(8);f.add(9);return f;
+  f.add(8);f.add(9);f.select(0);return f;
 }
 module.exports={fixture,settle,storageKey};
