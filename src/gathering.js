@@ -6,7 +6,7 @@
     const all = name => runtime.objects[name]?.getAllInstances() || [];
     const first = name => runtime.objects[name]?.getFirstInstance();
     const listening = new WeakSet();
-    let focus = new WeakMap(), token = "", hooked = false, failed = false;
+    let focus = new WeakMap(), sequence = 0, token = "", hooked = false, failed = false;
     const fail = error => {
       if (failed) return;
       failed = true;
@@ -20,7 +20,7 @@
       const id = save.getAt(0, 1, 0);
       if (!Number.isSafeInteger(id) || id < 10000000) return null;
       const current = `${id}:${save.uid}:${g["当前地图编号"]}:${g["主地图编号起始"]}`;
-      if (token !== current) { token = current; focus = new WeakMap(); }
+      if (token !== current) { token = current; focus = new WeakMap(); sequence = 0; }
       return { save, base: g["主地图编号起始"] };
     }
     function resources({ save, base }) {
@@ -44,37 +44,51 @@
       }
       return targets;
     }
-    function select(core, targets) {
+    function assignment(core) {
       const v = core.instVars, turret = core.behaviors["生产炮台"], job = v["执行状态"];
       if (!turret?.isEnabled || !jobs.has(job) || ![job, "自动"].includes(v["设定状态"]) ||
           v["特殊状态"] === "突破" || core.behaviors.DragDrop?.isDragging ||
-          (v["X坐标"] >= 20000 && v["X坐标"] < 30000)) {
-        focus.delete(core); return;
-      }
+          (v["X坐标"] >= 20000 && v["X坐标"] < 30000)) return null;
+      return `${v["设定状态"]}:${job}:${v["X坐标"]}:${v["Y坐标"]}`;
+    }
+    const reachable = (core, tile) => (tile.x - core.x) ** 2 + (tile.y - core.y) ** 2 <= core.behaviors["生产炮台"].range ** 2;
+    function select(core, targets, cores) {
+      const current = assignment(core), turret = core.behaviors["生产炮台"], job = core.instVars["执行状态"];
+      if (!current) { focus.delete(core); return; }
       const candidates = targets.filter(({ tile }) => tile.instVars["资源类型"] === job &&
-        (tile.x - core.x) ** 2 + (tile.y - core.y) ** 2 <= turret.range ** 2);
-      const assignment = `${v["设定状态"]}:${job}:${v["X坐标"]}:${v["Y坐标"]}`;
+        reachable(core, tile));
       const old = focus.get(core);
-      let target = old?.assignment === assignment && candidates.find(t =>
-        t.identity === old.identity && t.remaining <= old.remaining);
+      let target, order = Infinity;
+      // Join the earliest reachable active focus, including our own. Separate
+      // ranges can still work locally, but new/returning workers do not split
+      // a group just because another plot became ready mid-harvest.
+      for (const peer of cores) {
+        const remembered = focus.get(peer);
+        if (!remembered || remembered.order >= order || peer.instVars["执行状态"] !== job ||
+            remembered.assignment !== assignment(peer)) continue;
+        const shared = candidates.find(t => t.identity === remembered.identity &&
+          t.remaining <= remembered.remaining && reachable(peer, t.tile));
+        if (shared) { target = shared; order = remembered.order; }
+      }
       if (!target) target = candidates.reduce((best, t) => !best || t.remaining < best.remaining ||
         (t.remaining === best.remaining && t.tile.uid < best.tile.uid) ? t : best, null);
       if (!target) {
         if (old && turret.currentTarget?.uid === old.uid) turret.currentTarget = null;
         focus.delete(core); return;
       }
-      focus.set(core, { assignment, identity: target.identity, remaining: target.remaining, uid: target.tile.uid });
+      focus.set(core, { assignment: current, identity: target.identity, remaining: target.remaining,
+        uid: target.tile.uid, order: Number.isFinite(order) ? order : ++sequence });
       if (turret.currentTarget?.uid !== target.tile.uid) turret.currentTarget = target.tile;
     }
     function refresh(core) {
       if (failed) return;
       try {
         const current = context();
-        if (current) select(core, resources(current));
+        if (current) select(core, resources(current), all("角色核心"));
       } catch (error) { fail(error); }
     }
     return {
-      leave() { token = ""; focus = new WeakMap(); },
+      leave() { token = ""; focus = new WeakMap(); sequence = 0; },
       tick() {
         if (failed) return;
         try {
@@ -105,7 +119,7 @@
               core.behaviors["生产炮台"].addEventListener("shoot", () => refresh(core));
               listening.add(core);
             }
-            select(core, targets);
+            select(core, targets, cores);
           }
         } catch (error) { fail(error); }
       },

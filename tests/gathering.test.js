@@ -72,6 +72,51 @@ test("ties select consistently, including workers created after hooks install", 
   const late = f.worker(); f.mod.tick(); assert.equal(f.target(late), a);
   a.instVars.资源类型 = ""; f.mod.tick(); assert.equal(f.target(w), b); assert.equal(f.target(late), b);
 });
+test("a third gatherer joins the shared focus when a weaker plot becomes available", () => {
+  for (const job of ["伐木", "采矿", "种植"]) {
+    const f = fixture(), workers = [f.worker(job), f.worker(job)], a = f.resource(20, { job }), b = f.resource(1, { job });
+    b.instVars.资源类型 = "";
+    f.mod.tick(); assert.ok(workers.every(w => f.target(w) === a));
+    b.instVars.资源类型 = job;
+    workers.push(f.worker(job)); f.mod.tick();
+    assert.ok(workers.every(w => f.target(w) === a), "joining workers must finish the group's existing target");
+    a.health(0); f.shoot(workers[0]); f.shoot(workers[1]); f.shoot(workers[2]);
+    assert.ok(workers.every(w => f.target(w) === b));
+  }
+});
+test("overlapping work ranges share an existing target while unreachable workers keep working locally", () => {
+  const f = fixture(), a = f.resource(20, { x: 0 }), b = f.resource(1, { x: 400 });
+  const left = f.worker("采矿", 0), right = f.worker("采矿", 400);
+  f.mod.tick(); assert.equal(f.target(left), a); assert.equal(f.target(right), b);
+  const middle = f.worker("采矿", 200); f.mod.tick();
+  assert.equal(f.target(middle), a, "join the earliest reachable active focus");
+  assert.equal(f.target(right), b, "never target a resource outside work range");
+  a.health(0); f.shoot(left); f.shoot(middle); f.mod.tick();
+  assert.equal(f.target(left), null); assert.equal(f.target(middle), b); assert.equal(f.target(right), b);
+});
+test("stale or unreachable peer assignments cannot hold a new worker on an old target", () => {
+  for (const change of [
+    (f, w) => { w.instVars.执行状态 = "战斗"; },
+    (f, w) => { w.instVars.X坐标++; },
+    (f, w) => { w.behaviors.生产炮台.isEnabled = false; },
+    (f, w) => { w.behaviors.DragDrop.isDragging = true; },
+    (f, w) => { w.x = 1000; },
+    (f, w) => { f.cores.splice(f.cores.indexOf(w), 1); },
+  ]) {
+    const f = fixture(), early = f.worker(), a = f.resource(20), b = f.resource(30);
+    f.mod.tick(); assert.equal(f.target(early), a);
+    b.health(1); change(f, early);
+    const late = f.worker(); f.mod.tick(); assert.equal(f.target(late), b);
+  }
+});
+test("merging groups converges on the earlier active target without changing jobs or priorities", () => {
+  const f = fixture(), a = f.resource(20, { x: 0 }), b = f.resource(10, { x: 400 });
+  const first = f.worker("采矿", 0), second = f.worker("采矿", 400), third = f.worker("采矿", 400);
+  f.mod.tick(); assert.equal(f.target(first), a); assert.equal(f.target(second), b); assert.equal(f.target(third), b);
+  for (const w of [second, third]) w.behaviors.生产炮台.range = 500;
+  f.mod.tick(); assert.ok([first, second, third].every(w => f.target(w) === a));
+  assert.ok([first, second, third].every(w => w.instVars.优先工作目标X === 10001 && w.instVars.设定状态 === "采矿"));
+});
 test("range changes, regrowth, resource changes and worker moves release stale focus", () => {
   for (const change of [
     (f, w, a) => { a.x = 500; },

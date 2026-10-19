@@ -326,6 +326,12 @@ until it is depleted, then choose the next weakest available resource. Workers
 with the same job and reachable resources choose the same target, including
 when two resources have equal remaining harvests.
 
+New or returning workers join an existing reachable target for their job.
+They finish that shared target before switching to a newly available plot.
+If previously separate groups gain overlapping ranges, they converge on the
+earliest active target they can reach. Workers unable to reach that target
+continue on a local resource; the mod does not extend work range.
+
 This is always enabled and also applies while an Automatic worker is gathering.
 Each worker keeps their assigned profession and position. Moving a worker,
 changing their job or losing access to the resource triggers a new selection.
@@ -881,6 +887,14 @@ best two belts, native sales credited copper, and reload preserved replacement
 permission. Manual unlock/relock protected a keeper. Native Auto-all filled
 four recipe/bonus groups and continued cycling upgrade batches of ten;
 Sell all also cycled weapons-only batches without touching existing gear.
+
+Version 1.17.1 fixes gatherers holding separate targets when a worker joins or
+returns while another plot becomes available. Regression tests cover three
+workers, overlapping ranges, merging groups and stale peer assignments. In
+isolated build 25975458, the old code reproduced a two-plus-one miner split.
+With the fix, groups of three miners, planters and loggers stayed together,
+depleted their shared plot, switched targets, and handled native regrowth and
+a returning worker without splitting or extending work range.
 
 To check the controls in-game:
 
