@@ -89,6 +89,19 @@ changing equipment. **Auto-equip saved job outfits** enables or disables swaps
 for the campaign and remembers the setting across restarts; it starts enabled.
 Saving and forgetting remain available while auto-equip is disabled.
 
+Items referenced by a saved outfit show a **blue outfit lock** in inventory and
+character equipment screens. Hover or focus the icon to see every character
+and job using that exact piece. The lock blocks native selling and all crafting
+sale modes, including a station replacing its own auto-locked surplus. Protected
+pieces still participate in the usual stock and keep-limit calculations.
+
+Outfit locks remain active when auto-equip is disabled and survive job changes,
+equipment level upgrades, map changes and restarts. Replacing or forgetting an
+outfit releases only its references; a shared piece stays protected until its
+last saved reference is removed. These locks do not change the game's ordinary
+manual/automatic lock flag. Normal locks remain independent. Changing an item's
+rolled properties requires saving the outfit again, as with outfit restoration.
+
 Outfits include all six equipment slots, including the equipped core and
 treasure. An empty slot in a saved outfit is restored as empty, subject to
 inventory space. Absorbed cores are not equipment slots and are not changed.
@@ -484,13 +497,16 @@ Combat gear keeps **rarity**, **total matching bonus roll values**, **main stat
 roll**, then **equipment level** as its ranking. Exact ties keep the existing
 piece in both cases. These comparisons do not change saved job outfits.
 
-Equipped gear and pre-existing locks count toward the limit but are never
+Saved-outfit items, equipped gear and pre-existing locks count toward the limit but are never
 sold. That includes locks made by older mod versions. Unlock an old item if
 you want it eligible for replacement. New matching crafts retained by this
 mode are auto-locked and tracked by their full item identity, so this station
 can replace its own weaker keepers later. Manually unlocking and relocking an
 item, or upgrading it, removes that automatic replacement permission. Another
 station's tracked locks remain protected. Ambiguous identities are kept.
+An outfit lock always prevents replacement, even for the originating station's
+tracked keeper. Its tooltip lists the outfits that must be changed or forgotten
+before the piece can be sold.
 
 Comparison is triggered by a new craft and only trims that item variant/tier
 and the bonus groups it touches. It can sell weaker, unlocked duplicates
@@ -995,6 +1011,17 @@ resuming from an open popup after cancellation. The release passes 362 JavaScrip
 and four installer tests. In isolated build 25975458, 134 native research/drill
 completions verified the full priority order, native Repeat, manual overrides,
 selected drill paths and unlock limits; station controls and reloads also passed.
+
+Version 1.20.0 adds blue outfit locks with character/job hover tooltips. Saved
+pieces are protected from native sales and every station output policy, including
+replacement of that station's tracked auto-locks. Tests cover shared references,
+replacement/forgetting, manual-lock preservation, upgrades, storage failures,
+reloads, campaign isolation, marker visibility and tooltip input handling.
+The release passes 370 JavaScript tests and four installer tests.
+In isolated build 25975458, native inventory/equipment/pawnshop screens, real
+pointer hover/click, multiple character/job references, native sale blocking,
+release after the final Forget, reload onto another realm, and canvas alignment
+at 1000×700 and 1600×1000 passed without runtime errors.
 
 To check the controls in-game:
 

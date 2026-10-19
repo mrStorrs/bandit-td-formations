@@ -5,7 +5,7 @@
   const valid = entry => entry && [entry.id, entry.type, entry.owner, entry.recipe].every(positive) &&
     [1, 10, 100].includes(entry.multiplier);
 
-  function attachCrafting(runtime, engine, notify) {
+  function attachCrafting(runtime, engine, notify, outfitProtection = () => false) {
     const all = name => runtime.objects[name]?.getAllInstances() || [];
     const first = name => runtime.objects[name]?.getFirstInstance();
     const campaigns = new Map();
@@ -194,7 +194,7 @@
         automatic = false;
       }
     }
-    const sets = globalThis.BanditFormations.attachCraftSets(runtime, engine, notify, { context, enqueue: repeat });
+    const sets = globalThis.BanditFormations.attachCraftSets(runtime, engine, notify, { context, enqueue: repeat, outfitProtection });
     return {
       leave() { sets.leave(); },
       tick() {

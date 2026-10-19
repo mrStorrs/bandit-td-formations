@@ -4,7 +4,7 @@ const fs = require("node:fs");
 const vm = require("node:vm");
 const settle = () => new Promise(resolve => setImmediate(resolve));
 const clone = value => value === undefined ? undefined : JSON.parse(JSON.stringify(value));
-function fixture(stored = new Map(), extended = false) {
+function fixture(stored = new Map(), extended = false, outfitProtection = () => false) {
   let clock = 0;
   const cells = new Map(), notifications = [], calls = [], tiles = [], methods = new Map(), handlers = {}, messages = [];
   const save = { uid: 101, width: 64, getAt: (...coords) => cells.get(coords.join()) ?? 0,
@@ -115,7 +115,7 @@ function fixture(stored = new Map(), extended = false) {
   const sandbox = { BanditFormations: {}, performance: { now: () => clock }, console: { error() {} } };
   vm.createContext(sandbox);
   for (const name of ["craft-sets.js", "craft-sets-runtime.js", "crafting.js"]) vm.runInContext(fs.readFileSync(`${__dirname}/../../src/${name}`, "utf8"), sandbox);
-  const loop = sandbox.BanditFormations.attachCrafting(runtime, engine, text => notifications.push(text));
+  const loop = sandbox.BanditFormations.attachCrafting(runtime, engine, text => notifications.push(text), outfitProtection);
   save.setAt(12345678, 0, 1, 0);
   for (const id of Object.keys(recipes)) save.setAt(1, Number(id), 19, 0);
   for (let index = 0; index < 3; index++) {

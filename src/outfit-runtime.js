@@ -6,7 +6,7 @@
     const first = name => runtime.objects[name]?.getFirstInstance();
     const clean = text => String(text).replace(/\[[^\]]*\]/g, "");
     const pending = new Map();
-    let state = null, running = null, saving = false, hooked = false, lastStatus = "", lastError = "", epoch = 0;
+    let state = null, running = null, saving = false, hooked = false, lastStatus = "", lastLocks = "", lastError = "", epoch = 0;
     const pause = () => new Promise(resolve => setTimeout(resolve, 16));
     function context() {
       if (!engine.GetMainRunningLayout() || runtime.layout.name !== "主界面") return null;
@@ -33,7 +33,7 @@
       if (state?.saveId === current.saveId) return state;
       pending.clear(); lastError = "";
       const next = state = { saveId: current.saveId, key: `cjs-formations:outfits:v1:${current.saveId}`,
-        enabled: true, outfits: [], ready: false, error: null };
+        enabled: true, outfits: [], references: new Map(), ready: false, error: null };
       next.loading = (async () => {
         try {
           const data = await runtime.storage.getItem(next.key);
@@ -49,6 +49,7 @@
               keys.add(key);
             }
             next.enabled = data.enabled; next.outfits = data.outfits;
+            indexReferences(next);
           }
         } catch (error) { next.error = error; report(error); }
         finally { next.ready = true; }
@@ -56,6 +57,25 @@
       return next;
     }
     const findOutfit = (data, who) => data.outfits.find(o => o.id === who.id && o.identity === who.identity && o.job === who.job);
+    function indexReferences(data) {
+      data.references = new Map();
+      for (const outfit of data.outfits) for (const key of new Set(outfit.slots.filter(Boolean))) {
+        if (!data.references.has(key)) data.references.set(key, []);
+        data.references.get(key).push(outfit);
+      }
+    }
+    function references(current, key) {
+      return (load(current).references.get(key) || []).filter(outfit => character(current, outfit.id)?.identity === outfit.identity);
+    }
+    function isProtected(save, row, layer = 7) {
+      const current = context();
+      if (!current || current.save !== save) return true;
+      const data = load(current);
+      // A pending or failed read/write cannot establish that selling is safe.
+      if (!data.ready || data.error || saving) return true;
+      const piece = item(current, row, layer);
+      return !!piece && references(current, piece.key).length > 0;
+    }
     function request(id) {
       const current = context();
       if (!current) return;
@@ -70,12 +90,26 @@
       if (typeof block?._RunAndBlock !== "function" || typeof fn.CaptureFunctionParameters !== "function") {
         throw new Error("The game's job-change hook is unavailable.");
       }
+      const sale = engine.GetEventSheetManager().GetFunctionBlockByName("出售物品");
+      const saleBlock = sale?.GetEventBlock();
+      if (typeof saleBlock?._RunAndBlock !== "function" || typeof sale.CaptureFunctionParameters !== "function") {
+        throw new Error("The game's equipment-sale hook is unavailable.");
+      }
       const run = block._RunAndBlock;
       block._RunAndBlock = function (...args) {
         const [id] = fn.CaptureFunctionParameters();
         const result = run.apply(this, args);
         try { request(id); } catch (error) { report(error); }
         return result;
+      };
+      const sell = saleBlock._RunAndBlock;
+      saleBlock._RunAndBlock = function (...args) {
+        const [row, , automatic] = sale.CaptureFunctionParameters(), current = context();
+        if (current && isProtected(current.save, row)) {
+          if (!automatic) notify("Outfit lock: change or forget the saved outfits using this item before selling it.");
+          return;
+        }
+        return sell.apply(this, args);
       };
       hooked = true;
     }
@@ -218,6 +252,35 @@
         error: data.error?.message || "" } : { visible: false };
       const text = JSON.stringify(payload);
       if (text !== lastStatus) { lastStatus = text; engine.PostComponentMessageToDOM("cjs-formations", "outfit-status", payload); }
+      publishLocks(current);
+    }
+    function publishLocks(current) {
+      const markers = [], data = current && load(current);
+      const pages = all("二级页面背景").some(p => p.isVisible);
+      const blocked = runtime.globalVars["装备穿戴中"] ||
+        ["转场云", "世界地图", "提示信息", "对话选择框"].some(name => all(name).length) || all("黑幕").some(p => p.isVisible);
+      if (data?.ready && !data.error && !blocked && data.references.size) for (const icon of all("物品图标")) {
+        const v = icon.instVars;
+        if (!icon.isVisible || icon.opacity === 0 || icon.layer.isSelfAndParentsVisible === false ||
+            (pages && v["用途"] === "底部")) continue;
+        const equipped = ["角色装备", "角色装备丹药"].includes(v["功能"]);
+        if (!equipped && !["物品", "装备", "当铺", "物品选择", "角色丹药", "词条洗练", "合成材料", "宝物分解"].includes(v["功能"])) continue;
+        const layer = equipped ? 9 : v["库序号"];
+        if (![7, 9].includes(layer)) continue;
+        const piece = item(current, v["物品序号"], layer);
+        if (!piece || piece.type !== v["物品编号"]) continue;
+        const owners = references(current, piece.key).map(outfit => ({
+          name: character(current, outfit.id).name, job: clean(runtime.callFunction("文本", outfit.job, 0)),
+        }));
+        if (!owners.length) continue;
+        const box = icon.getBoundingBox(), [left, top] = icon.layer.layerToCssPx(box.left, box.top);
+        const [right, bottom] = icon.layer.layerToCssPx(box.right, box.bottom);
+        const size = Math.max(14, Math.min(22, (right - left) * 0.34));
+        if (![left, top, right, bottom, size].every(Number.isFinite) || right <= left || bottom <= top) continue;
+        markers.push({ uid: icon.uid, x: Math.round(left), y: Math.round(top), size: Math.round(size), owners });
+      }
+      const text = JSON.stringify(markers);
+      if (text !== lastLocks) { lastLocks = text; engine.PostComponentMessageToDOM("cjs-formations", "outfit-locks", { markers }); }
     }
     async function edit(action, payload) {
       if (saving || running || pending.size) return;
@@ -236,6 +299,7 @@
         }
         await runtime.storage.setItem(data.key, { version: 1, enabled, outfits });
         data.enabled = enabled; data.outfits = outfits; lastError = "";
+        indexReferences(data);
         if (action !== "enabled") notify(`${who.name}: ${clean(runtime.callFunction("文本", who.job, 0))} outfit ${action === "save" ? "saved" : "forgotten"}.`);
       } catch (error) { report(error); }
       finally { saving = false; publish(); }
@@ -244,7 +308,7 @@
       engine.AddDOMComponentMessageHandler("cjs-formations", `outfit-${action}`, payload => edit(action, payload));
     }
     return {
-      request, flush,
+      request, flush, isProtected,
       ready() {
         const current = context();
         return !current || (state?.saveId === current.saveId && !!state.ready && !running && !saving && !pending.size && !runtime.globalVars["装备穿戴中"]);
@@ -253,14 +317,17 @@
         const current = context();
         if (current) {
           const data = load(current);
+          try { installHook(); } catch (error) { data.error = error; report(error); }
           if (!data.error) {
-            try { installHook(); } catch (error) { data.error = error; report(error); }
             if (data.ready && !data.error && pending.size && !saving && safe(current)) flush().catch(report);
           }
         }
         publish();
       },
-      leave() { epoch++; pending.clear(); state = null; lastStatus = ""; },
+      leave() {
+        epoch++; pending.clear(); state = null; lastStatus = ""; lastLocks = "";
+        engine.PostComponentMessageToDOM("cjs-formations", "outfit-locks", { markers: [] });
+      },
     };
   }
   Object.assign(globalThis.BanditFormations, { attachOutfits });

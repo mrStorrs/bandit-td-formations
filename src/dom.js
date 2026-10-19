@@ -14,12 +14,13 @@
         ["forest-status", ({ text }) => this.forestStatus(text)],
         ["recruit-status", state => this.recruitStatus(state)],
         ["outfit-status", state => this.outfitStatus(state)],
+        ["outfit-locks", state => this.outfitLocks(state)],
         ["craft-status", state => this.craftStatus(state)],
         ["study-status", state => this.studyStatus(state)],
       ]);
     }
     Attach() {
-      const editable = element => element?.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(element?.tagName) || this.recruitPanel?.contains(element) || this.outfitPanel?.contains(element) || this.craftPanel?.contains(element) || this.studyPanel?.contains(element);
+      const editable = element => element?.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(element?.tagName) || this.recruitPanel?.contains(element) || this.outfitPanel?.contains(element) || this.outfitLockLayer?.contains(element) || this.craftPanel?.contains(element) || this.studyPanel?.contains(element);
       const cancel = () => {
         this.held.clear();
         if (this.ready) this.PostToRuntime("cancel", {});
@@ -51,6 +52,8 @@
       }, true);
       const loseFocus = () => {
         cancel();
+        this.outfitLockHover = null;
+        if (this.outfitLockTooltip) this.outfitLockTooltip.hidden = true;
         if (this.recruitState?.running) this.PostToRuntime("recruit-stop", {});
       };
       window.addEventListener("blur", loseFocus);
@@ -93,7 +96,7 @@
         this.craftKeep = make("input", "", this.craftKeepLabel); this.craftKeep.type = "number"; this.craftKeep.id = "cjs-craft-keep";
         this.craftKeep.min = "1"; this.craftKeep.max = "999"; this.craftKeep.step = "1"; this.craftKeep.value = "1"; this.craftKeep.required = true;
         this.craftKeep.style.cssText = "width:65px;font:inherit";
-        make("div", "Selling changes apply immediately in either mode. Sell over limit keeps the best N per item, tier and role. Work suffixes: Work Crit + job bonus > Work Crit > job bonus. Then compare suffix Work Crit %, job bonus rolls and rarity. Innate stats do not count. Minimum rarity still applies. Combat keeps rarity first. Equipped gear and existing locks are protected; this mode can replace its own auto-locked crafts. Pause stops selling.", this.craftOutputBox).style.cssText = "margin:0 0 10px;color:#c5ced1;font-size:12px;line-height:1.4";
+        make("div", "Selling changes apply immediately in either mode. Sell over limit keeps the best N per item, tier and role. Work suffixes: Work Crit + job bonus > Work Crit > job bonus. Then compare suffix Work Crit %, job bonus rolls and rarity. Innate stats do not count. Minimum rarity still applies. Combat keeps rarity first. Saved outfits, equipped gear and existing locks are protected; this mode can replace its own auto-locked crafts when no outfit uses them. Pause stops selling.", this.craftOutputBox).style.cssText = "margin:0 0 10px;color:#c5ced1;font-size:12px;line-height:1.4";
         this.craftGear = make("div", "", body);
         const gearSelect = (title, id, options) => select(title, id, options, this.craftGear);
         this.craftLoop = gearSelect("Loop", "cjs-craft-loop", [["all", "Checked roles · lowest stock"], ...state.roles.map(r => [r.id, r.name])]);
@@ -124,7 +127,7 @@
         this.craftPause.style.cssText = "margin-left:8px;padding:7px 12px;cursor:pointer;font:inherit";
         this.craftInfo = make("div", "", body); this.craftInfo.setAttribute("role", "status");
         this.craftInfo.style.cssText = "margin-top:10px;line-height:1.4;white-space:pre-line";
-        make("div", "This station makes its own pieces in batches of 10. Checked roles and Loop choose what to craft. Normally, matching gear is kept and locked for every role, including unchecked roles. Work gear needs a Work Crit or job-bonus suffix; built-in stats do not qualify. Sell all overrides keeping; Sell over limit removes weaker duplicates. Non-matches follow the checkbox above. Recipe changes apply after the current queue finishes.", this.craftGear).style.cssText = "margin-top:8px;color:#c5ced1;font-size:12px;line-height:1.4";
+        make("div", "This station makes its own pieces in batches of 10. Checked roles and Loop choose what to craft. Normally, matching gear is kept and locked for every role, including unchecked roles. Work gear needs a Work Crit or job-bonus suffix; built-in stats do not qualify. Sell all overrides normal keeping; saved outfits remain protected. Sell over limit removes weaker duplicates. Non-matches follow the checkbox above. Recipe changes apply after the current queue finishes.", this.craftGear).style.cssText = "margin-top:8px;color:#c5ced1;font-size:12px;line-height:1.4";
         const controls = () => {
           const busy = this.craftState.busy || this.craftState.error, gear = this.craftState.station.kind !== 6;
           const sets = gear && this.craftMode.value === "sets";
@@ -308,6 +311,62 @@
         const input = this.studyJobInputs[job.id]; input.checked = job.selected; input.disabled = state.busy || state.error;
       }
     }
+    outfitLocks({ markers }) {
+      if (!this.outfitLockLayer) {
+        const layer = this.outfitLockLayer = document.createElement("div");
+        layer.id = "cjs-outfit-locks";
+        layer.style.cssText = "position:fixed;inset:0;pointer-events:none;z-index:2147483644";
+        document.body.appendChild(layer);
+        this.outfitLockButtons = new Map();
+        const tooltip = this.outfitLockTooltip = document.createElement("div");
+        tooltip.id = "cjs-outfit-lock-tooltip"; tooltip.setAttribute("role", "tooltip"); tooltip.hidden = true;
+        tooltip.style.cssText = "position:fixed;z-index:2147483647;pointer-events:none;box-sizing:border-box;width:300px;max-width:calc(100vw - 24px);padding:10px 12px;border:1px solid #64d8ed;border-radius:6px;background:#10232af7;color:#edfaff;font:13px/1.5 sans-serif;white-space:pre-line;box-shadow:0 3px 16px #0009";
+        document.body.appendChild(tooltip);
+      }
+      const hide = () => { this.outfitLockHover = null; this.outfitLockTooltip.hidden = true; };
+      const show = button => {
+        const marker = button.outfitMarker;
+        if (!marker) return;
+        this.outfitLockHover = marker.uid;
+        const tooltip = this.outfitLockTooltip;
+        tooltip.textContent = button.outfitText; tooltip.hidden = false;
+        tooltip.style.left = `${Math.max(12, Math.min(marker.x, window.innerWidth - 312))}px`;
+        const height = tooltip.getBoundingClientRect().height;
+        tooltip.style.top = `${Math.max(12, Math.min(marker.y + marker.size + 6, window.innerHeight - height - 12))}px`;
+      };
+      const present = new Set();
+      for (const marker of markers) {
+        if (marker.x < 0 || marker.y < 0 || marker.x + marker.size > window.innerWidth || marker.y + marker.size > window.innerHeight) continue;
+        present.add(marker.uid);
+        let button = this.outfitLockButtons.get(marker.uid);
+        if (!button) {
+          button = document.createElement("button"); button.type = "button";
+          button.className = "cjs-outfit-lock";
+          button.style.cssText = "position:absolute;pointer-events:auto;box-sizing:border-box;border:1px solid #b5f3ff;border-radius:4px;background:#12667b;color:#fff;padding:2px;cursor:help;box-shadow:0 1px 4px #000b";
+          button.innerHTML = '<svg viewBox="0 0 24 24" width="100%" height="100%" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M7 10V7a5 5 0 0 1 10 0v3"/><rect x="4" y="10" width="16" height="12" rx="2"/><path d="M12 14v4"/></svg>';
+          button.setAttribute("aria-describedby", "cjs-outfit-lock-tooltip");
+          button.addEventListener("pointerenter", () => show(button));
+          button.addEventListener("focus", () => show(button));
+          button.addEventListener("pointerleave", hide); button.addEventListener("blur", hide);
+          button.addEventListener("click", event => { event.preventDefault(); show(button); });
+          for (const event of ["pointerdown", "pointerup", "pointermove", "pointerrawupdate", "pointercancel", "mousedown", "mouseup", "mousemove", "click", "dblclick", "touchstart", "touchend", "touchmove", "touchcancel", "keydown", "keyup", "wheel"]) {
+            button.addEventListener(event, e => e.stopPropagation());
+          }
+          this.outfitLockLayer.appendChild(button); this.outfitLockButtons.set(marker.uid, button);
+        }
+        button.outfitMarker = marker;
+        button.outfitText = "Saved outfit lock\n" + marker.owners.map(owner => `${owner.name} · ${owner.job}`).join("\n") +
+          "\n\nProtected from selling. Change or forget these outfits to release this lock.";
+        button.setAttribute("aria-label", button.outfitText);
+        button.style.left = `${marker.x}px`; button.style.top = `${marker.y}px`;
+        button.style.width = button.style.height = `${marker.size}px`;
+        if (this.outfitLockHover === marker.uid) show(button);
+      }
+      for (const [uid, button] of this.outfitLockButtons) if (!present.has(uid)) {
+        button.outfitMarker = null; button.remove(); this.outfitLockButtons.delete(uid);
+        if (this.outfitLockHover === uid) hide();
+      }
+    }
     outfitStatus(state) {
       this.outfitState = state;
       if (!state.visible) { if (this.outfitPanel) this.outfitPanel.hidden = true; return; }
@@ -349,7 +408,7 @@
         this.outfitEnabled.addEventListener("change", () => {
           this.PostToRuntime("outfit-enabled", { token: this.outfitState.token, enabled: this.outfitEnabled.checked });
         });
-        make("div", "Choose a job, equip your gear, then Save. Jobs without a saved outfit keep current gear.", panel).style.cssText = "margin-top:7px;color:#c5ced1;font-size:12px;line-height:1.4";
+        make("div", "Choose a job, equip your gear, then Save. Jobs without a saved outfit keep current gear. Blue outfit locks protect saved pieces from selling; hover a lock to see its characters and jobs. Forget or replace every outfit using a piece to release it.", panel).style.cssText = "margin-top:7px;color:#c5ced1;font-size:12px;line-height:1.4";
         for (const event of ["pointerdown", "pointerup", "pointermove", "pointerrawupdate", "pointercancel", "mousedown", "mouseup", "mousemove", "click", "dblclick", "touchstart", "touchend", "touchmove", "touchcancel", "keydown", "keyup", "wheel"]) {
           panel.addEventListener(event, e => e.stopPropagation());
         }

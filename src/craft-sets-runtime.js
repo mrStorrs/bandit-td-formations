@@ -130,6 +130,7 @@
     }
     function sellItem(current, state, item, managed = false) {
       const s = current.save;
+      if (bridge.outfitProtection(s, item.row, item.location)) return;
       if (item.location !== 7 || s.getAt(item.row, 1, 7) !== item.recipe || s.getAt(item.row, 7, 7) !== 0 ||
           s.getAt(item.row, 2, 7) !== 1 || (s.getAt(item.row, 22, 7) !== 0 && !managed)) return;
       const manager = engine.GetEventSheetManager();
@@ -152,7 +153,8 @@
       for (const other of inventory) {
         other.workCritValue = workCritValue(other);
         other.managed = counts.get(other.key) === 1 && state.managed.has(other.key);
-        other.protected = other.location !== 7 || current.save.getAt(other.row, 7, 7) !== 0 ||
+        other.protected = bridge.outfitProtection(current.save, other.row, other.location) ||
+          other.location !== 7 || current.save.getAt(other.row, 7, 7) !== 0 ||
           (current.save.getAt(other.row, 22, 7) !== 0 && !other.managed);
       }
       for (const extra of planCraftSurplus(inventory, incoming, state.options.keepLimit, current.wp, state.options.minimum)) {

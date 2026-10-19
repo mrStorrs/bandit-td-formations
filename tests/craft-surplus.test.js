@@ -13,6 +13,23 @@ async function ready(limit = 1) {
   f.start(0, 13, 1, 30); return f;
 }
 function craft(f, quality, bonuses = [59], rolls = [50]) { f.rolls = rolls; f.complete(0, bonuses, quality); }
+test("saved outfit protection prevents replacing a station's own auto-locked keeper", async () => {
+  let protectedRow = 0;
+  const f = fixture(new Map(), true, (_, row, layer) => layer === 7 && row === protectedRow);
+  await f.tick(); await f.tick();
+  await f.configure({ mode: "repeat", keepLimit: 1, minimum: 1, autoSell: false }); f.start(0, 13, 1, 30);
+  craft(f, 3); await settle(); protectedRow = bag(f)[0]; assert.equal(saved(f).managed.length, 1);
+  craft(f, 6); assert.deepEqual(qualities(f), [3]); assert.equal(f.save.getAt(protectedRow, 22, 7), 1);
+  assert.equal(f.status().error, false);
+  protectedRow = 0; craft(f, 6); assert.deepEqual(qualities(f), [6]);
+});
+
+test("outfit protection also stops Sell all without reporting a failed native sale", async () => {
+  const f = fixture(new Map(), true, () => true); await f.tick(); await f.tick();
+  await f.configure({ mode: "repeat", keepLimit: 0 }); f.start(0, 13, 1, 10);
+  craft(f, 6); assert.deepEqual(qualities(f), [6]);
+  assert.equal(f.save.getAt(1, 2, 0), 0); assert.equal(f.status().error, false);
+});
 function give(f, recipe, quality, bonuses = [59], rolls = [50], tier = 1) {
   f.bonuses = bonuses; f.rolls = rolls;
   f.runtime.callFunction("获得物品", true, recipe, quality, 1, tier, 200, 1, false, 0, "特定装备", false);

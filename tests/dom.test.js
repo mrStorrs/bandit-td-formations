@@ -16,10 +16,12 @@ function fixture() {
     }
     return event;
   } });
-  const window = target(), document = target();
+  const window = Object.assign(target(), { innerWidth: 1280, innerHeight: 800 }), document = target();
   document.createElement = tag => Object.assign(target(), { tagName: tag.toUpperCase(), style: {}, children: [],
     setAttribute(name, value) { this[name] = value; },
-    appendChild(child) { this.children.push(child); },
+    appendChild(child) { this.children.push(child); child.parentElement = this; },
+    remove() { this.parentElement.children = this.parentElement.children.filter(child => child !== this); },
+    getBoundingClientRect() { return { width: 300, height: 130 }; },
     replaceChildren() { this.children = []; },
     checkValidity() { return !this.validity?.badInput && (this.value === "" || (Number.isFinite(Number(this.value)) && Number(this.value) >= Number(this.min))); },
     reportValidity() { this.validityReported = true; return this.checkValidity(); },
@@ -228,6 +230,30 @@ test("invalid minimum copper is rejected without overwriting preferences; invali
 });
 
 const outfitState = { visible: true, token: "campaign:character:job", name: "Worker", jobName: "Forging", enabled: true, saved: false, busy: false, error: "" };
+test("outfit lock tooltips show every owner as text, follow coordinates, and disappear with the item", () => {
+  const f = fixture(), marker = { uid: 7, x: 120, y: 200, size: 20, owners: [
+    { name: "Panda", job: "Forging" }, { name: "<img src=x>", job: "Research" },
+  ] };
+  f.handlers["outfit-locks"]({ markers: [marker] });
+  const button = f.dom.outfitLockButtons.get(7);
+  assert.equal(button.style.left, "120px"); assert.equal(button.style.top, "200px");
+  button.dispatch("pointerenter"); assert.equal(f.dom.outfitLockTooltip.hidden, false);
+  assert.match(f.dom.outfitLockTooltip.textContent, /Panda · Forging\n<img src=x> · Research/);
+  assert.equal(f.dom.outfitLockTooltip.children.length, 0);
+  assert.equal(button.dispatch("click").stopped, true);
+  assert.equal(button.dispatch("pointerdown").stopped, true);
+  f.document.activeElement = button; f.window.dispatch("keydown", { code: "KeyC" });
+  assert.equal(f.messages.some(([name]) => name === "combat"), false);
+  f.handlers["outfit-locks"]({ markers: [{ ...marker, x: 1200, y: 750 }] });
+  assert.equal(f.dom.outfitLockButtons.get(7), button);
+  assert.equal(f.dom.outfitLockTooltip.style.left, "968px");
+  assert.equal(f.dom.outfitLockTooltip.style.top, "658px");
+  f.handlers["outfit-locks"]({ markers: [] });
+  assert.equal(f.dom.outfitLockButtons.size, 0); assert.equal(f.dom.outfitLockTooltip.hidden, true);
+  button.dispatch("click"); assert.equal(f.dom.outfitLockTooltip.hidden, true);
+  f.handlers["outfit-locks"]({ markers: [{ ...marker, x: -10 }] });
+  assert.equal(f.dom.outfitLockButtons.size, 0);
+});
 test("outfit controls save/forget only the displayed character and job and submit the auto-equip toggle", () => {
   const f = fixture(); f.handlers["outfit-status"](outfitState);
   assert.equal(f.dom.outfitSave.textContent, "Save outfit for Forging");

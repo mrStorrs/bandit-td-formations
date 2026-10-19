@@ -160,7 +160,7 @@
     const recruitment = globalThis.BanditFormations.attachRecruitment(runtime, engine, notify);
     const recipeCosts = globalThis.BanditFormations.attachRecipeCosts(runtime, engine, notify);
     const gathering = globalThis.BanditFormations.attachGathering(runtime, engine, notify);
-    const crafting = globalThis.BanditFormations.attachCrafting(runtime, engine, notify);
+    const crafting = globalThis.BanditFormations.attachCrafting(runtime, engine, notify, outfits.isProtected);
     const study = globalThis.BanditFormations.attachStudy(runtime, engine, notify);
     engine.AddDOMComponentMessageHandler(component, "forest", () => { cancelKeys(); forest.toggle(); });
     engine.AddDOMComponentMessageHandler(component, "combat", () => {
@@ -178,7 +178,7 @@
     engine.AddDOMComponentMessageHandler(component, "cancel", cancelKeys);
     runtime.addEventListener("tick", () => { recipeCosts.tick(); gathering.tick(); outfits.tick(); recruitment.tick(); crafting.tick(); study.tick(); return hotkeys.tick() || buildingHotkeys.tick() || forest.tick(); });
     runtime.addEventListener("beforelayoutstart", () => { cancelKeys(); gathering.leave(); forest.leave(); recruitment.leave(); outfits.leave(); crafting.leave(); study.leave(); });
-    engine.PostComponentMessageToDOM(component, "ready", { version: "1.19.0" });
-    console.info("[Bandit TD Formations] v1.19.0 ready: hold 1–4 to save positions and jobs, tap to restore; Shift + 1–4 for buildings; C toggles combat; Beast realm loop on, F6 toggles; auto recruit controls on the recruitment screen; crafting, research and drilling controls on each selected station; realm 2 recipes use realm 2 materials; gatherers finish the weakest resource first; per-job outfits on the character panel.");
+    engine.PostComponentMessageToDOM(component, "ready", { version: "1.20.0" });
+    console.info("[Bandit TD Formations] v1.20.0 ready: hold 1–4 to save positions and jobs, tap to restore; Shift + 1–4 for buildings; C toggles combat; Beast realm loop on, F6 toggles; auto recruit controls on the recruitment screen; crafting, research and drilling controls on each selected station; realm 2 recipes use realm 2 materials; gatherers finish the weakest resource first; per-job outfits with blue item locks and owner tooltips.");
   });
 })();
