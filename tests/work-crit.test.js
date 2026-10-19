@@ -55,13 +55,28 @@ test("combat gear retains rarity-first ranking and never qualifies on work crit 
   assert.equal(bag(f).length,1);assert.equal(records(f)[0].quality,5);
   craft(f,6,[51],[120]);assert.equal(bag(f).length,1);assert.equal(records(f)[0].quality,5);
 });
-test("built-in belt crit counts and its native value uses the main roll and equipment level",async()=>{
+test("belts need a qualifying suffix, and innate crit plus a job suffix is only job-bonus gear",async()=>{
   const f=await ready({},19);f.catalog[19][9]=51;f.catalog[19][12]=100;
-  craft(f,3,[72],[50]);assert.equal(bag(f).length,1);assert.equal(records(f)[0].lock,1);
-  craft(f,2,[59],[50]);
-  assert.ok(records(f).some(item=>item.bonuses[0]===59&&item.lock===1));
+  craft(f,6,[72],[100]);assert.equal(bag(f).length,0);assert.equal(f.save.getAt(1,2,0),123);
+  craft(f,6,[59],[100]);assert.equal(bag(f).length,1);assert.equal(records(f)[0].lock,1);
+  craft(f,3,[51],[50]);
+  assert.equal(bag(f).length,1);assert.equal(records(f)[0].quality,3);assert.equal(records(f)[0].bonuses[0],51);
+  craft(f,2,[51,59],[10,10]);
+  assert.equal(bag(f).length,2,"crit-only gear still serves other compatible jobs");
+  assert.ok(records(f).some(item=>item.bonuses[1]===59&&item.lock===1));
   const calls=f.calls.filter(c=>c[0]==="装备主属性"&&c[3]===51);
-  assert.ok(calls.some(c=>c[1]===1&&c[6]==="主属性"&&c[4]===200));
+  assert.ok(calls.length>0);assert.ok(calls.every(c=>c[6]==="副词条"));
+});
+test("work suffix strength and ties ignore innate crit and the main stat roll",async()=>{
+  for(const oldCritRoll of [60,50]) {
+    const f=await ready({},19);f.catalog[19][9]=51;f.catalog[19][12]=100;
+    f.bonuses=[51,59];f.rolls=[oldCritRoll,50];
+    f.runtime.callFunction("获得物品",true,19,3,1,1,1,1,false,0,"特定装备",false);
+    const row=bag(f)[0];
+    craft(f,3,[51,59],[50,50]);
+    assert.deepEqual(bag(f),[row]);assert.equal(f.save.getAt(row,8,7),1);
+    assert.equal(f.save.getAt(1,2,0),123);
+  }
 });
 test("an unreadable native work-crit value keeps both items and stops automatic selling",async()=>{
   const f=await ready({},2);craft(f,3,[59]);

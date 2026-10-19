@@ -75,8 +75,21 @@ test("work crit fills compatible work sets, with a job combination allocated to 
   plan=api.planCraftSets([item(2,[51]),combo],targets,o);
   assert.deepEqual(clone(plan.counts),[[0,1,0,0],[0,1,0,0]]);
   assert.equal(api.matchesCraftItem(item(2,[51]),target("combat-str"),o),false);
-  assert.equal(api.matchesCraftItem(item(3,[],{mainStat:51}),target("forge"),o),true);
+  assert.equal(api.matchesCraftItem(item(3,[],{mainStat:51}),target("forge"),o),false);
   for(const bonuses of [[12],[52],[72]])assert.equal(api.matchesCraftItem(item(2,bonuses),target("forge"),o),false);
+});
+test("innate stats never qualify a work item or fill its job stock", () => {
+  const targets=[target("forge"),target("building")],o=options();
+  const belt=item(3,[],{mainStat:51});
+  const wp={getAt:(_,field)=>({3:1,4:"普通",5:"装备",6:3,9:51,10:1,23:"生产"})[field]??0};
+  assert.equal(api.isCraftKeeper(belt,wp,o),false);
+  assert.equal(api.matchesCraftItem(item(3,[],{mainStat:59}),targets[0],o),false);
+  assert.deepEqual(clone(api.craftSaleGroups(belt,wp)),["other:"]);
+  assert.deepEqual(clone(api.craftSaleGroups({...belt,bonuses:[59]},wp)),[59]);
+  for(const keepLimit of [null,2]) {
+    const plan=api.planCraftSets([belt,{...belt,bonuses:[59]}],targets,{...o,keepLimit});
+    assert.deepEqual(clone(plan.counts),[[0,0,1,0],[0,0,0,0]]);
+  }
 });
 test("forge and crafting select roles and rounds using only their respective slots", () => {
   const targets = [target("forge"), target("research",[5,6,7,8])], o = options();

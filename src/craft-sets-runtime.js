@@ -79,17 +79,17 @@
     }
     function readItem(current, row, location) {
       const { save, wp } = current, recipe = save.getAt(row, 1, location);
-      return { row, location, recipe, slot: wp.getAt(recipe, 6), mainStat: wp.getAt(recipe, 9), tier: save.getAt(row, 3, location),
+      return { row, location, recipe, slot: wp.getAt(recipe, 6), tier: save.getAt(row, 3, location),
         quality: save.getAt(row, 5, location), level: save.getAt(row, 6, location), mainRoll: save.getAt(row, 8, location),
         bonuses: Array.from({ length: 6 }, (_, i) => save.getAt(row, 9 + i, location)),
         rolls: Array.from({ length: 6 }, (_, i) => save.getAt(row, 15 + i, location)) };
     }
-    function workCritValue(item, wp) {
-      const value = (roll, coefficient, type) => runtime.callFunction("装备主属性",
-        item.level, item.tier, 51, roll, coefficient, type, 0, item.quality);
-      // Compare the game's actual Work Crit %, including a belt's main stat.
-      let total = item.mainStat === 51 ? value(item.mainRoll, wp.getAt(item.recipe, 12), "主属性") : 0;
-      for (let i = 0; i < item.bonuses.length; i++) if (item.bonuses[i] === 51) total += value(item.rolls[i], 100, "副词条");
+    function workCritValue(item) {
+      // Only rolled suffixes contribute to work-gear matching and strength.
+      let total = 0;
+      for (let i = 0; i < item.bonuses.length; i++) if (item.bonuses[i] === 51) {
+        total += runtime.callFunction("装备主属性", 0, item.tier, 51, item.rolls[i], 100, "副词条", 0, item.quality);
+      }
       return total;
     }
     function items(current) {
@@ -150,7 +150,7 @@
         other.key = itemKey(current, other); counts.set(other.key, (counts.get(other.key) || 0) + 1);
       }
       for (const other of inventory) {
-        other.workCritValue = workCritValue(other, current.wp);
+        other.workCritValue = workCritValue(other);
         other.managed = counts.get(other.key) === 1 && state.managed.has(other.key);
         other.protected = other.location !== 7 || current.save.getAt(other.row, 7, 7) !== 0 ||
           (current.save.getAt(other.row, 22, 7) !== 0 && !other.managed);

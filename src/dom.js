@@ -93,7 +93,7 @@
         this.craftKeep = make("input", "", this.craftKeepLabel); this.craftKeep.type = "number"; this.craftKeep.id = "cjs-craft-keep";
         this.craftKeep.min = "1"; this.craftKeep.max = "999"; this.craftKeep.step = "1"; this.craftKeep.value = "1"; this.craftKeep.required = true;
         this.craftKeep.style.cssText = "width:65px;font:inherit";
-        make("div", "Selling changes apply immediately in either mode. Sell over limit keeps the best N per item, tier and role. Work gear: Work Crit + job bonus > Work Crit > job bonus. Then compare Work Crit %, job bonus rolls, rarity, main roll and level. Minimum rarity still applies. Combat keeps rarity first. Equipped gear and existing locks are protected; this mode can replace its own auto-locked crafts. Pause stops selling.", this.craftOutputBox).style.cssText = "margin:0 0 10px;color:#c5ced1;font-size:12px;line-height:1.4";
+        make("div", "Selling changes apply immediately in either mode. Sell over limit keeps the best N per item, tier and role. Work suffixes: Work Crit + job bonus > Work Crit > job bonus. Then compare suffix Work Crit %, job bonus rolls and rarity. Innate stats do not count. Minimum rarity still applies. Combat keeps rarity first. Equipped gear and existing locks are protected; this mode can replace its own auto-locked crafts. Pause stops selling.", this.craftOutputBox).style.cssText = "margin:0 0 10px;color:#c5ced1;font-size:12px;line-height:1.4";
         this.craftGear = make("div", "", body);
         const gearSelect = (title, id, options) => select(title, id, options, this.craftGear);
         this.craftLoop = gearSelect("Loop", "cjs-craft-loop", [["all", "Checked roles · lowest stock"], ...state.roles.map(r => [r.id, r.name])]);
@@ -124,7 +124,7 @@
         this.craftPause.style.cssText = "margin-left:8px;padding:7px 12px;cursor:pointer;font:inherit";
         this.craftInfo = make("div", "", body); this.craftInfo.setAttribute("role", "status");
         this.craftInfo.style.cssText = "margin-top:10px;line-height:1.4;white-space:pre-line";
-        make("div", "This station makes its own pieces in batches of 10. Checked roles and Loop choose what to craft. Normally, matching gear is kept and locked for every role, including unchecked roles. Work gear qualifies with Work Crit or its job bonus; belts include built-in Work Crit. Sell all overrides keeping; Sell over limit removes weaker duplicates. Non-matches follow the checkbox above. Recipe changes apply after the current queue finishes.", this.craftGear).style.cssText = "margin-top:8px;color:#c5ced1;font-size:12px;line-height:1.4";
+        make("div", "This station makes its own pieces in batches of 10. Checked roles and Loop choose what to craft. Normally, matching gear is kept and locked for every role, including unchecked roles. Work gear needs a Work Crit or job-bonus suffix; built-in stats do not qualify. Sell all overrides keeping; Sell over limit removes weaker duplicates. Non-matches follow the checkbox above. Recipe changes apply after the current queue finishes.", this.craftGear).style.cssText = "margin-top:8px;color:#c5ced1;font-size:12px;line-height:1.4";
         const controls = () => {
           const busy = this.craftState.busy || this.craftState.error, gear = this.craftState.station.kind !== 6;
           const sets = gear && this.craftMode.value === "sets";

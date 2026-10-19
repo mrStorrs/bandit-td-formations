@@ -41,7 +41,7 @@
   }
   const eligibleCraftItem = (item, options) => item.slot >= 1 && item.slot <= 4 &&
     item.tier === options.tier && item.quality >= options.minimum && item.quality <= 6;
-  const hasWorkCrit = (item, wp) => (wp ? wp.getAt(item.recipe, 9) : item.mainStat) === 51 || item.bonuses.includes(51);
+  const hasWorkCrit = item => item.bonuses.includes(51);
   function matchesCraftItem(item, target, options) {
     return eligibleCraftItem(item, options) && item.recipe === target.recipes[item.slot - 1] &&
       (item.bonuses.includes(target.bonus) || !target.combat && hasWorkCrit(item));
@@ -51,7 +51,7 @@
         wp.getAt(item.recipe, 3) !== item.tier || wp.getAt(item.recipe, 6) !== item.slot) return [];
     return craftRoles.filter(role => {
       if (wp.getAt(item.recipe, 10) !== role.stat ||
-          !(item.bonuses.includes(role.bonus) || !role.combat && hasWorkCrit(item, wp))) return false;
+          !(item.bonuses.includes(role.bonus) || !role.combat && hasWorkCrit(item))) return false;
       if (item.slot !== 1) return wp.getAt(item.recipe, 23) === (role.combat ? "战斗" : "生产");
       return role.combat ? wp.getAt(item.recipe, 8) === role.stat + 3 : wp.getAt(item.recipe, 9) === role.power;
     });
@@ -74,7 +74,7 @@
     }
     const bonus = (item, group) => item.bonuses.reduce((sum, id, i) => sum +
       ((typeof group === "string" || id === group) ? item.rolls[i] : 0), 0);
-    const workRank = (item, group) => 2 * Number(hasWorkCrit(item, wp)) + Number(item.bonuses.includes(group));
+    const workRank = (item, group) => 2 * Number(hasWorkCrit(item)) + Number(item.bonuses.includes(group));
     const meetsMinimum = item => item.quality >= minimum && item.quality <= 6;
     for (const [group, items] of groups) {
       const work = craftRoles.some(role => !role.combat && role.bonus === group);
@@ -84,7 +84,7 @@
         Number(meetsMinimum(b)) - Number(meetsMinimum(a)) ||
         (work ? workRank(b, group) - workRank(a, group) || b.workCritValue - a.workCritValue || bonus(b, group) - bonus(a, group) : 0) ||
         b.quality - a.quality ||
-        bonus(b, group) - bonus(a, group) || b.mainRoll - a.mainRoll || b.level - a.level ||
+        (work ? 0 : bonus(b, group) - bonus(a, group) || b.mainRoll - a.mainRoll || b.level - a.level) ||
         Number(a === incoming) - Number(b === incoming) || a.location - b.location || a.row - b.row);
       for (const item of ranked.slice(0, Math.max(0, limit - protectedItems.length))) keep.add(item);
     }

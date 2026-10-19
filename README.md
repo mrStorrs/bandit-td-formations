@@ -391,9 +391,10 @@ and ring. Cores, treasures and special set upgrades are outside this loop.
 
 The combat roles craft the tier's ordinary spear, bow and fan respectively.
 Every piece must be the correct recipe/stat variant, exactly the chosen tier,
-and at least the minimum rarity. Work gear qualifies with **Work Crit** (rate),
-the job bonus above, or both. Built-in Work Crit on belts counts too. Combat
-gear still requires its matching combat bonus. General Work Bonus, Work Crit
+and at least the minimum rarity. Work gear qualifies with a rolled **Work Crit**
+(rate) suffix, the job-bonus suffix above, or both. Innate stats, including
+built-in Work Crit on belts, do not qualify an item or contribute to work-gear
+ranking. Combat gear still requires its matching combat bonus. General Work Bonus, Work Crit
 DMG and combat crit do not substitute for Work Crit or a specific job bonus.
 Quality and rolls still come from the game; selecting a minimum does not
 guarantee that rarity.
@@ -426,8 +427,8 @@ existing matches. Each result is checked against every job and combat role,
 regardless of the checkboxes or single-role dropdown. With only Forger selected,
 STR work gloves with Build Bonus are kept for Builder, but only Forger sets drive the loop.
 Keepers still need that station's selected tier, minimum rarity, correct stat
-and a matching role bonus or, for work gear, Work Crit. Work weapons need the
-job's specific work power. Combat weapons can be any ordinary weapon with the
+and a matching role-bonus suffix or, for work gear, a Work Crit suffix. Work
+weapons need the job's specific work power. Combat weapons can be any ordinary weapon with the
 matching attack type and primary
 stat: a sword with AGI, Pierce attack and Pierce Bonus is protected even though
 the AGI loop crafts bows. These alternatives do not replace the chosen weapon
@@ -460,17 +461,19 @@ than N pieces showing a particular bonus. Nonmatching gear follows the
 **Auto-sell non-matching crafts** checkbox; with it off, surplus comparisons
 group nonmatches by their exact set of bonus types.
 
-Work gear is ranked in this order, within the minimum rarity:
+Work gear is ranked by its rolled suffixes in this order, within the minimum rarity:
 
 1. **Work Crit + the relevant job bonus** — best.
 2. **Work Crit alone**.
 3. **The relevant job bonus alone**.
 
-Within each category, compare actual **Work Crit %**, then total **matching job
-bonus rolls**, then **rarity**, **main stat roll** and **equipment level**.
-Work Crit includes its rolled bonuses and a belt's built-in main stat, using
-the game's values. For a Forger, the combination needs Forge Bonus; for a
-Crafter, Craft Bonus; for a Researcher, Tech Bonus, and so on. A lower-rarity
+Within each category, compare actual **Work Crit % from suffixes**, then total
+**matching job-bonus suffix rolls**, then **rarity**. Innate stats, main stat
+rolls and equipment level do not break work-gear ties. For example, a belt with
+built-in Work Crit and only a Forge Bonus suffix counts as job-bonus-only gear;
+it needs a rolled Work Crit suffix too to qualify for the best combination.
+For a Forger, the combination needs Forge Bonus; for a Crafter, Craft Bonus;
+for a Researcher, Tech Bonus, and so on. A lower-rarity
 combination beats higher-rarity crit-only gear as long as it meets the minimum.
 Generic Work Crit gear can serve each compatible job with the same stat and
 equipment type; it survives if one of those groups still needs it. Normal
@@ -952,6 +955,16 @@ locks, native calculation failures, and unchanged combat ranking. In isolated
 build 25975458, stronger work combinations replaced higher-rarity gear, sales
 paid native copper, belts qualified on built-in crit, and Normal Auto-all kept
 and locked crit-only gear. The updated station help also passed.
+
+Version 1.18.1 limits work-gear qualification, stock counts and bonus ranking
+to rolled suffixes. Innate belt crit no longer supplies a match or promotes a
+job-only piece into the best combination. Main stat rolls and equipment level
+no longer break work-gear ties; combat ranking is unchanged. Regression tests
+cover innate-only rejects, suffix-only role groups and stock, belt upgrades,
+and stronger suffixes winning despite weaker innate stats. In isolated build
+25975458, native belt crafts followed the suffix ranking and credited copper
+for rejects; Normal Auto-all kept and locked suffix matches while rejecting
+innate-only belts.
 
 To check the controls in-game:
 
