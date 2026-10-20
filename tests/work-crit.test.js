@@ -21,28 +21,38 @@ test("work crit alone is kept and locked in Normal Auto-all, and does not satisf
   f.cancel(0);await f.configure({loop:"combat-str",minimum:3});await f.tick();
   assert.equal(f.save.getAt(f.queue(0),3,13),10,"work-only gloves never fill combat stock");
 });
-test("work crit plus the job bonus outranks crit alone, which outranks job-only gear regardless of rarity",async()=>{
+test("higher rarity beats stronger work suffixes across all six grades, in either crafting order",async()=>{
+  for(const recipe of [2,19])for(let lower=1;lower<6;lower++)for(let higher=lower+1;higher<=6;higher++)for(const higherFirst of [false,true]) {
+    const f=await ready({},recipe);
+    const best=[higher,recipe===2?[59]:[51,59],recipe===2?[1]:[1,1]];
+    const worse=[lower,[51,51,59],[100,100,100]];
+    for(const args of higherFirst?[best,worse]:[worse,best])craft(f,...args);
+    assert.equal(bag(f).length,1,`recipe ${recipe}: grade ${higher} over ${lower}`);
+    assert.equal(records(f)[0].quality,higher);assert.equal(records(f)[0].lock,1);
+    assert.equal(f.save.getAt(1,2,0),123);assert.equal(f.status().error,false);
+  }
+});
+test("within the same rarity, work crit plus the job bonus outranks crit alone, then job-only gear",async()=>{
   const f=await ready({},2);
-  craft(f,6,[59],[100]);craft(f,3,[51],[80]);
-  assert.equal(bag(f).length,1);assert.equal(records(f)[0].quality,3);assert.equal(records(f)[0].bonuses[0],51);
-  craft(f,2,[51,59],[10,10]);
-  assert.equal(bag(f).length,1);assert.deepEqual(records(f)[0].bonuses.slice(0,2),[51,59]);assert.equal(records(f)[0].quality,2);
-  craft(f,6,[51],[120]);assert.equal(bag(f).length,1);assert.equal(records(f)[0].quality,2);
+  craft(f,4,[59],[100]);craft(f,4,[51],[80]);
+  assert.equal(bag(f).length,1);assert.equal(records(f)[0].bonuses[0],51);
+  craft(f,4,[51,59],[10,10]);
+  assert.equal(bag(f).length,1);assert.deepEqual(records(f)[0].bonuses.slice(0,2),[51,59]);
+  craft(f,4,[51],[120]);assert.equal(bag(f).length,1);assert.deepEqual(records(f)[0].bonuses.slice(0,2),[51,59]);
   assert.equal(records(f)[0].lock,1);assert.equal(f.save.getAt(1,2,0),3*123);
 });
-test("within the preferred combination, work crit amount wins before job roll and rarity",async()=>{
+test("within the same rarity and combination, work crit amount wins before job roll",async()=>{
   const f=await ready({},2);
-  craft(f,6,[51,59],[50,100]);craft(f,3,[51,51,59],[30,30,1]);
-  assert.equal(records(f)[0].quality,3);assert.deepEqual(records(f)[0].bonuses.slice(0,3),[51,51,59]);
-  craft(f,2,[51,51,59],[30,30,80]);assert.equal(records(f)[0].quality,2);
-  craft(f,6,[51,51,59],[30,30,80]);assert.equal(records(f)[0].quality,6);
+  craft(f,4,[51,59],[50,100]);craft(f,4,[51,51,59],[30,30,1]);
+  assert.deepEqual(records(f)[0].bonuses.slice(0,3),[51,51,59]);
+  craft(f,4,[51,51,59],[30,30,80]);assert.equal(f.save.getAt(bag(f)[0],17,7),80);
 });
 test("the skill bonus must match the job; crit damage and combat crit are not work crit rate",async()=>{
   const f=await ready({},2);
-  craft(f,4,[51],[50]);craft(f,6,[12,52,59],[120,120,120]);
+  craft(f,4,[51],[50]);craft(f,4,[12,52,59],[120,120,120]);
   assert.equal(bag(f).length,1);assert.equal(records(f)[0].bonuses[0],51);
-  craft(f,6,[51,60],[40,120]);assert.equal(bag(f).length,1);assert.equal(records(f)[0].quality,4);
-  craft(f,3,[51,59],[40,10]);assert.equal(records(f)[0].quality,3);
+  craft(f,4,[51,60],[40,120]);assert.equal(bag(f).length,1);assert.equal(records(f)[0].bonuses[1],0);
+  craft(f,4,[51,59],[40,10]);assert.deepEqual(records(f)[0].bonuses.slice(0,2),[51,59]);
 });
 test("minimum rarity remains required even when reject selling is disabled",async()=>{
   const f=await ready({minimum:3,autoSell:false},2);
@@ -59,9 +69,9 @@ test("belts need a qualifying suffix, and innate crit plus a job suffix is only 
   const f=await ready({},19);f.catalog[19][9]=51;f.catalog[19][12]=100;
   craft(f,6,[72],[100]);assert.equal(bag(f).length,0);assert.equal(f.save.getAt(1,2,0),123);
   craft(f,6,[59],[100]);assert.equal(bag(f).length,1);assert.equal(records(f)[0].lock,1);
-  craft(f,3,[51],[50]);
-  assert.equal(bag(f).length,1);assert.equal(records(f)[0].quality,3);assert.equal(records(f)[0].bonuses[0],51);
-  craft(f,2,[51,59],[10,10]);
+  craft(f,6,[51],[50]);
+  assert.equal(bag(f).length,1);assert.equal(records(f)[0].quality,6);assert.equal(records(f)[0].bonuses[0],51);
+  craft(f,6,[51,59],[10,10]);
   assert.equal(bag(f).length,2,"crit-only gear still serves other compatible jobs");
   assert.ok(records(f).some(item=>item.bonuses[1]===59&&item.lock===1));
   const calls=f.calls.filter(c=>c[0]==="装备主属性"&&c[3]===51);
@@ -86,9 +96,9 @@ test("an unreadable native work-crit value keeps both items and stops automatic 
 });
 test("crit gloves serve compatible work jobs while job combinations retain their own quotas",async()=>{
   const f=await ready();craft(f,3,[51],[50]);
-  craft(f,2,[51,59],[10,10]);craft(f,2,[51,62],[10,10]);
+  craft(f,3,[51,59],[10,10]);craft(f,3,[51,62],[10,10]);
   assert.equal(bag(f).length,3,"the stronger generic crit pair still serves Logger");
-  craft(f,2,[51,56],[10,10]);
+  craft(f,3,[51,56],[10,10]);
   assert.equal(bag(f).length,3);assert.ok(records(f).every(item=>item.bonuses[0]===51&&item.bonuses[1]>0));
 });
 test("manual locks protect job-only gear even when a stronger work-crit combination is crafted",async()=>{

@@ -475,20 +475,26 @@ than N pieces showing a particular bonus. Nonmatching gear follows the
 **Auto-sell non-matching crafts** checkbox; with it off, surplus comparisons
 group nonmatches by their exact set of bonus types.
 
-Work gear is ranked by its rolled suffixes in this order, within the minimum rarity:
+**Rarity ranks first** when comparing eligible duplicates: **Red (6) > Gold/orange
+(5) > Purple (4) > Blue (3) > Green (2) > White (1)**. A higher-rarity piece wins
+even if the lower-rarity piece has better rolled bonuses. This compares the
+color grade; recipe/realm tiers still have separate limits.
+
+Within the **same rarity**, work gear is ranked by its rolled suffixes:
 
 1. **Work Crit + the relevant job bonus** — best.
 2. **Work Crit alone**.
 3. **The relevant job bonus alone**.
 
 Within each category, compare actual **Work Crit % from suffixes**, then total
-**matching job-bonus suffix rolls**, then **rarity**. Innate stats, main stat
+**matching job-bonus suffix rolls**. Innate stats, main stat
 rolls and equipment level do not break work-gear ties. For example, a belt with
 built-in Work Crit and only a Forge Bonus suffix counts as job-bonus-only gear;
 it needs a rolled Work Crit suffix too to qualify for the best combination.
 For a Forger, the combination needs Forge Bonus; for a Crafter, Craft Bonus;
-for a Researcher, Tech Bonus, and so on. A lower-rarity
-combination beats higher-rarity crit-only gear as long as it meets the minimum.
+for a Researcher, Tech Bonus, and so on. A red job-bonus-only piece beats an
+orange Work Crit + job bonus piece for that job. Gear still needs a qualifying
+suffix and the minimum rarity to count toward a set.
 Generic Work Crit gear can serve each compatible job with the same stat and
 equipment type; it survives if one of those groups still needs it. Normal
 mode counts each physical piece once, preferring its specific job when stocks tie.
@@ -1022,6 +1028,15 @@ In isolated build 25975458, native inventory/equipment/pawnshop screens, real
 pointer hover/click, multiple character/job references, native sale blocking,
 release after the final Forget, reload onto another realm, and canvas alignment
 at 1000×700 and 1600×1000 passed without runtime errors.
+
+Version 1.20.1 makes rarity the first ranking criterion for surplus work gear.
+Suffix combinations and rolls break ties within a color grade. Regression
+coverage compares every pair of the six grades in both crafting orders at
+forge and crafting stations, alongside existing lock protections and combat
+ranking. The release passes 371 JavaScript tests and four installer tests.
+In isolated build 25975458, both station types replaced strong-roll orange
+gear with weak-roll red gear, locked the red, sold the orange for native
+copper, rejected later orange gear, and upgraded to better same-grade bonuses.
 
 To check the controls in-game:
 

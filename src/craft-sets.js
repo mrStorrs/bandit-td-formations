@@ -82,8 +82,8 @@
       for (const item of protectedItems) keep.add(item);
       const ranked = items.filter(item => !item.protected).sort((a, b) =>
         Number(meetsMinimum(b)) - Number(meetsMinimum(a)) ||
-        (work ? workRank(b, group) - workRank(a, group) || b.workCritValue - a.workCritValue || bonus(b, group) - bonus(a, group) : 0) ||
         b.quality - a.quality ||
+        (work ? workRank(b, group) - workRank(a, group) || b.workCritValue - a.workCritValue || bonus(b, group) - bonus(a, group) : 0) ||
         (work ? 0 : bonus(b, group) - bonus(a, group) || b.mainRoll - a.mainRoll || b.level - a.level) ||
         Number(a === incoming) - Number(b === incoming) || a.location - b.location || a.row - b.row);
       for (const item of ranked.slice(0, Math.max(0, limit - protectedItems.length))) keep.add(item);

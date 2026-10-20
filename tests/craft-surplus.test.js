@@ -43,12 +43,13 @@ test("keep-best-N replaces its own weaker auto-locked crafts and locks the retai
   craft(f, 2); assert.deepEqual(qualities(f), [4, 5]); assert.equal(f.save.getAt(1, 2, 0), 246);
 });
 
-test("work bonus rolls take priority over rarity, with exact ties retaining the old piece", async () => {
+test("rarity takes priority over work bonus rolls, with exact ties retaining the old piece", async () => {
   const f = await ready(); craft(f, 4, [59], [50]); craft(f, 4, [59, 59], [30, 30]);
   assert.equal(bag(f).length, 1); const row = bag(f)[0]; assert.equal(f.save.getAt(row, 10, 7), 59);
   craft(f, 4, [59, 59], [30, 30]); assert.deepEqual(bag(f), [row]);
-  craft(f, 6, [59], [1]); assert.deepEqual(qualities(f), [4]);
-  craft(f, 6, [59], [60]); assert.deepEqual(qualities(f), [6]);
+  craft(f, 6, [59], [1]); assert.deepEqual(qualities(f), [6]);
+  craft(f, 5, [59, 59], [100, 100]); assert.deepEqual(qualities(f), [6]);
+  craft(f, 6, [59], [60]); assert.deepEqual(qualities(f), [6]); assert.equal(f.save.getAt(bag(f)[0], 15, 7), 60);
 });
 
 test("type, stat variant, tier and job bonus have separate limits; multi-bonus pieces survive if any group needs them", async () => {
