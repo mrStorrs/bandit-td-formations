@@ -134,6 +134,17 @@ test("switching maps while storage is loading cannot apply an old formation", as
   h.setWorld({ ...world(), token: "other" }); resolve(snapshot(world())); await pending;
   assert.equal(h.applied.length, 0);
 });
+test("character positions and jobs still use separate slots on each map", async () => {
+  const h = harness();
+  h.keys.key("down", 1); h.advance(1000); await h.keys.key("up", 1);
+  h.setWorld({ ...world(), mapId: 2, token: "map-2" });
+  h.keys.key("down", 1); await h.keys.key("up", 1);
+  assert.equal(h.applied.length, 0); assert.match(h.notices.at(-1), /empty/);
+  h.keys.key("down", 1); h.advance(1000); await h.keys.key("up", 1);
+  assert.ok(h.data.has("cjs-formations:v1:12345678:1:1"));
+  assert.ok(h.data.has("cjs-formations:v1:12345678:2:1"));
+  assert.equal(h.data.size, 2);
+});
 test("storage failures report failure without saying saved", async () => {
   const h = harness(); h.storage.setItem = async () => { throw new Error("disk full"); };
   h.keys.key("down", 1); h.advance(1000); await h.keys.tick();

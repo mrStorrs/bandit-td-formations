@@ -109,7 +109,8 @@
       if (!context || context.token !== pending.token || this.busy) return;
       this.busy = true;
       try {
-        const key = `${this.formation.prefix}:${context.saveId}:${context.mapId}:${pending.slot}`;
+        const key = this.formation.storageKey?.(context, pending.slot) ??
+          `${this.formation.prefix}:${context.saveId}:${context.mapId}:${pending.slot}`;
         if (save) {
           const data = this.formation.snapshot(context);
           await this.storage.setItem(key, data);
@@ -118,7 +119,13 @@
             this.notify(this.formation.savedMessage(pending.slot, data));
           }
         } else {
-          const data = await this.storage.getItem(key);
+          let data = await this.storage.getItem(key);
+          if (data == null && this.formation.loadLegacy) {
+            if (this.context()?.token !== pending.token) return;
+            data = await this.formation.loadLegacy(this.storage, context, pending.slot);
+            if (this.context()?.token !== pending.token) return;
+            if (data != null) await this.storage.setItem(key, data);
+          }
           const latest = this.context();
           if (!latest || latest.token !== pending.token) return;
           if (data == null) { this.notify(this.formation.emptyMessage(pending.slot)); return; }

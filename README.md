@@ -9,7 +9,7 @@ research and drilling mod for Bandit Simulator TD (Steam app 4267800).
 - **Tap and release the same key:** restore each character's saved tile and job,
   including their priority work target when its tile still exists.
 - **Hold `Shift` + `1`–`4` for one second:** save a building layout in a separate
-  slot. **Tap `Shift` + the number:** restore that building layout.
+  slot shared across maps. **Tap `Shift` + the number:** restore that building layout.
 - **Press `C`:** remember all placed characters' modes and switch them to combat.
   **Press `C` again:** restore each character's previous mode, including their
   work target when it still exists on the same map. Character positions stay put.
@@ -38,8 +38,9 @@ research and drilling mod for Bandit Simulator TD (Steam app 4267800).
   gear, and click **Save outfit for [job]**. Choosing that job again restores
   that character's saved outfit. Jobs without an outfit keep current equipment.
 - A message confirms saving or restoring. An empty slot leaves characters alone.
-- Formations persist locally across restarts and are separate for each campaign
-  save identifier and current map. They are not included in Steam Cloud saves.
+- Formations persist locally across restarts and are separate for each campaign.
+  Character slots are specific to each map; building slots are shared across all
+  maps in that campaign. They are not included in Steam Cloud saves.
 
 Recall happens on release so holding a key to save never recalls the old
 formation first. The number pad keeps its existing controls. Hotkeys are ignored
@@ -130,7 +131,17 @@ restarts. They are separate from formation slots and are not in Steam Cloud.
 Arrange your buildings, then hold **Shift + 1** until “Building formation 1
 saved” appears. Arrange another layout and hold **Shift + 2**. Tap those same
 combinations to switch layouts. Slots 3 and 4 work the same way. Building slots
-persist separately from character slots, for each campaign and current map.
+persist separately from character slots and are **shared across every map in the
+same campaign**. Saving a building slot on any map replaces that shared slot.
+Character formations retain their separate positions and jobs for each map.
+
+Older map-specific building saves carry over on the first recall of each slot.
+The current map's old layout takes priority. If it has none, the mod imports the
+layout from another map when there is only one distinct saved layout. If several
+maps have different layouts for that slot, visit the preferred map and tap its
+shortcut to choose it, or hold the shortcut to save a new shared layout.
+Old map-specific copies are retained; once a shared slot exists, it takes priority
+on every map.
 
 Snapshots include completed, unlocked buildings with the game's Move command.
 Restores use native relocation and retain current building levels, upgrades,
@@ -1073,6 +1084,15 @@ spear while selling two Forge-only extras, respected a saved-and-unequipped
 outfit piece, and selected the red belt over an orange belt. Native copper
 payments, unchanged queues and UI result messages passed without runtime errors.
 
+Version 1.22.0 shares building slots across all maps within a campaign while
+keeping character formations specific to each map. Existing building saves
+migrate on recall, preserving old copies and handling conflicting layouts.
+The release passes 392 JavaScript tests and four installer tests. In isolated
+build 25975458, native Shift shortcuts saved and recalled layouts across maps
+28, 29 and 30 after reloads. Shared-slot replacement, character-slot isolation,
+blocked destinations, old-save discovery and conflict resolution, building
+levels, sprite positions and tile occupancy all passed.
+
 To check the controls in-game:
 
 1. Arrange your characters, choose their jobs and priority work targets, then
@@ -1098,8 +1118,10 @@ To check the controls in-game:
 9. Hold `Shift + 1` to save the building layout. Move buildings normally and
    hold `Shift + 2`, then tap each combination to restore it. Check levels and
    occupied tiles, including a swap with an empty buffer area available.
-   Restart and recall again to check persistence. Keep character slots 1/2
-   separate and verify blocked destinations stop the whole building restore.
+   Switch maps and restart, then recall both shared layouts. Saving again on
+   the new map should replace the shared building slot. Keep character slots
+   1/2 separate per map and verify blocked destinations stop the whole building
+   restore.
 10. In recruitment, select grade `B` and set the stat thresholds you want.
     Check that either a B-or-better work grade or any stat above its threshold
     stops rolling and locks the recruit. Try grade **Off** with only one stat
@@ -1183,8 +1205,14 @@ New snapshots use data format version 2 with positions, modes, and priority
 coordinates; the namespace stays unchanged so version 1 position saves remain
 available until replaced by holding the slot again.
 Combat undo uses the separate `cjs-formations:combat:v1:` namespace.
-Building presets use `cjs-formations:buildings:v1:<saveId>:<mapId>:<slot>` and
-store building slots, types, and coordinates, without overwriting upgrades.
+Building presets use `cjs-formations:buildings:v2:<saveId>:<slot>` and store
+building slots, types, and coordinates, without overwriting upgrades. Data
+version 2 omits the map identifier. Old
+`cjs-formations:buildings:v1:<saveId>:<mapId>:<slot>` records are copied into the
+shared namespace on first recall, with the current map preferred and conflicting
+layouts on other maps requiring a choice on their original map. Migration
+preserves old records, and a map change during loading or migration cancels the
+restore.
 Recruitment preferences use DOM local storage at
 `cjs-formations:recruit-options:v1`; the running state is never persisted.
 The `minimumMoney` option is a nonnegative copper reserve (default `0`), separate

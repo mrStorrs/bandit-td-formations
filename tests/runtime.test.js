@@ -28,7 +28,7 @@ function fixture() {
   const runtime = {
     layout: { name: "主界面" }, globalVars: { 当前地图编号: 1, 分页界面: "", 爬塔挑战开关: false, 战斗开关: true },
     objects: Object.fromEntries(Object.entries(objects).map(([k, v]) => [k, { getFirstInstance: () => v[0], getAllInstances: () => v }])),
-    storage: { setItem: async (k, v) => stored.set(k, v), getItem: async k => stored.get(k) },
+    storage: { setItem: async (k, v) => stored.set(k, v), getItem: async k => stored.get(k), keys: async () => [...stored.keys()] },
     addEventListener: (name, callback) => { events[name] = callback; },
     callFunction(name, ...args) {
       calls.push([name, ...args]);
@@ -120,7 +120,7 @@ function buildingFixture() {
 test("building runtime restores swaps through native relocation and preserves upgrades and character slots", async () => {
   const f = buildingFixture(); await f.hold(1); await f.holdBuildings(1);
   const characterSlot = JSON.stringify(f.stored.get("cjs-formations:v1:12345678:1:1"));
-  const key = "cjs-formations:buildings:v1:12345678:1:1", saved = f.stored.get(key);
+  const key = "cjs-formations:buildings:v2:12345678:1", saved = f.stored.get(key);
   [saved.buildings[0].x, saved.buildings[1].x] = [saved.buildings[1].x, saved.buildings[0].x];
   f.calls.length = 0; await f.tapBuildings(1);
   assert.deepEqual(f.positions(), [[6, 4], [4, 4]]);
@@ -134,7 +134,7 @@ test("building runtime restores swaps through native relocation and preserves up
 test("building runtime refuses native occupied slots and verifies that native movement succeeded", async () => {
   for (const refuse of [false, true]) {
     const f = buildingFixture(); await f.holdBuildings(1);
-    const saved = f.stored.get("cjs-formations:buildings:v1:12345678:1:1"); saved.buildings[0].y = 8;
+    const saved = f.stored.get("cjs-formations:buildings:v2:12345678:1"); saved.buildings[0].y = 8;
     if (refuse) f.refuseMoves(); else f.save.setAt(1, 10, 7, 1);
     f.calls.length = 0; await f.tapBuildings(1);
     assert.deepEqual(f.positions(), [[4, 4], [6, 4]]);
@@ -159,8 +159,35 @@ test("building storage operations exclude combat and character formations and re
   await f.handlers.combat(); await f.hold(2);
   assert.equal(f.stored.size, 1); assert.equal(f.calls.length, 0);
   f.runtime.globalVars.当前地图编号 = 2;
-  resolve(f.stored.get("cjs-formations:buildings:v1:12345678:1:1")); await pending;
+  resolve(f.stored.get("cjs-formations:buildings:v2:12345678:1")); await pending;
   assert.equal(f.calls.length, 0);
+});
+test("shared building slots restore natively on another map while character slots stay map-specific", async () => {
+  const f = buildingFixture(); await f.hold(1); await f.holdBuildings(1);
+  const saved = f.stored.get("cjs-formations:buildings:v2:12345678:1");
+  [saved.buildings[0].x, saved.buildings[1].x] = [saved.buildings[1].x, saved.buildings[0].x];
+  f.runtime.globalVars.当前地图编号 = 2;
+  await f.tap(1);
+  assert.match(f.messages.at(-1)[1].text, /Slot 1 is empty/);
+  f.calls.length = 0; await f.tapBuildings(1);
+  assert.deepEqual(f.positions(), [[6, 4], [4, 4]]);
+  assert.equal(f.calls.filter(c => c[0] === "建筑搬迁").length, 3);
+  assert.equal(f.calls.filter(c => c[0] === "角色位置移动").length, 0);
+  await f.holdBuildings(1);
+  assert.equal(f.stored.size, 2);
+  f.runtime.globalVars.当前地图编号 = 1; await f.tapBuildings(1);
+  assert.deepEqual(f.positions(), [[6, 4], [4, 4]]);
+});
+test("the native building bridge migrates a layout saved on a different map", async () => {
+  const f = buildingFixture();
+  f.stored.set("cjs-formations:buildings:v1:12345678:28:1", {
+    version: 1, saveId: 12345678, mapId: 28,
+    buildings: [{ id: 10, type: 2, x: 6, y: 4 }, { id: 11, type: 2, x: 4, y: 4 }],
+  });
+  await f.tapBuildings(1);
+  assert.deepEqual(f.positions(), [[6, 4], [4, 4]]);
+  assert.equal(f.stored.get("cjs-formations:buildings:v2:12345678:1").version, 2);
+  assert.equal(f.stored.size, 2);
 });
 
 test("runtime bridge saves and restores through the native move function and repairs swap occupancy", async () => {
