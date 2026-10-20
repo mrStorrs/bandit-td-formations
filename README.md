@@ -37,13 +37,15 @@ research and drilling mod for Bandit Simulator TD (Steam app 4267800).
 - **Job outfits:** select a character, choose their job priority, equip their
   gear, and click **Save outfit for [job]**. Choosing that job again restores
   that character's saved outfit. Jobs without an outfit keep current equipment.
+- **Ctrl + left-click an inventory item:** sell equipment or cores for copper,
+  or decompose treasures for souls. Normal locks and saved outfits are protected.
 - A message confirms saving or restoring. An empty slot leaves characters alone.
 - Formations persist locally across restarts and are separate for each campaign.
   Character slots are specific to each map; building slots are shared across all
   maps in that campaign. They are not included in Steam Cloud saves.
 
 Recall happens on release so holding a key to save never recalls the old
-formation first. The number pad keeps its existing controls. Hotkeys are ignored
+formation first. The number pad keeps its existing controls. Formation hotkeys are ignored
 while typing, using Ctrl/Alt/Meta, dragging characters, in menus, or during the
 Soul Tower movement lock. Losing focus cancels a pending key press.
 Shift is reserved for the building formation shortcuts; it does not toggle `C`
@@ -114,8 +116,9 @@ duplicate pieces leave that slot's current gear in place and show a notice.
 The mod matches the original item marker, type, quality, and rolled properties
 across the game's inventory transfers. Upgrades and item-lock changes preserve
 the match. Resave after rerolling/replacing equipment or renaming the character.
-Keep unused outfit pieces in your inventory; saving an outfit does not reserve
-items against selling, crafting, or equipping them on someone else.
+Keep unused outfit pieces in your inventory. Saved pieces are protected from
+selling and the Ctrl-click shortcut; other item-consuming game actions and
+equipping them on someone else remain available.
 
 Manual job selection, priority work targets, formation recalls, and the combat
 toggle all use the same outfit rules. The beast loop waits for the game's
@@ -125,6 +128,25 @@ AI activity changes under **Automatic** do not switch between work outfits.
 
 Outfits persist locally per campaign and character across maps and game
 restarts. They are separate from formation slots and are not in Steam Cloud.
+
+## Inventory shortcut
+
+Hold **Ctrl** and **left-click** an unequipped item in your inventory to discard
+that one piece using the game's normal reward: equipment and cores sell for
+copper; treasures decompose for souls. The inventory refreshes immediately.
+This also works in the character's equipment/core bag, pawnshop and treasure
+decomposition screens. Resource stacks and spirit objects keep their existing
+controls.
+
+Manual locks, crafting auto-locks and saved-outfit locks prevent the shortcut
+from discarding an item. Unlock a normal lock first, or change/forget every saved
+outfit using that piece. Ctrl-click does not unlock items. Plain clicks still
+use the game's usual controls.
+
+The action happens on release. Dragging off the item, releasing Ctrl first,
+losing focus, switching pages or changing the item during the press cancels it.
+The shortcut waits while equipment is being transferred and ignores dialogs,
+filters and text fields. It works while the game is paused.
 
 ## Building formations
 
@@ -707,7 +729,7 @@ python3 manage.py install --game-dir "/path/to/Steam/steamapps/common/塔防山�
 
 On Windows, use `py -3` in place of `python3` if appropriate. Restart the game
 after installing. Look for the “Formations ready” message on startup.
-The startup message includes the installed version number (currently 1.25.0).
+The startup message includes the installed version number (currently 1.26.0).
 
 The installer backs up the input archive in `cjs-formations-backups/` beside the
 game, verifies the result, then replaces `package.nw` atomically. It does not
@@ -1145,6 +1167,16 @@ Research Tech to 120, all ordinary trees through stages 60 and 120, Craft Tech
 catching up from 19, manual research crossing stage boundaries, and a saved
 Mining order switching to Craft and Alchemy after its paid level.
 
+Version 1.26.0 adds Ctrl + left-click to sell inventory equipment/cores or
+decompose treasures. The release passes 430 JavaScript tests and four installer
+tests. Coverage includes normal and outfit locks, stale/reused inventory rows,
+page changes, cancellation and native mouse-event suppression. In isolated
+build 25975458, real pointer clicks verified nine native sales/decompositions,
+exact copper/soul rewards, normal click-to-lock behavior, and inventory, equipment,
+core, pawnshop and treasure screens at 1000×700 and 1600×1000 with high-DPI scaling.
+Saved weapon/core/treasure protection, swapped-out gear and paused play were
+also checked against the native game.
+
 To check the controls in-game:
 
 1. Arrange your characters, choose their jobs and priority work targets, then
@@ -1250,6 +1282,8 @@ native Repeat preference.
 `src/outfits.js` validates outfit snapshots and matches equipment records.
 `src/outfit-runtime.js` observes native job changes, serializes equipment swaps,
 checks inventory and equip eligibility, and manages the outfit panel and storage.
+`src/inventory.js` validates Ctrl-click gestures against the visible item and its
+identity, checks normal/outfit locks, and invokes native sale or decomposition.
 `src/runtime.js` adapts character/tile APIs, native movement/mode/summon functions,
 the victory callback, and the native auto-summon event group.
 `src/dom.js` handles keyboard focus, confirmation messages, and recruitment,

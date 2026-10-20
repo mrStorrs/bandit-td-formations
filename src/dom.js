@@ -8,13 +8,14 @@
       this.AddRuntimeMessageHandlers([
         ["ready", ({ version }) => {
           this.ready = true;
-          this.notify(`Formations ready · v${version} · Hold 1–4 to save, tap to restore · Shift + 1–4 buildings · C combat · F6 Beast realm loop (default ON).`);
+          this.notify(`Formations ready · v${version} · Hold 1–4 to save, tap to restore · Shift + 1–4 buildings · C combat · F6 Beast realm loop (default ON) · Ctrl-click inventory to sell/decompose.`);
         }],
         ["notify", ({ text }) => this.notify(text)],
         ["forest-status", ({ text }) => this.forestStatus(text)],
         ["recruit-status", state => this.recruitStatus(state)],
         ["outfit-status", state => this.outfitStatus(state)],
         ["outfit-locks", state => this.outfitLocks(state)],
+        ["inventory-status", state => { this.inventoryState = state; }],
         ["craft-status", state => this.craftStatus(state)],
         ["study-status", state => this.studyStatus(state)],
       ]);
@@ -59,6 +60,38 @@
       window.addEventListener("blur", loseFocus);
       document.addEventListener("visibilitychange", () => { if (document.hidden) loseFocus(); });
       document.addEventListener("focusin", e => { if (editable(e.target)) cancel(); });
+      let inventoryPress = null, suppressInventoryMouse = false;
+      const consume = event => { event.preventDefault(); event.stopImmediatePropagation(); };
+      const controlClick = event => event.ctrlKey && !event.shiftKey && !event.altKey && !event.metaKey;
+      const cancelInventory = () => {
+        if (inventoryPress) this.PostToRuntime("inventory-click", { phase: "cancel" });
+        inventoryPress = null;
+      };
+      window.addEventListener("pointerdown", event => {
+        if (event.button !== 0 || (event.pointerType && event.pointerType !== "mouse")) return;
+        cancelInventory(); suppressInventoryMouse = false;
+        if (!this.ready || !this.inventoryState?.active || !controlClick(event) || event.target?.tagName !== "CANVAS") return;
+        const matches = this.inventoryState.items.filter(item => event.clientX >= item.left && event.clientX < item.right && event.clientY >= item.top && event.clientY < item.bottom);
+        if (matches.length !== 1) return;
+        const item = matches[0];
+        inventoryPress = { pointerId: event.pointerId, token: this.inventoryState.token };
+        suppressInventoryMouse = true; consume(event);
+        this.PostToRuntime("inventory-click", { phase: "down", token: inventoryPress.token, uid: item.uid, key: item.key, x: event.clientX, y: event.clientY });
+      }, true);
+      window.addEventListener("pointerup", event => {
+        if (!inventoryPress || event.pointerId !== inventoryPress.pointerId || event.button !== 0) return;
+        consume(event);
+        const press = inventoryPress; inventoryPress = null;
+        this.PostToRuntime("inventory-click", { phase: controlClick(event) && event.target?.tagName === "CANVAS" ? "up" : "cancel",
+          token: press.token, x: event.clientX, y: event.clientY });
+      }, true);
+      window.addEventListener("pointercancel", cancelInventory, true);
+      // Suppress compatibility mouse events too: native left-click toggles locks.
+      for (const type of ["mousedown", "mouseup", "click", "dblclick"]) window.addEventListener(type, event => {
+        if (suppressInventoryMouse && event.button === 0 && (type !== "click" || event.detail !== 0)) consume(event);
+      }, true);
+      window.addEventListener("blur", () => { cancelInventory(); suppressInventoryMouse = false; });
+      document.addEventListener("visibilitychange", () => { if (document.hidden) cancelInventory(); });
     }
     craftStatus(state) {
       this.craftState = state;

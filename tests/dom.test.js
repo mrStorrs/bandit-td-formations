@@ -51,6 +51,60 @@ test("C overrides the native menu shortcut and toggles once per press, never on 
   f.window.dispatch("keydown", { code: "KeyC" });
   assert.deepEqual(f.messages, [["combat", {}], ["combat", {}]]);
 });
+
+const inventoryState = token => ({ active: true, token, items: [{ uid: 123, key: "piece-1", left: 80, top: 150, right: 120, bottom: 190 }] });
+function inventoryPointer(f, type, extra = {}) {
+  return f.window.dispatch(type, { button: 0, detail: 1, pointerId: 1, pointerType: "mouse", ctrlKey: true,
+    target: { tagName: "CANVAS" }, clientX: 100, clientY: 170, ...extra });
+}
+test("Ctrl-click captures the whole native mouse gesture and sends one inventory action on release", () => {
+  const f = fixture(); f.handlers["inventory-status"](inventoryState("inventory-1"));
+  for (const type of ["pointerdown", "mousedown", "pointerup", "mouseup", "click", "dblclick"]) {
+    assert.equal(inventoryPointer(f, type).prevented, true, type);
+  }
+  assert.deepEqual(f.messages, [
+    ["inventory-click", { phase: "down", token: "inventory-1", uid: 123, key: "piece-1", x: 100, y: 170 }],
+    ["inventory-click", { phase: "up", token: "inventory-1", x: 100, y: 170 }],
+  ]);
+  assert.equal(inventoryPointer(f, "click", { detail: 0, target: { tagName: "BUTTON" } }).prevented, undefined,
+    "a later keyboard-activated button must still work");
+  assert.equal(inventoryPointer(f, "pointerdown", { ctrlKey: false }).prevented, undefined);
+  assert.equal(inventoryPointer(f, "mousedown", { ctrlKey: false }).prevented, undefined);
+  assert.equal(inventoryPointer(f, "mouseup", { ctrlKey: false }).prevented, undefined);
+  assert.equal(f.messages.length, 2);
+});
+test("Ctrl-click ignores normal clicks, other modifiers, non-mouse pointers, inputs and closed inventory", () => {
+  for (const extra of [{ ctrlKey: false }, { button: 2 }, { altKey: true }, { shiftKey: true }, { metaKey: true },
+    { pointerType: "touch" }, { target: { tagName: "INPUT" } }, { target: { tagName: "BUTTON" } }]) {
+    const f = fixture(); f.handlers["inventory-status"](inventoryState("one"));
+    assert.equal(inventoryPointer(f, "pointerdown", extra).prevented, undefined);
+    assert.equal(f.messages.length, 0);
+  }
+  const f = fixture(); assert.equal(inventoryPointer(f, "pointerdown").prevented, undefined);
+  f.handlers["inventory-status"](inventoryState("one"));
+  assert.equal(inventoryPointer(f, "pointerdown", { clientX: 500 }).prevented, undefined); assert.equal(f.messages.length, 0);
+  f.document.activeElement = { tagName: "INPUT" };
+  assert.equal(inventoryPointer(f, "pointerdown").prevented, true, "clicking the canvas leaves a previously focused input");
+});
+test("releasing Control first or releasing over a control cancels without toggling the native item lock", () => {
+  for (const extra of [{ ctrlKey: false }, { target: { tagName: "BUTTON" } }]) {
+    const f = fixture(); f.handlers["inventory-status"](inventoryState("one"));
+    inventoryPointer(f, "pointerdown"); assert.equal(inventoryPointer(f, "pointerup", extra).prevented, true);
+    assert.equal(f.messages.at(-1)[1].phase, "cancel");
+    assert.equal(inventoryPointer(f, "mouseup", { ctrlKey: false }).prevented, true);
+    assert.equal(inventoryPointer(f, "click", { ctrlKey: false }).prevented, true);
+  }
+});
+test("focus loss and pointer cancellation discard a pending sale; page changes keep the original token", () => {
+  for (const type of ["blur", "pointercancel"]) {
+    const f = fixture(); f.handlers["inventory-status"](inventoryState("one"));
+    inventoryPointer(f, "pointerdown"); f.window.dispatch(type); inventoryPointer(f, "pointerup");
+    assert.deepEqual(f.messages.at(-1), ["inventory-click", { phase: "cancel" }]);
+  }
+  const f = fixture(); f.handlers["inventory-status"](inventoryState("one"));
+  inventoryPointer(f, "pointerdown"); f.handlers["inventory-status"](inventoryState("two"));
+  inventoryPointer(f, "pointerup"); assert.equal(f.messages.at(-1)[1].token, "one");
+});
 test("F6 toggles the forest loop once per press and consumes browser/native shortcuts", () => {
   const f = fixture();
   assert.equal(f.window.dispatch("keydown", { code: "F6" }).prevented, true);
