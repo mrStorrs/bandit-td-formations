@@ -7,7 +7,13 @@
   const researchPriority = ["研究技术", "伐木技术", "营房技术", "操练技术", "采矿技术", "主堂技术", "招募技术"];
   const levelOK = value => Number.isSafeInteger(value) && value >= 0;
 
-  function researchTargets(kj, save, cap) {
+  function researchLimit(kj, id, level, maximum) {
+    if (kj.getAt(id, 2) === "基础" || kj.getAt(id, 1) === "研究技术") return maximum;
+    // Advanced levels are stored from zero: displayed level 60 is value 59.
+    return Math.min(maximum, (Math.floor((level + 1) / 60) + 1) * 60 - 1);
+  }
+
+  function researchTargets(kj, save, cap, staged = true) {
     const targets = [];
     for (let id = 1; id < kj.width; id++) {
       if (kj.getAt(id, 0) !== id) continue;
@@ -19,11 +25,13 @@
       const level = save.getAt(id, 4, 0), maximum = regular ? 1 : cap(id);
       if (!levelOK(level) || !levelOK(maximum) || level >= maximum) continue;
       const priority = researchPriority.indexOf(kj.getAt(id, 1));
-      targets.push({ id, level, maximum, regular, order,
+      targets.push({ id, level, maximum: staged ? researchLimit(kj, id, level, maximum) : maximum, regular, order,
+        stage: regular ? -2 : priority === 0 ? -1 : Math.floor((level + 1) / 60),
         priority: regular ? 0 : priority >= 0 ? priority + 1 : researchPriority.length + 1,
         category: regular ? "Regular" : researchCategories[order][1] });
     }
-    return targets.sort((a, b) => a.priority - b.priority ||
+    const stage = Math.min(...targets.filter(t => t.stage >= 0).map(t => t.stage));
+    return targets.filter(t => !staged || t.stage < 0 || t.stage === stage).sort((a, b) => a.stage - b.stage || a.priority - b.priority ||
       (a.regular ? a.id - b.id : a.order - b.order || a.id - b.id));
   }
 
@@ -77,7 +85,7 @@
     return targets.find(t => !occupied(t.id));
   }
 
-  const api = { researchTargets, drillUnlockLevel, drillEndJobs, drillPaths, drillTargets, nextResearch };
+  const api = { researchLimit, researchTargets, drillUnlockLevel, drillEndJobs, drillPaths, drillTargets, nextResearch };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   globalThis.BanditFormations = Object.assign(globalThis.BanditFormations || {}, api);
 })();

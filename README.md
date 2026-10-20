@@ -29,9 +29,9 @@ research and drilling mod for Bandit Simulator TD (Steam app 4267800).
   their own tier, minimum rarity, material multiplier and auto-sell setting.
   They keep and lock useful gear and craft in batches of **10**.
 - **Auto research and drill:** enabled by default, with controls on each selected
-  station. Research prioritizes main-tab unlocks, then Research, Logging, Barracks,
-  Training, Mining, Great Hall and Recruit Tech. Each tree finishes to its current
-  cap. Drilling trains the
+  station. Main-tab unlocks come first, then Research Tech to the academy cap.
+  Other trees finish each 60-level stage, with Logging, Barracks, Training,
+  Mining, Great Hall and Recruit Tech first within that stage. Drilling trains the
   lowest unlocked class only far enough to unlock the next job. Manual choices
   take priority and train to the normal cap.
 - **Job outfits:** select a character, choose their job priority, equip their
@@ -611,31 +611,33 @@ also save their own end-job selections. Changes take effect immediately.
 Workers still perform the work normally; automation selects the next target and pays
 the game's normal copper cost. It waits when funds are insufficient.
 
-When selecting a new tree, research follows this priority:
+When selecting new research:
 
 1. Anything unfinished and available in the main **Research** tab.
-2. **Research Tech**.
-3. **Logging Tech**.
-4. **Barracks Tech**.
-5. **Training Tech**.
-6. **Mining Tech**.
-7. **Great Hall Tech**.
-8. **Recruit Tech**.
-9. Everything else: **Team → Gather → Growth → Cultivate → Craft**, using
-   the game's topic order within each category.
+2. **Research Tech**, up to the full current academy cap, to speed up later work.
+3. Every other tree in the **lowest unfinished 60-level stage**. All available
+   trees reach displayed level **60** before any advance toward **120**, then
+   **180**, **240**, and **300**, subject to the academy cap.
 
-Locked, capped and already-assigned topics are skipped.
+Within each stage, the order remains **Logging Tech → Barracks Tech → Training
+Tech → Mining Tech → Great Hall Tech → Recruit Tech**, then everything else in
+**Team → Gather → Growth → Cultivate → Craft** order. Each category follows the
+game's topic order. Craft includes **Forging Tech, Craft Tech, and Alchemy Tech**.
 
-Each selected tree continues to its **current building cap** before the mod
-chooses another tree. Native Repeat handles its levels, such as displayed
-levels 1 through 60. A newly available higher-priority topic waits for the active tree
-to finish, including manual choices. Native prerequisites, category unlocks and
-building caps still apply. Other research stations can take different available
-trees independently.
+Each automatic tree finishes its stage before the mod chooses another. Native
+Repeat stops at that boundary without paying for a level in the next stage.
+Research Tech and manual choices can continue to the full building cap.
+New higher-priority research waits for the active stage to finish. An automatic
+order already ahead of the lowest stage finishes its paid level, then catches
+up the lower trees. Native prerequisites, category unlocks and building caps
+still apply. Locked and capped topics do not block progress. Other research
+stations can work on different trees in the same stage; if all remaining trees
+in that stage are assigned, an idle station waits for them to finish.
 
-The current tree is remembered through copper shortages and restarts. If
-native Repeat is off, the mod resumes the same tree until its cap. A building
-upgrade extends the current tree's cap before another tree is selected.
+The current stage is remembered through copper shortages and restarts. If
+native Repeat is off, the mod resumes the same tree until that boundary. An
+academy upgrade opens more stages and Research Tech levels without extending
+an ordinary automatic tree past its current stage.
 
 Under **Drill toward these end jobs**, check the final jobs this station should unlock.
 The 16 end jobs are grouped into **STR, AGI, INT, and Production**, using the
@@ -679,8 +681,8 @@ Settings and current targets persist locally per station and campaign across
 moving stations, map changes and restarts. Existing global toggles and end-job
 choices migrate once to all existing research/drill stations, including those
 on other maps. Newly built stations use the defaults. Turning **Auto research**
-or **Auto drill** off stops new mod orders at that station; current research can
-finish its tree and an active automatic drill stops at its unlock level.
+or **Auto drill** off stops new mod orders at that station; current automatic
+research can finish its stage and an active automatic drill stops at its unlock level.
 The game's Repeat preference is preserved.
 New selections wait during pause, menus, dragging and transitions, and for a
 usable completed building. Other mod automation continues independently.
@@ -705,7 +707,7 @@ python3 manage.py install --game-dir "/path/to/Steam/steamapps/common/塔防山�
 
 On Windows, use `py -3` in place of `python3` if appropriate. Restart the game
 after installing. Look for the “Formations ready” message on startup.
-The startup message includes the installed version number (currently 1.15.1).
+The startup message includes the installed version number (currently 1.25.0).
 
 The installer backs up the input archive in `cjs-formations-backups/` beside the
 game, verifies the result, then replaces `package.nw` atomically. It does not
@@ -1130,6 +1132,19 @@ isolated build 25975458, 210 native crafts verified both station types over
 multiple loops, keeping newly stocked gear, and rebuilding the order under
 Sell over limit without skipping its first turn or affecting the other station.
 
+Version 1.25.0 researches ordinary trees in 60-level stages, completing the
+lowest unfinished stage before advancing. Main-tab unlocks still come first,
+and Research Tech alone can run ahead to the academy cap. Native Repeat stops
+at each stage without paying for an extra level; manual choices retain their
+full cap. Saved automatic orders ahead of the lowest stage finish their paid
+level before switching to catch-up work. The release passes 417 JavaScript
+tests and four installer tests, including boundaries through level 300,
+multiple stations, academy upgrades, manual overrides, copper shortages and
+reloads. In isolated build 25975458, 243 native research completions verified
+Research Tech to 120, all ordinary trees through stages 60 and 120, Craft Tech
+catching up from 19, manual research crossing stage boundaries, and a saved
+Mining order switching to Craft and Alchemy after its paid level.
+
 To check the controls in-game:
 
 1. Arrange your characters, choose their jobs and priority work targets, then
@@ -1223,13 +1238,15 @@ and ranks surplus items independently by their recipe, tier and bonus groups.
 `src/craft-sets-runtime.js` schedules batches of ten, identifies their native
 completion results, locks keepers and handles per-station settings, selection,
 legacy settings migration and native sales.
-`src/study.js` orders unlocked research by main-tab/named-tree priority and
-remaining category order, orders drill targets by
+`src/study.js` selects the lowest unfinished 60-level research stage, prioritizes
+main-tab unlocks and uncapped Research Tech, orders remaining trees by named
+priority and category, and orders drill targets by
 class tier, traces prerequisite paths from selected end jobs, and calculates
 the drill levels needed for further job unlocks.
 `src/study-runtime.js` manages station preferences, legacy migration and selection,
 selects targets through native functions, preserves manual training to its cap,
-and bounds automatic drilling without changing the player's native Repeat preference.
+and bounds automatic research stages and drilling without changing the player's
+native Repeat preference.
 `src/outfits.js` validates outfit snapshots and matches equipment records.
 `src/outfit-runtime.js` observes native job changes, serializes equipment swaps,
 checks inventory and equip eligibility, and manages the outfit panel and storage.

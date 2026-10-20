@@ -34,7 +34,7 @@ test("newly unlocked Research Tech waits for the current automatic or manual tre
     await f.tick();assert.equal(f.queue(0),40);
   }
 });
-test("research follows the named priority then remaining categories without favoring lower levels",()=>{
+test("research follows named priority over individual levels within the same 60-level stage",()=>{
   const f=fixture(),read=()=>researchTargets(f.kj,f.save,()=>3);
   assert.deepEqual(read().map(t=>t.id),[40,34,32,41,36,31,33,35,43,42,44,37,38,39]);
   f.save.setAt(3,40,4,0);f.save.setAt(2,34,4,0);
@@ -50,7 +50,7 @@ test("regular and advanced prerequisites still gate the requested priority",()=>
   assert.equal(nextResearch(list,()=>false).id,11);
   assert.equal(nextResearch(list,id=>id===11).id,34);
 });
-test("other stations take the next available priority without waiting for lower levels",()=>{
+test("other stations take the next available priority within the same 60-level stage",()=>{
   const f=fixture();for(let id=31;id<=44;id++)f.save.setAt(1,id,4,0);f.save.setAt(0,35,4,0);
   const list=researchTargets(f.kj,f.save,()=>3);
   assert.equal(nextResearch(list,()=>false).id,40);assert.equal(nextResearch(list,id=>id===40).id,34);

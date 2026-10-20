@@ -300,7 +300,7 @@
       this.studyJobsBox.hidden = kind !== "drill";
       if (kind === "drill") this.updateStudyJobs(state);
       this.studyHelp.textContent = kind === "research" ?
-        "Finish each tree to its current cap, then choose: main Research tab → Research Tech → Logging Tech → Barracks Tech → Training Tech → Mining Tech → Great Hall Tech → Recruit Tech → everything else (Team → Gather → Growth → Cultivate → Craft). Manual choices take priority. Turning off automation stops new orders; native Repeat can finish the active tree." :
+        "Main Research tab unlocks come first. Research Tech can reach the full academy cap. All other trees finish each 60-level stage (60 → 120 → 180 → 240 → 300) before advancing. Within a stage: Logging Tech → Barracks Tech → Training Tech → Mining Tech → Great Hall Tech → Recruit Tech → everything else (Team → Gather → Growth → Cultivate → Craft). Manual choices run to their full cap. Turning off automation lets the paid stage finish, then stops." :
         "Follow this station's checked end jobs, lowest unlocked class tier first. Train prerequisites only to the next job's unlock level; end jobs stop at level 1. Manual choices train to their normal cap. Turning off automation stops new selections; active auto drills still stop at their unlock level.";
       this.studyInfo.textContent = state.message;
     }

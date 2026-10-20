@@ -1,7 +1,7 @@
 (() => {
   "use strict";
   function attachStudy(runtime, engine, notify) {
-    const { researchTargets, drillUnlockLevel, drillEndJobs, drillPaths, drillTargets, nextResearch } = globalThis.BanditFormations;
+    const { researchLimit, researchTargets, drillUnlockLevel, drillEndJobs, drillPaths, drillTargets, nextResearch } = globalThis.BanditFormations;
     const prefix = "cjs-formations:study:v1:", states = new Map(), cooldowns = new Map();
     const first = name => runtime.objects[name]?.getFirstInstance();
     const all = name => runtime.objects[name]?.getAllInstances() || [];
@@ -185,17 +185,27 @@
         let current, station, state, repeat;
         try {
           current = context();
-          station = current?.stations.find(st => st.kind === 9 && st.tile.uid === work.CaptureFunctionParameters()[1]);
+          station = current?.stations.find(st => st.tile.uid === work.CaptureFunctionParameters()[1]);
           if (station) {
             state = load(current);
-            const entry = state.entries.get(station.id), setting = settingsFor(state, station), limit = drillLimit(current, station.target);
+            const entry = state.entries.get(station.id), setting = settingsFor(state, station);
             if (state.ready && !state.error && sameStation(entry, station) && entry.mode === "auto" &&
-                entry.target === station.target && (!drillPaths(current.zy, setting.drillJobs).has(station.target) ||
-                (limit > 0 && current.save.getAt(station.target, 5, 0) + 1 >= limit))) {
-              // Native completion pays for the next level immediately. Suppress
-              // that repeat at the unlock boundary, then restore the preference.
-              repeat = current.save.getAt(station.id, 5, 21);
-              current.save.setAt(0, station.id, 5, 21);
+                entry.target === station.target) {
+              let stop;
+              if (station.kind === 8) {
+                const target = targets(current, station).find(t => t.id === station.target);
+                stop = !target || target.level + 1 >= researchLimit(current.kj, target.id, entry.level, target.maximum);
+              } else {
+                const limit = drillLimit(current, station.target);
+                stop = !drillPaths(current.zy, setting.drillJobs).has(station.target) ||
+                  (limit > 0 && current.save.getAt(station.target, 5, 0) + 1 >= limit);
+              }
+              if (stop) {
+                // Native completion pays for the next level immediately. Suppress
+                // that repeat at the research stage or drill unlock boundary.
+                repeat = current.save.getAt(station.id, 5, 21);
+                current.save.setAt(0, station.id, 5, 21);
+              }
             }
           }
         } catch (error) { if (state) fail(state, error); }
@@ -212,7 +222,7 @@
     const drillLimit = (current, id) => drillUnlockLevel(current.zy, id, target => runtime.callFunction("转职等级要求", target));
     function targets(current, station, mode = "auto", drillJobs = null) {
       const { save, kj, zy } = current;
-      if (station.kind === 8) return researchTargets(kj, save, id => runtime.callFunction("科技等级上限", id, station.level));
+      if (station.kind === 8) return researchTargets(kj, save, id => runtime.callFunction("科技等级上限", id, station.level), mode !== "manual");
       const maximum = Math.min(runtime.globalVars["职业等级上限"], runtime.callFunction("操练等级上限", station.level));
       return drillTargets(zy, save, maximum, id => runtime.callFunction("转职等级要求", id),
         family => runtime.callFunction("操练按钮解锁判断", ["", "力量系", "敏捷系", "智力系", "生产系"][family]) === 1, mode !== "manual", drillJobs);
@@ -323,6 +333,8 @@
             let target;
             if (entry) target = (entry.mode === "manual" ? targets(current, station, "manual") : available)
               .find(t => t.id === entry.target);
+            if (target && station.kind === 8 && entry.mode === "auto" &&
+                target.level >= researchLimit(current.kj, target.id, entry.level, target.maximum)) target = undefined;
             if (entry && !target) { forget(state, station.id); entry = null; }
             if (!target) target = station.kind === 8 ? nextResearch(available, id => occupied(current, 8, id)) :
               available.find(t => !occupied(current, 9, t.id));

@@ -353,7 +353,9 @@ test("research controls open on their station and hide unrelated drill settings"
   f.dom.studyInputs.research.checked=false;f.dom.studyInputs.research.dispatch("change");
   assert.deepEqual(f.messages.at(-1),["study-enabled",{token:state.token,kind:"research",enabled:false}]);
   assert.equal(f.dom.studyInfo.textContent,state.message);
-  assert.match(f.dom.studyHelp.textContent,/main Research tab → Research Tech → Logging Tech → Barracks Tech → Training Tech → Mining Tech → Great Hall Tech → Recruit Tech/);
+  assert.match(f.dom.studyHelp.textContent,/Research Tech can reach the full academy cap/);
+  assert.match(f.dom.studyHelp.textContent,/60 → 120 → 180 → 240 → 300/);
+  assert.match(f.dom.studyHelp.textContent,/Logging Tech → Barracks Tech → Training Tech → Mining Tech → Great Hall Tech → Recruit Tech/);
   const before=f.messages.length;f.dom.studyInputs.drill.dispatch("change");assert.equal(f.messages.length,before);
   f.handlers["study-status"]({...state,busy:true});const count=f.messages.length;
   f.dom.studyInputs.research.dispatch("change");assert.equal(f.messages.length,count);assert.equal(f.dom.studyInputs.research.disabled,true);
