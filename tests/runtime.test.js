@@ -139,7 +139,23 @@ test("building runtime refuses native occupied slots and verifies that native mo
     f.calls.length = 0; await f.tapBuildings(1);
     assert.deepEqual(f.positions(), [[4, 4], [6, 4]]);
     assert.equal(f.calls.filter(c => c[0] === "建筑搬迁").length, refuse ? 1 : 0);
-    assert.match(f.messages.at(-1)[1].text, refuse ? /refused/ : /characters/);
+    assert.match(f.messages.at(-1)[1].text, refuse ? /refused/ : /partially restored.*0 moved.*1 not moved/);
+  }
+});
+test("building runtime moves independent buildings and reports partial restores without moving characters", async()=>{
+  for(const block of [
+    f=>f.save.setAt(1,10,7,1),
+    f=>{f.tiles.find(t=>t.instVars.X坐标===4&&t.instVars.Y坐标===8).instVars.建设许可=false;},
+    f=>{f.sprites[0].instVars.有效解锁=false;},
+  ]) {
+    const f=buildingFixture();await f.holdBuildings(1);
+    const saved=f.stored.get("cjs-formations:buildings:v2:12345678:1");
+    saved.buildings.forEach(b=>{b.y=8;});block(f);
+    f.calls.length=0;await f.tapBuildings(1);
+    assert.deepEqual(f.positions(),[[4,4],[6,8]]);
+    assert.deepEqual(f.calls.filter(c=>c[0]==="建筑搬迁").map(c=>c[1]),[11]);
+    assert.equal(f.calls.filter(c=>c[0]==="角色位置移动").length,0);
+    assert.match(f.messages.at(-1)[1].text,/partially restored.*1 moved.*1 not moved/);
   }
 });
 test("building shortcuts are blocked by menus, transitions, edit modes, and dragging", async () => {

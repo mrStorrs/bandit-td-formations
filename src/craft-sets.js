@@ -53,7 +53,7 @@
       if (wp.getAt(item.recipe, 10) !== role.stat ||
           !(item.bonuses.includes(role.bonus) || !role.combat && hasWorkCrit(item))) return false;
       if (item.slot !== 1) return wp.getAt(item.recipe, 23) === (role.combat ? "战斗" : "生产");
-      return role.combat ? wp.getAt(item.recipe, 8) === role.stat + 3 : wp.getAt(item.recipe, 9) === role.power;
+      return wp.getAt(item.recipe, 9) === role.power;
     });
   }
   const isCraftKeeper = (item, wp, options) => eligibleCraftItem(item, options) && matchingCraftRoles(item, wp).length > 0;

@@ -102,6 +102,24 @@ test("keepers are locked before native automatic selling, rejects use the native
   f.complete(0,[63]);assert.equal(bag(f).length,2);assert.equal(bag(f).at(-1).lock,0);
   assert.equal(f.save.getAt(1,2,0),money+123);assert.equal(saved(f).options.autoSell,false);
 });
+test("forges sell combat-only rolls on the wrong weapons but retain proper combat and work matches", async()=>{
+  for(const keepLimit of [null,2]) for(const [job,recipe,combatBonus,workBonus] of [
+    ["logging",1,19,56],["building",3,19,62],["training",4,20,64],
+    ["mining",6,20,57],["alchemy",8,21,61],["planting",9,21,58],
+    ["forge",2,19,59],["crafting",5,20,60],["research",7,21,63],
+  ]) {
+    const f=await start({loop:job,roles:[job],forgeOutput:"weapons",keepLimit});
+    assert.equal(f.save.getAt(f.queue(0),3,13),recipe);
+    f.complete(0,[combatBonus]);
+    const validCombat=[2,5,7].includes(recipe);
+    assert.equal(bag(f).length,Number(validCombat),`${job}: combat-only roll`);
+    assert.equal(f.save.getAt(1,2,0),validCombat?0:123);
+    f.complete(0,[combatBonus,workBonus]);f.complete(0,[51]);
+    assert.ok(bag(f).every(it=>it.lock===1));
+    assert.ok(bag(f).some(it=>f.save.getAt(it.row,10,7)===workBonus));
+    assert.ok(bag(f).some(it=>f.save.getAt(it.row,9,7)===51));
+  }
+});
 test("all selected roles are checked and duplicate keepers go to future rounds", async()=>{
   const f=await start({roles:["forge","building"]});
   give(f,13,62);await f.tick();assert.equal(bag(f)[0].lock,1);
@@ -127,15 +145,16 @@ test("unchecked jobs are kept and locked while only selected jobs advance the cr
     assert.match(f.status().message,/Forge: Round 1 · Builder · 1\/2 pieces/);
   }
 });
-test("existing unchecked matches and compatible combat weapons are locked without counting toward the selected set", async()=>{
+test("existing unchecked sets are locked but combat bonuses on the wrong weapon are left unlocked", async()=>{
   const f=fixture(new Map(),true);await f.tick();
-  give(f,13,62);give(f,19,62);give(f,1,19);give(f,4,20);give(f,8,21);
+  give(f,13,62);give(f,19,62);give(f,2,19);give(f,5,20);give(f,7,21);
+  give(f,1,19);give(f,4,20);give(f,8,21);
   await f.configureAll({loop:"forge",roles:["forge"]});await f.tick();
-  assert.equal(bag(f).length,5);assert.ok(bag(f).every(item=>item.lock===1));
+  assert.deepEqual(bag(f).map(item=>item.lock),[1,1,1,1,1,0,0,0]);
   assert.match(f.status().message,/Forge: Round 1 · Forger · 0\/2 pieces/);
   await f.select(1);assert.match(f.status().message,/Crafting: Round 1 · Forger · 0\/2 pieces/);await f.select(0);
   const money=f.save.getAt(1,2,0);f.save.setAt(6,9,1,0);f.complete(0,[19]);
-  assert.equal(bag(f).length,6);assert.equal(bag(f).at(-1).lock,1);assert.equal(f.save.getAt(1,2,0),money);
+  assert.equal(bag(f).length,9);assert.equal(bag(f).at(-1).lock,1);assert.equal(f.save.getAt(1,2,0),money);
 });
 test("inherited queues protect unchecked job and combat matches before native automatic sales", async()=>{
   const f=await start({loop:"forge",roles:["forge"]});f.loop.leave();f.save.setAt(6,9,1,0);

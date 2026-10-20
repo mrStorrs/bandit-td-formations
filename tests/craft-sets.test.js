@@ -165,7 +165,7 @@ test("recipe selection uses the chosen tier, stat and work/combat family", () =>
   assert.deepEqual(clone(api.craftRecipes(wp,target("forge"),2)), [0,4,0,0]);
   assert.deepEqual(clone(api.craftRecipes(wp,target("combat-str"),1)), [1,5,0,0]);
 });
-test("combat crafting chooses spear, bow and fan while keeping compatible alternatives", () => {
+test("combat crafting and keepers both require spear, bow and fan", () => {
   const rows = {
     1:{3:1,4:"普通",5:"装备",6:1,8:4,9:40,10:1,23:"通用"},
     2:{3:1,4:"普通",5:"装备",6:1,8:4,9:43,10:1,23:"通用"},
@@ -178,9 +178,37 @@ test("combat crafting chooses spear, bow and fan while keeping compatible altern
   for(const [role,recipe,alternative,bonus] of [["combat-str",2,1,19],["combat-agi",4,3,20],["combat-int",6,5,21]]){
     const recipes=api.craftRecipes(wp,target(role),1);
     assert.equal(recipes[0],recipe);
-    for(const id of [recipe,alternative]) assert.equal(api.isCraftKeeper(item(1,[bonus],{recipe:id}),wp,o),true);
+    assert.equal(api.isCraftKeeper(item(1,[bonus],{recipe}),wp,o),true);
+    assert.equal(api.isCraftKeeper(item(1,[bonus],{recipe:alternative}),wp,o),false);
     assert.equal(api.matchesCraftItem(item(1,[bonus],{recipe:alternative}),target(role,recipes),o),false);
+    assert.ok(!api.craftSaleGroups(item(1,[bonus],{recipe:alternative}),wp).includes(bonus));
   }
   rows[1][8]=5;
   assert.equal(api.isCraftKeeper(item(1,[19]),wp,o),false,"a mismatched attack stat does not qualify for combat");
+});
+test("every combat role agrees with keeper and stock grouping across tiers, weapon families and rolled bonuses", () => {
+  const rows = {}, powers = [40,43,46,48,44,41,47,45,42];
+  for (let tier=1;tier<=9;tier++) for (let weapon=0;weapon<9;weapon++) {
+    const stat=Math.floor(weapon/3)+1;
+    rows[(tier-1)*9+weapon+1]={3:tier,4:"普通",5:"装备",6:1,8:stat+3,9:powers[weapon],10:stat,23:"通用"};
+  }
+  const wp={width:82,getAt:(id,field)=>rows[id]?.[field]??0};
+  for(let tier=1;tier<=9;tier++) for(const role of api.craftRoles.filter(r=>r.combat)) {
+    const o=options({tier}), recipes=api.craftRecipes(wp,role,tier);
+    for(let weapon=1;weapon<=9;weapon++) {
+      const recipe=(tier-1)*9+weapon, gear=item(1,[role.bonus],{recipe,tier});
+      const expected=recipe===recipes[0];
+      assert.equal(api.isCraftKeeper(gear,wp,o),expected,`${role.id}, tier ${tier}, weapon ${weapon}`);
+      assert.equal(api.matchesCraftItem(gear,{...role,recipes},o),expected);
+      assert.equal(api.craftSaleGroups(gear,wp).includes(role.bonus),expected);
+      if(rows[recipe][10]===role.stat) {
+        const work=api.craftRoles.find(r=>!r.combat&&r.power===rows[recipe][9]);
+        const shared={...gear,bonuses:[role.bonus,work.bonus]};
+        assert.equal(api.isCraftKeeper(shared,wp,o),true,"a valid work match is kept even on the wrong combat weapon");
+        assert.ok(api.craftSaleGroups(shared,wp).includes(work.bonus));
+        assert.equal(api.craftSaleGroups(shared,wp).includes(role.bonus),expected);
+        assert.equal(api.isCraftKeeper({...gear,bonuses:[51]},wp,o),true,"rolled Work Crit still qualifies a work weapon");
+      }
+    }
+  }
 });

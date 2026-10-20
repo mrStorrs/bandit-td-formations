@@ -150,12 +150,16 @@ different types are skipped, and newly added buildings stay where they are.
 Resave after demolishing/rebuilding, since the game can reuse a slot for the
 same building type.
 
-The entire move sequence is checked first. A character, facility, newer
-building, unavailable tile, or building under construction can block a restore.
-Move characters out of buildings and clear the saved destinations before
-retrying. Swaps use an empty building-sized area temporarily; if there is no
-room, the restore stops before moving anything. The native 1×1, 2×2, and 3×3
-building footprints are supported.
+The move sequence is checked first, and every feasible group of buildings is
+restored. Occupied, locked or unfinished buildings and blocked destinations are
+skipped. Skipped buildings stay put, so other moves needing their space are
+skipped too. The message reports a partial restore with the numbers moved and
+not moved. Clear those obstacles and tap the shortcut again to finish.
+Swaps use an empty building-sized area temporarily. A swap that cannot finish
+is skipped without leaving buildings parked elsewhere, while independent moves
+continue. The native 1×1, 2×2, and 3×3 building footprints are supported.
+Malformed saved layouts and unavailable native relocation functions still stop
+the restore.
 
 Facility plots such as crops and workstations stay in place, following normal
 building relocation behavior. The game recalculates their range from the moved
@@ -453,11 +457,13 @@ regardless of the checkboxes or single-role dropdown. With only Forger selected,
 STR work gloves with Build Bonus are kept for Builder, but only Forger sets drive the loop.
 Keepers still need that station's selected tier, minimum rarity, correct stat
 and a matching role-bonus suffix or, for work gear, a Work Crit suffix. Work
-weapons need the job's specific work power. Combat weapons can be any ordinary weapon with the
-matching attack type and primary
-stat: a sword with AGI, Pierce attack and Pierce Bonus is protected even though
-the AGI loop crafts bows. These alternatives do not replace the chosen weapon
-recipe in set progress.
+weapons need the job's specific work power. Combat matches require
+**STR spear + Phys Bonus**, **AGI bow + Pierce Bonus**, or **INT fan + Spell Bonus**.
+These same weapon requirements apply to crafting, keeping, set progress and
+sell-over groups. Axes, hammers, daggers, shovels, staves and sickles can still
+qualify through their own job bonus or rolled Work Crit, but their combat
+bonuses alone do not qualify them. Items already locked by an older version
+keep their locks; unwanted old matches can be unlocked and sold manually.
 
 **Auto-sell non-matching crafts** starts checked and can be disabled while
 running. In Normal mode, it sells only newly completed Auto-all crafts that
@@ -1093,6 +1099,18 @@ build 25975458, native Shift shortcuts saved and recalled layouts across maps
 blocked destinations, old-save discovery and conflict resolution, building
 levels, sprite positions and tile occupancy all passed.
 
+Version 1.23.0 makes combat keeper and sell-over matching use the same spear,
+bow and fan requirements as crafting and set progress. It also lets building
+formations restore feasible moves while skipping blocked buildings and swaps,
+with a partial-restore count. The release passes 400 JavaScript tests and four
+installer tests. In isolated build 25975458, all nine tiers passed 243 native
+weapon-catalog comparisons. Thirty-two native forge completions checked all
+nine T2 weapon families, the three reported shovel suffix combinations, valid
+work matches and surplus replacement. Native building checks verified occupied
+dependencies, blocked destinations, missing swap space, retry after clearing
+obstacles and shared layouts after a map change, with intact levels, sprites
+and occupancy and no runtime errors.
+
 To check the controls in-game:
 
 1. Arrange your characters, choose their jobs and priority work targets, then
@@ -1120,8 +1138,9 @@ To check the controls in-game:
    occupied tiles, including a swap with an empty buffer area available.
    Switch maps and restart, then recall both shared layouts. Saving again on
    the new map should replace the shared building slot. Keep character slots
-   1/2 separate per map and verify blocked destinations stop the whole building
-   restore.
+   1/2 separate per map. Block one destination and check that independent
+   buildings still move and the message reports a partial restore. Clear the
+   blockage and recall again to finish the remaining moves.
 10. In recruitment, select grade `B` and set the stat thresholds you want.
     Check that either a B-or-better work grade or any stat above its threshold
     stops rolling and locks the recruit. Try grade **Off** with only one stat

@@ -62,12 +62,13 @@ test("2x2 swaps reserve all four cells and 3x3 buildings may move across part of
   const target = snapshotBuildings(world([building(1, 4, 3, 3)]));
   assert.equal(planBuildings(target, large).steps.length, 1);
 });
-test("locked terrain, characters, facilities, and unknown obstacles block a target before any moves", () => {
+test("locked terrain, characters, facilities, and unknown obstacles skip only the blocked target", () => {
   const saved = snapshotBuildings(world([building(1, 3), building(2, 4)]));
   for (const block of [{ allowed: false }, { character: true }, { facility: true }, { occupied: true }]) {
     const current = world(); Object.assign(tile(current, 4), block);
     const before = JSON.stringify(current);
-    assert.throws(() => planBuildings(saved, current), /blocked/);
+    const plan=planBuildings(saved,current);
+    assert.deepEqual(plan.moves.map(m=>m.id),[1]);assert.equal(plan.skipped,1);
     assert.equal(JSON.stringify(current), before);
   }
 });
@@ -75,18 +76,23 @@ test("all footprint cells are checked for terrain and overlap", () => {
   const current = world([building(1, 2, 2, 3)]);
   const saved = snapshotBuildings(world([building(1, 6, 6, 3)]));
   tile(current, 7, 7).allowed = false;
-  assert.throws(() => planBuildings(saved, current), /blocked/);
+  const plan=planBuildings(saved,current);
+  assert.equal(plan.steps.length,0);assert.equal(plan.skipped,1);
   const overlap = snapshotBuildings(world()); overlap.buildings[1].x = 1;
   assert.throws(() => planBuildings(overlap, world()), /overlap/);
 });
-test("occupied and unfinished moving buildings stop the restore, while stationary occupants are left alone", () => {
-  const saved = snapshotBuildings(world([building(1, 3), building(2, 2)]));
+test("occupied and unfinished buildings stay put while independent buildings move", () => {
+  const saved = snapshotBuildings(world([building(1, 3), building(2, 4)]));
   for (const block of [c => { c.buildings[0].occupant = 8; }, c => { tile(c, 1).character = true; },
     c => { c.buildings[0].movable = false; }]) {
-    const current = world(); block(current); assert.throws(() => planBuildings(saved, current), /characters|construction/);
+    const current = world(); block(current);
+    const plan=planBuildings(saved,current);
+    assert.deepEqual(plan.moves.map(m=>m.id),[2]);assert.equal(plan.skipped,1);
   }
   const current = world(); current.buildings[1].occupant = 8;
-  assert.equal(planBuildings(saved, current).moves.length, 1);
+  const stationary=snapshotBuildings(world([building(1,3),building(2,2)]));
+  assert.equal(planBuildings(stationary, current).moves.length, 1);
+  assert.equal(planBuildings(stationary, current).skipped, 0);
 });
 test("missing or changed building types are skipped, and newer buildings can block their old slots", () => {
   const saved = snapshotBuildings(world([building(1, 3), building(2, 4), building(3, 5)]));
@@ -94,22 +100,59 @@ test("missing or changed building types are skipped, and newer buildings can blo
   const plan = planBuildings(saved, current);
   assert.equal(plan.skipped, 2); assert.equal(plan.moves.length, 1);
   const blocked = world([building(1, 1), building(9, 3)]);
-  assert.throws(() => planBuildings(saved, blocked), /Another building/);
+  const blockedPlan=planBuildings(saved,blocked);
+  assert.equal(blockedPlan.steps.length,0);assert.equal(blockedPlan.skipped,3);
 });
 test("a packed cycle needs free space and an inconsistent source is rejected without mutation", () => {
   const current = world(undefined, 2, 1);
   const saved = snapshotBuildings(world([building(1, 2), building(2, 1)], 2, 1));
-  assert.throws(() => planBuildings(saved, current), /empty building-sized/);
+  const packed=planBuildings(saved,current);
+  assert.equal(packed.steps.length,0);assert.equal(packed.skipped,2);
   const target = snapshotBuildings(world([building(1, 3)]));
   tile(current, 1).building = 0;
-  assert.throws(() => planBuildings(target, current), /still updating/);
+  const updating=planBuildings(target,current);
+  assert.equal(updating.steps.length,0);assert.equal(updating.skipped,1);
 });
 test("building layouts restore across maps but still check destination terrain", () => {
   const saved = snapshotBuildings(world([building(1, 3), building(2, 4)]));
   const current = { ...world(), mapId: 29, token: "map-29" };
   assert.equal(planBuildings(saved, current).moves.length, 2);
   tile(current, 4).allowed = false;
-  assert.throws(() => planBuildings(saved, current), /blocked/);
+  const partial=planBuildings(saved,current);
+  assert.deepEqual(partial.moves.map(m=>m.id),[1]);assert.equal(partial.skipped,1);
+});
+test("a blocked building and every move depending on its footprint stay put while an independent swap completes", () => {
+  const current=world([1,2,3,4,5].map(id=>building(id,id)));
+  current.buildings[2].occupant=7;
+  const saved=snapshotBuildings(world([building(1,2),building(2,3),building(3,6),building(4,5),building(5,4)]));
+  const plan=planBuildings(saved,current);
+  assert.deepEqual(plan.moves.map(m=>m.id).sort(),[4,5]);
+  assert.equal(plan.skipped,3);assert.equal(plan.steps.length,3);
+  assert.ok(plan.steps.every(step=>[4,5].includes(step.id)));
+  assert.match(buildingFormation.restoredMessage(1,saved,plan),/partially restored.*2 moved.*3 not moved/);
+});
+test("a cycle without a buffer is skipped after feasible unrelated moves, without leaving parked buildings", () => {
+  const current=world([building(1,1,1,2),building(2,3,1,2),building(3,5,1,1)],5,2);
+  const saved=snapshotBuildings(world([building(1,3,1,2),building(2,1,1,2),building(3,5,2,1)],5,2));
+  const plan=planBuildings(saved,current);
+  assert.deepEqual(plan.moves.map(m=>m.id),[3]);assert.equal(plan.skipped,2);
+  assert.deepEqual(plan.steps.map(s=>s.id),[3]);
+});
+test("a later independent move can free a buffer for an earlier swap", () => {
+  const current=world([building(1,1,1,2),building(2,3,1,2),building(3,5,1,1)],6,3);
+  const saved=snapshotBuildings(world([building(1,3,1,2),building(2,1,1,2),building(3,6,3,1)],6,3));
+  const plan=planBuildings(saved,current);
+  assert.equal(plan.moves.length,3);assert.equal(plan.skipped,0);
+  assert.equal(plan.steps[0].id,3);
+  assert.ok(plan.steps.some(s=>s.id!==3&&s.x===5&&s.y===1));
+});
+test("failed swap trials never leave a temporary move in the returned plan", () => {
+  const current=world([building(1,6,1),building(2,2,2,3),building(3,4,1,2),building(4,7,1)],7,3);
+  const saved=snapshotBuildings(world([building(1,1,1),building(2,5,2,3),building(3,2,1,2),building(4,7,2)],7,3));
+  // Parking the 1x1 building cannot resolve the larger buildings' cycle.
+  const plan=planBuildings(saved,current);
+  assert.deepEqual(plan.steps.map(s=>s.id),[4]);
+  assert.deepEqual(plan.moves.map(m=>m.id),[4]);assert.equal(plan.skipped,3);
 });
 test("malformed saves, wrong campaigns, duplicate IDs, and invalid coordinates are rejected", () => {
   const current = world(), saved = snapshotBuildings(current);

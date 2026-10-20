@@ -37,6 +37,19 @@ test("the only STR/Forger spear survives and the next weakest forge-only spears 
   assert.deepEqual(bag(f), [shared, ...forge.slice(2)]);
   assert.equal(f.save.getAt(1, 2, 0), 246);
 });
+test("wrong combat bonuses do not shelter excess work weapons from stock trimming", async () => {
+  for(const [recipe,workBonus,combatBonus] of [[1,56,19],[3,62,19],[4,64,20],[6,57,20],[8,61,21],[9,58,21]]) {
+    const f=await ready({keepLimit:1});
+    const weak=give(f,recipe,[workBonus,combatBonus],1);
+    const best=give(f,recipe,[workBonus],99);
+    await sell(f);
+    assert.equal(f.save.getAt(weak,1,7),0);
+    const before=bag(f);give(f,recipe,[combatBonus],50);
+    const reject=bag(f).find(row=>!before.includes(row));
+    await sell(f);
+    assert.deepEqual(bag(f).sort((a,b)=>a-b),[best,reject].sort((a,b)=>a-b),"the sale button only trims matches; unrelated existing rejects are untouched");
+  }
+});
 
 test("overlapping work groups retain their stock even when unchecked, while rarity ranks before suffix strength", async () => {
   const f = await ready({ keepLimit: 2, roles: ["forge"] });
