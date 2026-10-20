@@ -25,7 +25,7 @@ research and drilling mod for Bandit Simulator TD (Steam app 4267800).
   another batch of **10**, waiting for materials when necessary.
 - **Crafting controls per station:** select a forge, crafting station or brewery
   to open its automation popup. Each station saves its own mode and pause state.
-  Equipment stations prioritize the lowest-stock checked work/combat gear or loop one role, with
+  Equipment stations cycle checked work/combat gear in an initial lowest-stock order or loop one role, with
   their own tier, minimum rarity, material multiplier and auto-sell setting.
   They keep and lock useful gear and craft in batches of **10**.
 - **Auto research and drill:** enabled by default, with controls on each selected
@@ -377,9 +377,10 @@ tier (T1–T9), minimum rarity (the game's six color grades), and native materia
 multiplier (×1, ×10 or ×100). Click **Apply / Start**. These settings apply only
 to that station. The dropdown offers:
 
-- **Checked roles · lowest stock:** before each batch, choose the item/bonus
-  group with the fewest qualifying pieces among the checked jobs and combat
-  roles. Equal stocks take turns, starting in the displayed role order.
+- **Checked roles · round robin:** sort the checked item/bonus groups from
+  lowest qualifying stock to highest when the first batch starts. Equal stocks
+  use the displayed role order, then slot order. Make one batch per group and
+  repeat that same order.
 - **A single job or combat role:** repeatedly make that role's sets. This
   overrides the crafting checkboxes without clearing their selections.
 
@@ -432,10 +433,16 @@ Forging and crafting stations run **independent loops**, queuing **10 crafts of
 the same recipe per batch** and paying the full native material cost up front.
 The forge covers weapons and hand gear; crafting covers head/belt gear and
 accessories. Each station compares only the pieces it can make, including its
-Forge output restriction, and starts with the lowest stock. A group with zero
-pieces comes before one with two, even if that earlier group is below its keep
-limit. Stock is recounted after each paid batch finishes. Each loop starts its
-next round without waiting for the other loop.
+Forge output restriction. Its first loop starts with the lowest stock: a group
+with zero pieces comes before one with two. Each completed batch advances to the
+next group, even if none of its ten crafts matched. After the last group, the
+station wraps to the start of the same order. New keepers, sales and another
+station's output do not reshuffle that order. Each station advances without
+waiting for another station.
+**Apply / Start**, changing the sell-output mode/limit, or reloading the game
+rebuilds the order from current stock when the next new batch starts. Existing
+paid batches finish first. Waiting for materials, recipe unlocks or inventory
+space does not skip a turn.
 The selected station's popup shows its role, stock, round and progress. Each station
 chooses its recipe using its own settings and queue. Stations can queue identical
 recipes simultaneously, and refill without waiting for another station's batch.
@@ -445,11 +452,12 @@ come from the shared campaign.
 
 A paid batch finishes all ten attempts before that station changes recipe,
 even if an early craft matches. Every result is checked individually. Each
-new round in Normal mode needs another copy of that loop's pieces for every
-selected role. Existing inventory and worn gear count, and any physical piece
-counts only once even if it has several useful bonuses. Extra matches are
-retained for later rounds. Progress is recomputed from gear you still own; selling a keeper
-or changing its rolls makes that piece missing again.
+stock round shown in Normal mode represents another complete set of that
+station's pieces for every selected role; this stock display is separate from
+the batch rotation. Existing inventory and worn gear count, and any physical
+piece counts only once even if it has several useful bonuses. Extra matches
+are retained. Stock and set progress are recomputed from gear you still own,
+while the batch order stays fixed until restarted.
 
 In Normal mode, qualifying equipment is automatically locked, including
 existing matches. Each result is checked against every job and combat role,
@@ -562,13 +570,13 @@ the saved minimum, other tiers and items outside this station's gear filter are
 untouched. The popup reports how many items were sold; each sale pays the game's
 normal copper price.
 
-With Sell over limit, Auto-all fills the lowest-stock chosen recipe/bonus group
-first until every group reaches the keep limit. Stock counts only gear matching
+With Sell over limit, Auto-all starts its round-robin order with the lowest-stock
+chosen recipe/bonus group. Stock counts only gear matching
 the chosen recipe, role, tier and minimum rarity, including worn gear and the
-Work Crit alternatives above. Once stocked, it continues upgrade attempts with
-the lowest-stock groups, rotating
-ties in batches of ten, retaining improvements and selling weaker duplicates.
-Sell all keeps cycling recipes by batch because its output does not build stock.
+Work Crit alternatives above. Every group gets a batch of ten each loop,
+including groups already at the limit, retaining improvements and selling weaker
+duplicates. Sell all uses the same initial stock order and keeps cycling recipes
+by batch even though its output does not build stock.
 Both modes honor the forge's
 All / Weapon only / No weapon choice and keep stations independent.
 
@@ -1110,6 +1118,17 @@ work matches and surplus replacement. Native building checks verified occupied
 dependencies, blocked destinations, missing swap space, retry after clearing
 obstacles and shared layouts after a map change, with intact levels, sprites
 and occupancy and no runtime errors.
+
+Version 1.24.0 restores round-robin crafting, sorting each station's initial
+item/bonus order from lowest stock to highest. Every completed batch advances
+one turn, including batches with no keepers, and later loops reuse that order.
+Apply / Start rebuilds it after paid work finishes. The release passes 406
+JavaScript tests and four installer tests. Coverage includes stock changes,
+material waits, same-station restarts during a paid batch, single-role and
+forge-output restrictions, independent forges, and all selling modes. In
+isolated build 25975458, 210 native crafts verified both station types over
+multiple loops, keeping newly stocked gear, and rebuilding the order under
+Sell over limit without skipping its first turn or affecting the other station.
 
 To check the controls in-game:
 

@@ -129,18 +129,33 @@ test("lowest-stock selection compares item and bonus groups before checkbox orde
     assert.equal(cycles[1].target.id, "forge"); assert.equal(cycles[1].stock, 0);
   }
 });
-test("equal stock rotates by batch while lower stock always wins over the cursor", () => {
+test("equal starting stock rotates through every role and slot in displayed order", () => {
   const targets = [target("forge"), target("research", [5,6,7,8])];
-  for (const keepLimit of [null, 5]) {
+  for (const keepLimit of [null, 5, 0]) {
     const o = options({keepLimit});
-    let cursor = 0;
+    const rotation = {};
     for (const [role, slot] of [["forge",0],["forge",1],["research",0],["research",1],["forge",0]]) {
-      const cycle = api.planCraftSets([], targets, o, cursor).cycles[0];
-      assert.equal(cycle.target.id, role); assert.equal(cycle.slot, slot); cursor = cycle.nextCursor;
+      const cycle = api.planCraftSets([], targets, o, rotation).cycles[0];
+      assert.equal(cycle.target.id, role); assert.equal(cycle.slot, slot);
+      rotation[4] = { order: cycle.order, cursor: cycle.nextCursor };
     }
-    const inventory = [item(1,[59]), item(1,[63],{recipe:5}), item(2,[63],{recipe:6})];
-    const cycle = api.planCraftSets(inventory, targets, o, 2).cycles[0];
-    assert.equal(cycle.target.id, "forge"); assert.equal(cycle.slot, 1); assert.equal(cycle.stock, 0);
+  }
+});
+test("round robin keeps its initial low-to-high stock order through changed stock and later loops", () => {
+  const targets = [target("forge"), target("research", [5,6,7,8])];
+  const inventory = [item(1,[59]), item(1,[59]), item(2,[59]), item(2,[59]), item(1,[63],{recipe:5})];
+  for (const keepLimit of [null, 5, 0]) {
+    const o = options({keepLimit}), rotation = {};
+    let owned = inventory;
+    for (let turn = 0; turn < 9; turn++) {
+      const cycle = api.planCraftSets(owned, targets, o, rotation).cycles[0];
+      const [role, slot] = [["research",1],["research",0],["forge",0],["forge",1]][turn % 4];
+      assert.equal(cycle.target.id, role); assert.equal(cycle.slot, slot);
+      assert.deepEqual(clone(cycle.order), [3,2,0,1]);
+      rotation[4] = { order: cycle.order, cursor: cycle.nextCursor };
+      // The first target jumps from zero to ten; the remaining targets lose stock.
+      owned = Array.from({length:10}, () => item(2,[63],{recipe:6}));
+    }
   }
 });
 test("lowest-stock normal sets still allocate each multi-bonus item once; sell limits count each bonus", () => {

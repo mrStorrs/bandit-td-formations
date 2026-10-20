@@ -13,6 +13,31 @@ function addForge(f, id = 10) {
 }
 const recipe = (f,id) => f.save.getAt(f.save.getAt(id,3,21),3,13);
 
+test("two forges keep independent stock-sorted rotations and batch positions",async()=>{
+  const f=fixture(new Map(),true),second=addForge(f);await f.tick();
+  const give=(id,bonus)=>{
+    f.bonuses=[bonus];f.runtime.callFunction("获得物品",true,id,3,1,1,200,1,false,0,"特定装备",false,false);
+  };
+  give(2,59);give(13,59);give(7,63);
+  await f.configureAll({keepLimit:5});await f.tick();
+  const other=f.save.getAt(10,3,21);
+  assert.equal(recipe(f,3),15);assert.equal(recipe(f,10),15);
+  for(let turn=0;turn<3;turn++) {
+    for(let i=0;i<10;i++)f.complete(0,[72]);await f.tick();
+    assert.equal(recipe(f,3),[2,13,7][turn]);
+  }
+  assert.equal(f.save.getAt(10,3,21),other);assert.equal(f.save.getAt(other,8,13),10);
+  for(let i=0;i<10;i++)f.complete(second,[63]);await f.tick();
+  assert.equal(recipe(f,10),2);assert.equal(recipe(f,3),7);
+  for(let i=0;i<10;i++)f.complete(0,[72]);await f.tick();
+  assert.equal(recipe(f,3),15,"the first forge wraps to its original first turn despite new glove stock");
+  await f.select(second);await f.configure({forgeOutput:"weapons",keepLimit:5});
+  for(let i=0;i<10;i++)f.complete(second,[72]);await f.tick();
+  assert.equal(recipe(f,10),2,"reconfiguring the second forge starts its own new order");
+  assert.equal(recipe(f,3),15);assert.equal(f.remaining(0),10);
+  assert.equal(f.notifications.length,0);
+});
+
 test("two forges reload and refill their own recipes during a shared building upgrade",async()=>{
   const records=[
     {id:3,type:21,owner:6,enabled:true,options:{...options,forgeOutput:"weapons"}},

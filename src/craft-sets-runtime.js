@@ -18,7 +18,7 @@
     }
     function entry(station, options = craftDefaults, enabled = true, managed = []) {
       return { id: station.id, type: station.type, owner: station.owner, options: validateCraftOptions(options), enabled,
-        managed: new Set(managed), outputCursor: 0, busy: false, error: "", message: "Waiting for station…", kept: 0, sold: 0 };
+        managed: new Set(managed), rotation: {}, busy: false, error: "", message: "Waiting for station…", kept: 0, sold: 0 };
     }
     function persist(campaign) {
       const data = { version: 1, stations: [...campaign.stations.values()].map(({ id, type, owner, options, enabled, managed }) =>
@@ -313,14 +313,14 @@
           if (options.keepLimit !== null && station.kind === 6) throw new Error("Equipment sales require a forge or crafting station.");
           if (options.mode === "sets" && !craftTargets(current.wp, options).length) throw new Error("Check at least one role, or choose a single role to loop.");
           if (options.mode === "sets" || options.keepLimit !== null) installHooks();
-          state.options = options; state.outputCursor = 0; state.enabled = true; state.error = "";
+          state.options = options; state.rotation = {}; state.enabled = true; state.error = "";
         } else if (action === "sell") {
           if (typeof payload.autoSell !== "boolean") throw new Error("Invalid auto-sell setting.");
           state.options = { ...state.options, autoSell: payload.autoSell };
         } else if (action === "output") {
           if (payload.keepLimit !== null && (!Number.isSafeInteger(payload.keepLimit) || payload.keepLimit < 0 || payload.keepLimit > 999)) throw new Error("Invalid equipment keep limit.");
           if (payload.keepLimit !== null) installHooks();
-          state.options = { ...state.options, keepLimit: payload.keepLimit }; state.outputCursor = 0;
+          state.options = { ...state.options, keepLimit: payload.keepLimit }; state.rotation = {};
         } else state.enabled = false;
         publish(current);
         await persist(campaign);
@@ -376,7 +376,7 @@
       const targets = craftTargets(current.wp, state.options);
       if (!targets.length) throw new Error("Choose at least one crafting role.");
       if (current.blocked || runtime.globalVars["装备穿戴中"]) { state.message = "Waiting for gameplay to resume…"; return; }
-      const plan = planCraftSets(inventory, targets, state.options, state.outputCursor), cycle = plan.cycles.find(c => c.kind === station.kind);
+      const plan = planCraftSets(inventory, targets, state.options, state.rotation), cycle = plan.cycles.find(c => c.kind === station.kind);
       if (state.options.keepLimit === null) for (const item of inventory) if (isCraftKeeper(item, current.wp, state.options)) current.save.setAt(1, item.row, 22, item.location);
       const { target: role, slot, nextCursor } = cycle;
       state.message = `${cycle.name}: Round ${cycle.round} · ${cycle.target.name} · ${cycle.complete}/${cycle.slots.length} ${cycle.slots.length === 2 ? "pieces" : cycle.slots[0] === 0 ? "weapon" : "hand piece"}` +
@@ -394,8 +394,11 @@
       const recipe = role.recipes[slot];
       if (!recipe || current.save.getAt(recipe, 19, 0) !== 1) { state.message += " · Waiting for recipe unlock"; return; }
       const queue = bridge.enqueue(current, station, { recipe, multiplier: state.options.multiplier }, batchSize);
-      if (queue) tickets.set(station.id, { owned: true, id: station.id, token: token(current), type: station.type, owner: station.owner,
-        x: station.x, y: station.y, queue, recipe, count: batchSize, nextCursor, options: validateCraftOptions(state.options) });
+      if (queue) {
+        const progress = state.rotation[station.kind] ||= { order: cycle.order, cursor: 0 };
+        tickets.set(station.id, { owned: true, id: station.id, token: token(current), type: station.type, owner: station.owner,
+          x: station.x, y: station.y, queue, recipe, count: batchSize, progress, nextCursor, options: validateCraftOptions(state.options) });
+      }
       else state.message += " · Waiting for materials or station";
     }
     return {
@@ -409,8 +412,9 @@
         tickets.delete(station.id);
         const campaign = load(current), state = stateFor(current, station);
         if (!manual && !removed && identity(state, station) && ticket?.token === token(current) &&
-            ticket.queue === station.queue && ticket.nextCursor !== undefined && sameOptions(state.options, ticket.options)) {
-          state.outputCursor = ticket.nextCursor;
+            ticket.queue === station.queue && ticket.nextCursor !== undefined &&
+            ticket.progress === state.rotation[station.kind] && sameOptions(state.options, ticket.options)) {
+          ticket.progress.cursor = ticket.nextCursor;
         }
         if (!campaign.ready && (manual || removed)) {
           campaign.pending.set(station.id, { station, removed });

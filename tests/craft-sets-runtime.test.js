@@ -28,17 +28,67 @@ test("Auto-all starts with the least-stocked checked item even when an earlier r
     assert.equal(f.save.getAt(f.queue(0),3,13),15);assert.equal(f.remaining(0),10);
     assert.match(f.status().message,/Researcher/);assert.match(f.status().message,/Stock 0/);
     for(let n=0;n<10;n++)f.complete(0,[63]);await f.tick();
-    assert.equal(f.save.getAt(f.queue(0),3,13),7,"recount after a full batch instead of finishing the first checkbox's quota");
+    assert.equal(f.save.getAt(f.queue(0),3,13),7,"the next item in the starting stock order gets its batch");
     assert.equal(f.notifications.length,0);
   }
 });
-test("failed batches rotate tied stocks without replacing paid work or coordinating station queues", async()=>{
+test("failed batches rotate without replacing paid work or coordinating station queues", async()=>{
   const f=await start(),other=f.queue(1),paid=f.queue(0),balance=f.balance();
   f.complete(0,[72]);await f.tick();
   assert.equal(f.queue(0),paid);assert.equal(f.remaining(0),9);assert.deepEqual(f.balance(),balance);
   for(let n=0;n<9;n++)f.complete(0,[72]);await f.tick();
   assert.equal(f.save.getAt(f.queue(0),3,13),13,"next equally scarce item gets a turn");
   assert.equal(f.queue(1),other);assert.equal(f.remaining(1),10);
+});
+test("unequal starting stocks get one batch each and repeat the same order even when every roll misses", async()=>{
+  for(const keepLimit of [null,5,0]) {
+    const f=fixture(new Map(),true);await f.tick();
+    for(const recipe of [2,2,13,13,7])give(f,recipe,recipe===7?63:59);
+    await f.configure({keepLimit});await f.tick();
+    for(const expected of [15,7,2,13,15,7,2,13,15]) {
+      assert.equal(f.save.getAt(f.queue(0),3,13),expected);assert.equal(f.remaining(0),10);
+      batch(f,0,72);await f.tick();
+    }
+    assert.equal(bag(f).length,5);assert.equal(f.notifications.length,0);
+  }
+});
+test("stock gained and lost during a rotation does not reorder later batches", async()=>{
+  const f=fixture(new Map(),true);await f.tick();
+  for(const recipe of [2,2,13,13,7])give(f,recipe,recipe===7?63:59);
+  await f.configure({keepLimit:5});await f.tick();
+  assert.equal(f.save.getAt(f.queue(0),3,13),15);
+  for(let n=0;n<10;n++)f.complete(0,[63]);
+  for(const item of bag(f).filter(item=>item.recipe===2))f.runtime.callFunction("出售物品",item.row,false,false);
+  for(const expected of [7,2,13,15,7]) {
+    await f.tick();assert.equal(f.save.getAt(f.queue(0),3,13),expected);
+    batch(f,0,72);
+  }
+  assert.equal(f.notifications.length,0);
+});
+test("a waiting turn keeps its place, and stock order is captured only when the first batch is paid", async()=>{
+  const f=fixture(new Map(),true);await f.tick();f.materials(0);
+  await f.configure({keepLimit:5});await f.tick();assert.equal(f.queue(0),0);
+  for(const recipe of [2,13,7])give(f,recipe,recipe===7?63:59);
+  f.materials();await f.tick();assert.equal(f.save.getAt(f.queue(0),3,13),15);
+  f.materials(0);batch(f,0,72);
+  for(let n=0;n<3;n++)await f.tick();
+  assert.equal(f.queue(0),0);assert.match(f.status().message,/Waiting for materials/);
+  for(const item of bag(f).filter(item=>item.recipe===7))f.runtime.callFunction("出售物品",item.row,false,false);
+  f.materials();await f.tick();
+  assert.equal(f.save.getAt(f.queue(0),3,13),2,"the next scheduled turn still comes before the now-empty fan group");
+});
+test("Apply or changing sell mode rebuilds the order after paid work without advancing from an old ticket", async()=>{
+  for(const action of ["configure","output"]) {
+    const f=await start({keepLimit:5}),paid=f.queue(0),other=f.queue(1);
+    for(const recipe of [13,7,15])give(f,recipe,recipe===13?59:63);
+    if(action==="configure")await f.configure({keepLimit:5});
+    else await f.handlers["craft-output"]({token:f.status().token,keepLimit:null});
+    await f.tick();assert.equal(f.queue(0),paid);assert.equal(f.remaining(0),10);
+    batch(f,0,72);await f.tick();
+    assert.equal(f.save.getAt(f.queue(0),3,13),2,"a fresh rotation starts with the still-empty spear group");
+    batch(f,0,72);await f.tick();assert.equal(f.save.getAt(f.queue(0),3,13),13);
+    assert.equal(f.queue(1),other);assert.equal(f.remaining(1),10);
+  }
 });
 test("stock priority counts worn matches and ignores wrong quality, tier, bonus and unchecked roles", async()=>{
   const f=fixture(new Map(),true);await f.tick();

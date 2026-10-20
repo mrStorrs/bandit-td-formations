@@ -99,8 +99,8 @@
         make("div", "Selling changes apply immediately in either mode. Sell over limit keeps the best N per item, tier and role. Rarity always ranks first: Red (6) > Gold (5) > Purple (4) > Blue (3) > Green (2) > White (1). Within the same rarity, work suffixes rank Work Crit + job bonus > Work Crit > job bonus, then suffix Work Crit % and job bonus rolls. Innate stats do not count. Minimum rarity still applies. Saved outfits, equipped gear and existing locks are protected; this mode can replace its own auto-locked crafts when no outfit uses them. Pause stops automatic sales.", this.craftOutputBox).style.cssText = "margin:0 0 10px;color:#c5ced1;font-size:12px;line-height:1.4";
         this.craftGear = make("div", "", body);
         const gearSelect = (title, id, options) => select(title, id, options, this.craftGear);
-        this.craftLoop = gearSelect("Loop", "cjs-craft-loop", [["all", "Checked roles · lowest stock"], ...state.roles.map(r => [r.id, r.name])]);
-        make("div", "Normal and Sell over limit start with the lowest-stock item / bonus; equal stocks take turns. Choose a single role to repeat only that set. Combat weapons: STR spear, AGI bow, INT fan.", this.craftGear).style.cssText = "margin:-3px 0 10px;color:#c5ced1;font-size:12px";
+        this.craftLoop = gearSelect("Loop", "cjs-craft-loop", [["all", "Checked roles · round robin"], ...state.roles.map(r => [r.id, r.name])]);
+        make("div", "Start with items / bonuses ordered from lowest stock to highest, then repeat that order: one batch of 10 per turn. Apply / Start rebuilds the order. Choose a single role to repeat only that set. Combat weapons: STR spear, AGI bow, INT fan.", this.craftGear).style.cssText = "margin:-3px 0 10px;color:#c5ced1;font-size:12px";
         this.craftForgeLabel = make("label", "Forge output ", this.craftGear); this.craftForgeLabel.style.cssText = "display:block;margin-bottom:10px";
         this.craftForgeOutput = make("select", "", this.craftForgeLabel); this.craftForgeOutput.id = "cjs-craft-forge-output";
         this.craftForgeOutput.style.cssText = "font:inherit;max-width:100%";

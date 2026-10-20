@@ -103,7 +103,7 @@
     // A multi-bonus piece survives if any one of its groups still needs it.
     return pool.filter(item => !keep.has(item) && !item.protected && craftSaleGroups(item, wp).some(group => touched.includes(group)));
   }
-  function planCraftSets(items, targets, options, cursor = 0) {
+  function planCraftSets(items, targets, options, rotation = {}) {
     const counts = targets.map(() => [0, 0, 0, 0]);
     const eligible = items.map(item => ({ item, roles: targets.map((t, i) => matchesCraftItem(item, t, options) ? i : -1).filter(i => i >= 0)
       .sort((a, b) => Number(item.bonuses.includes(targets[b].bonus)) - Number(item.bonuses.includes(targets[a].bonus))) }))
@@ -124,16 +124,14 @@
     const cycles = [[4, "Forge", options.forgeOutput === "weapons" ? [0] : options.forgeOutput === "hands" ? [1] : [0, 1]], [5, "Crafting", [2, 3]]].map(([kind, name, slots]) => {
       const round = targets.length ? Math.min(...counts.flatMap(row => slots.map(slot => row[slot]))) + 1 : 1;
       const choices = counts.flatMap((row, index) => slots.map(slot => ({ index, slot, stock: row[slot] })));
-      let choice, position;
-      // Stock wins first; start ties after the previous completed batch.
-      // Sell-all cannot build stock, so it keeps cycling every selected recipe.
-      for (let offset = 0; offset < choices.length; offset++) {
-        const i = (cursor + offset) % choices.length, candidate = choices[i];
-        if (!choice || options.keepLimit !== 0 && candidate.stock < choice.stock) { choice = candidate; position = i; }
-      }
+      // Stock determines the initial order. Completed batches advance through
+      // that fixed order even when a turn produces no matching equipment.
+      const order = rotation[kind]?.order || choices.map((_, i) => i)
+        .sort((a, b) => choices[a].stock - choices[b].stock || a - b);
+      const cursor = rotation[kind]?.cursor || 0, choice = choices[order[cursor]];
       const index = choice?.index ?? -1;
       return { kind, name, slots, round, index, target: targets[index] || null,
-        slot: choice?.slot, stock: choice?.stock, nextCursor: choice ? (position + 1) % choices.length : undefined,
+        slot: choice?.slot, stock: choice?.stock, order, nextCursor: choice ? (cursor + 1) % order.length : undefined,
         complete: index < 0 ? 0 : slots.filter(slot => counts[index][slot] >= round).length };
     });
     return { counts, cycles };
