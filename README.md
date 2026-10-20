@@ -518,8 +518,32 @@ Comparison is triggered by a new craft and only trims that item variant/tier
 and the bonus groups it touches. It can sell weaker, unlocked duplicates
 already in the bag. It does not sweep unrelated inventory when enabled.
 Settings and tracked locks survive map changes and restarts. **Pause** stops
-both crafting automation and these sales at the selected station.
+both crafting automation and automatic sales at the selected station.
 Crafts completed while a setting is being saved are retained without selling.
+
+**Sell excess now**, beside **Apply / Start**, trims existing matching equipment
+on demand. Choose **Sell over limit** and set **Keep per item / bonus** first.
+The button uses the station's saved tier, minimum rarity and Forge output filter:
+forges cover weapons/hands and crafting stations cover belts/necklaces. Changed
+filters must be applied before selling. It also works while automation is paused,
+without starting automation or changing the current paid queue.
+
+Each exact item variant has separate work/combat counts, including unchecked
+roles. The sweep sells the weakest eligible extras only when **every** role
+matched by that piece would still have the requested stock afterward. Eleven
+Forge matches with Keep 5 normally sell six. With one STR/Forge spear and six
+Forge-only spears, Keep 5 retains the shared spear plus the four best Forge-only
+spears, selling the two weakest Forge-only spears. A role already below its
+target never loses a match. Rolled Work Crit also counts for compatible work
+roles, so it can protect an item needed by an unchecked job.
+
+The same rarity-first ranking and lock protections apply. Equipped pieces count
+toward stock; saved outfits, manual/older locks and another station's managed
+locks cannot be sold. This station's tracked auto-locks can be replaced. Protected
+pieces may leave stock above the limit. Unmatched items, lower-rarity items below
+the saved minimum, other tiers and items outside this station's gear filter are
+untouched. The popup reports how many items were sold; each sale pays the game's
+normal copper price.
 
 With Sell over limit, Auto-all fills the lowest-stock chosen recipe/bonus group
 first until every group reaches the keep limit. Stock counts only gear matching
@@ -1037,6 +1061,17 @@ ranking. The release passes 371 JavaScript tests and four installer tests.
 In isolated build 25975458, both station types replaced strong-roll orange
 gear with weak-roll red gear, locked the red, sold the orange for native
 copper, rejected later orange gear, and upgraded to better same-grade bonuses.
+
+Version 1.21.0 adds **Sell excess now** beside each equipment station's
+automation controls. It trims existing matches to the saved stock limit while
+checking every matching role before each planned removal. Tests cover shared
+bonuses, unchecked roles, rarity ranking, filters, outfit/manual/managed locks,
+paused queues, stale requests and native sale failures. The release passes
+381 JavaScript tests and four installer tests. In isolated build 25975458,
+real button clicks sold six of eleven matches, preserved a sole STR/Forge
+spear while selling two Forge-only extras, respected a saved-and-unequipped
+outfit piece, and selected the red belt over an orange belt. Native copper
+payments, unchanged queues and UI result messages passed without runtime errors.
 
 To check the controls in-game:
 

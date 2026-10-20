@@ -142,10 +142,7 @@
       if (s.getAt(item.row, 1, 7) !== 0) throw new Error("The game did not finish an equipment sale. Restart to retry.");
       state.sold++;
     }
-    function trimOutput(current, state, item, qualifies) {
-      const inventory = items(current).filter(other => other.recipe === item.recipe && other.tier === item.tier);
-      const incoming = inventory.find(other => other.row === item.row && other.location === 7);
-      if (!incoming) throw new Error("The new craft could not be found. No equipment was sold.");
+    function compareItems(current, state, inventory) {
       const counts = new Map();
       for (const other of inventory) {
         other.key = itemKey(current, other); counts.set(other.key, (counts.get(other.key) || 0) + 1);
@@ -157,6 +154,12 @@
           other.location !== 7 || current.save.getAt(other.row, 7, 7) !== 0 ||
           (current.save.getAt(other.row, 22, 7) !== 0 && !other.managed);
       }
+      return inventory;
+    }
+    function trimOutput(current, state, item, qualifies) {
+      const inventory = compareItems(current, state, items(current).filter(other => other.recipe === item.recipe && other.tier === item.tier));
+      const incoming = inventory.find(other => other.row === item.row && other.location === 7);
+      if (!incoming) throw new Error("The new craft could not be found. No equipment was sold.");
       for (const extra of planCraftSurplus(inventory, incoming, state.options.keepLimit, current.wp, state.options.minimum)) {
         if (itemKey(current, extra) !== extra.key) throw new Error("Equipment changed during comparison. Remaining items were kept.");
         sellItem(current, state, extra, extra.managed);
@@ -291,7 +294,8 @@
         running: !campaign.error && !!running(state), enabled: !campaign.error && !!state?.enabled,
         busy: !campaign.ready || !!state?.busy,
         message: campaign.error || state?.error || state?.message || "Loading station settings…",
-        error: !!(campaign.error || state?.error), kept: state?.kept || 0, sold: state?.sold || 0, roles: craftRoles } : { visible: false };
+        error: !!(campaign.error || state?.error), kept: state?.kept || 0, sold: state?.sold || 0,
+        saleMessage: state?.saleMessage || "", roles: craftRoles } : { visible: false };
       const text = JSON.stringify(payload);
       if (text !== lastStatus) { lastStatus = text; engine.PostComponentMessageToDOM("cjs-formations", "craft-status", payload); }
     }
@@ -327,6 +331,39 @@
       }
     }
     for (const action of ["configure", "pause", "sell", "output"]) engine.AddDOMComponentMessageHandler("cjs-formations", `craft-${action}`, payload => edit(action, payload));
+    engine.AddDOMComponentMessageHandler("cjs-formations", "craft-sell-excess", payload => {
+      const current = bridge.context(), station = selected(current);
+      if (!station || ![4, 5].includes(station.kind) || payload?.token !== stationToken(current, station) || runtime.globalVars["装备穿戴中"]) return;
+      const state = stateFor(current, station);
+      if (!state || state.busy || state.error || !(state.options.keepLimit > 0) ||
+          JSON.stringify(payload.options) !== JSON.stringify(state.options)) return;
+      const before = state.sold;
+      state.busy = true;
+      try {
+        installHooks();
+        const slots = station.kind === 5 ? [3, 4] : state.options.forgeOutput === "weapons" ? [1] : state.options.forgeOutput === "hands" ? [2] : [1, 2];
+        const inventory = compareItems(current, state, items(current).filter(item =>
+          slots.includes(item.slot) && current.save.getAt(item.row, 2, item.location) === 1 && isCraftKeeper(item, current.wp, state.options)));
+        const recipes = new Map();
+        for (const item of inventory) {
+          if (!recipes.has(item.recipe)) recipes.set(item.recipe, []);
+          recipes.get(item.recipe).push(item);
+        }
+        // Finish every comparison before the first irreversible native sale.
+        const extras = [...recipes.values()].flatMap(pool =>
+          planCraftSurplus(pool, pool[0], state.options.keepLimit, current.wp, state.options.minimum, true));
+        for (const extra of extras) {
+          if (itemKey(current, extra) !== extra.key) throw new Error("Equipment changed during comparison. Remaining items were kept.");
+          sellItem(current, state, extra, extra.managed);
+        }
+        state.saleMessage = state.sold === before ? "No sellable excess. Other sets and protected gear are kept." :
+          `Sold ${state.sold - before} excess item${state.sold - before === 1 ? "" : "s"}.`;
+        notify(state.saleMessage);
+      } catch (error) {
+        state.saleMessage = `Sold ${state.sold - before} excess items before stopping. Remaining items were kept.`;
+        fail(state, error);
+      } finally { state.busy = false; publish(bridge.context()); }
+    });
     function schedule(current, station, state, inventory) {
       if (active(state) && state.options.keepLimit !== null && [4, 5].includes(station.kind)) installHooks();
       if (state.options.mode === "repeat") {

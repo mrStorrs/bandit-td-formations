@@ -322,6 +322,26 @@ test("station output controls save limits in either mode without applying draft 
   f.handlers["craft-status"]({...craftState,token:"station:other"});assert.equal(f.dom.craftOutput.value,"normal");
 });
 
+test("Sell excess now sends saved station settings, works paused and blocks unapplied sale filters",()=>{
+  const f=fixture(),state={...craftState,enabled:false,options:{...craftState.options,keepLimit:5,forgeOutput:"all"}};
+  f.handlers["craft-status"](state);
+  assert.equal(f.dom.craftExcess.hidden,false);assert.equal(f.dom.craftExcess.disabled,false);
+  assert.equal(f.dom.craftTier.disabled,false);assert.equal(f.dom.craftForgeOutput.disabled,false);
+  f.dom.craftExcess.dispatch("click");
+  assert.deepEqual(JSON.parse(JSON.stringify(f.messages.at(-1))),["craft-sell-excess",{token:state.token,options:state.options}]);
+  for(const [name,value] of [["craftTier","2"],["craftMinimum","5"],["craftForgeOutput","weapons"],["craftKeep","3"],["craftOutput","all"]]){
+    const input=f.dom[name],old=input.value;input.value=value;
+    const count=f.messages.length;f.dom.craftExcess.dispatch("click");
+    assert.equal(f.messages.length,count,name);assert.equal(f.dom.craftExcess.disabled,true,name);input.value=old;
+  }
+  for(const change of [{busy:true},{error:true},{visible:false},{station:{id:5,kind:6,name:"Brewery"}},{options:{...state.options,keepLimit:null}}]){
+    f.handlers["craft-status"]({...state,...change});const count=f.messages.length;f.dom.craftExcess.dispatch("click");assert.equal(f.messages.length,count);
+  }
+  f.handlers["craft-status"]({...state,token:"another-station",saleMessage:"Sold 6 excess items."});
+  f.dom.craftExcess.dispatch("click");assert.equal(f.messages.at(-1)[1].token,"another-station");
+  assert.match(f.dom.craftInfo.textContent,/Sold 6 excess items/);
+});
+
 test("research controls open on their station and hide unrelated drill settings",()=>{
   const f=fixture(),state={visible:true,token:"campaign:study:1",station:{id:1,kind:8,name:"Research station"},enabled:true,busy:false,error:false,message:"Research: Manual · Team"};
   f.handlers["study-status"](state);f.handlers["craft-status"]({visible:false});

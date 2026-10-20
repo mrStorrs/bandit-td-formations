@@ -96,7 +96,7 @@
         this.craftKeep = make("input", "", this.craftKeepLabel); this.craftKeep.type = "number"; this.craftKeep.id = "cjs-craft-keep";
         this.craftKeep.min = "1"; this.craftKeep.max = "999"; this.craftKeep.step = "1"; this.craftKeep.value = "1"; this.craftKeep.required = true;
         this.craftKeep.style.cssText = "width:65px;font:inherit";
-        make("div", "Selling changes apply immediately in either mode. Sell over limit keeps the best N per item, tier and role. Rarity always ranks first: Red (6) > Gold (5) > Purple (4) > Blue (3) > Green (2) > White (1). Within the same rarity, work suffixes rank Work Crit + job bonus > Work Crit > job bonus, then suffix Work Crit % and job bonus rolls. Innate stats do not count. Minimum rarity still applies. Saved outfits, equipped gear and existing locks are protected; this mode can replace its own auto-locked crafts when no outfit uses them. Pause stops selling.", this.craftOutputBox).style.cssText = "margin:0 0 10px;color:#c5ced1;font-size:12px;line-height:1.4";
+        make("div", "Selling changes apply immediately in either mode. Sell over limit keeps the best N per item, tier and role. Rarity always ranks first: Red (6) > Gold (5) > Purple (4) > Blue (3) > Green (2) > White (1). Within the same rarity, work suffixes rank Work Crit + job bonus > Work Crit > job bonus, then suffix Work Crit % and job bonus rolls. Innate stats do not count. Minimum rarity still applies. Saved outfits, equipped gear and existing locks are protected; this mode can replace its own auto-locked crafts when no outfit uses them. Pause stops automatic sales.", this.craftOutputBox).style.cssText = "margin:0 0 10px;color:#c5ced1;font-size:12px;line-height:1.4";
         this.craftGear = make("div", "", body);
         const gearSelect = (title, id, options) => select(title, id, options, this.craftGear);
         this.craftLoop = gearSelect("Loop", "cjs-craft-loop", [["all", "Checked roles · lowest stock"], ...state.roles.map(r => [r.id, r.name])]);
@@ -121,10 +121,15 @@
         const sellLabel = make("label", "", this.craftGear); sellLabel.style.cssText = "display:block;margin-bottom:10px";
         this.craftSell = make("input", "", sellLabel); this.craftSell.type = "checkbox"; this.craftSell.id = "cjs-craft-sell";
         make("span", " Auto-sell non-matching crafts", sellLabel);
-        this.craftButton = make("button", "Apply / Start", body); this.craftButton.id = "cjs-craft-apply"; this.craftButton.type = "button";
+        const actions = make("div", "", body); actions.style.cssText = "display:flex;flex-wrap:wrap;gap:6px";
+        this.craftButton = make("button", "Apply / Start", actions); this.craftButton.id = "cjs-craft-apply"; this.craftButton.type = "button";
         this.craftButton.style.cssText = "background:#c0a35b;color:#10191d;border:0;border-radius:4px;padding:7px 12px;cursor:pointer;font:inherit";
-        this.craftPause = make("button", "Pause", body); this.craftPause.id = "cjs-craft-pause"; this.craftPause.type = "button";
-        this.craftPause.style.cssText = "margin-left:8px;padding:7px 12px;cursor:pointer;font:inherit";
+        this.craftExcess = make("button", "Sell excess now", actions); this.craftExcess.id = "cjs-craft-excess"; this.craftExcess.type = "button";
+        this.craftExcess.style.cssText = "padding:7px 10px;cursor:pointer;font:inherit";
+        this.craftPause = make("button", "Pause", actions); this.craftPause.id = "cjs-craft-pause"; this.craftPause.type = "button";
+        this.craftPause.style.cssText = "padding:7px 12px;cursor:pointer;font:inherit";
+        this.craftExcessHelp = make("div", "Sell excess now trims existing matches using this station's saved tier, minimum rarity, gear filter and stock limit. It checks every role, including unchecked ones, and works while automation is paused. Choose Sell over limit; apply changed filters before selling.", body);
+        this.craftExcessHelp.style.cssText = "margin-top:8px;color:#c5ced1;font-size:12px;line-height:1.4";
         this.craftInfo = make("div", "", body); this.craftInfo.setAttribute("role", "status");
         this.craftInfo.style.cssText = "margin-top:10px;line-height:1.4;white-space:pre-line";
         make("div", "This station makes its own pieces in batches of 10. Checked roles and Loop choose what to craft. Normally, matching gear is kept and locked for every role, including unchecked roles. Work gear needs a Work Crit or job-bonus suffix; built-in stats do not qualify. Sell all overrides normal keeping; saved outfits remain protected. Sell over limit removes weaker duplicates. Non-matches follow the checkbox above. Recipe changes apply after the current queue finishes.", this.craftGear).style.cssText = "margin-top:8px;color:#c5ced1;font-size:12px;line-height:1.4";
@@ -139,17 +144,25 @@
           this.craftKeep.disabled = busy || !surplus;
           this.craftGear.hidden = !gear;
           this.craftForgeLabel.hidden = this.craftState.station.kind !== 4;
-          this.craftForgeOutput.disabled = this.craftState.busy || !sets || this.craftState.station.kind !== 4;
+          this.craftForgeOutput.disabled = this.craftState.busy || !(sets || surplus) || this.craftState.station.kind !== 4;
           for (const input of [this.craftLoop, this.craftTier, this.craftMinimum, this.craftMultiplier]) input.disabled = this.craftState.busy || !sets;
+          this.craftTier.disabled = this.craftState.busy || !(sets || surplus);
           this.craftMinimum.disabled = this.craftState.busy || !(sets || surplus);
           for (const input of Object.values(this.craftRoles)) input.disabled = this.craftState.busy || !sets || this.craftLoop.value !== "all";
           this.craftSell.disabled = busy || !(sets || surplus) || this.craftOutput.value === "all";
           this.craftButton.disabled = this.craftState.busy;
           this.craftButton.textContent = sets ? "Apply / Start" : "Apply repeat ×10";
           this.craftPause.disabled = busy || !this.craftState.enabled;
+          const saved = this.craftState.options;
+          this.craftExcess.hidden = this.craftExcessHelp.hidden = !gear;
+          this.craftExcess.disabled = busy || !gear || !surplus || !(saved.keepLimit > 0) ||
+            !this.craftKeep.checkValidity() || Number(this.craftKeep.value) !== saved.keepLimit ||
+            Number(this.craftTier.value) !== saved.tier || Number(this.craftMinimum.value) !== saved.minimum ||
+            (this.craftState.station.kind === 4 && this.craftForgeOutput.value !== (saved.forgeOutput || "all"));
         };
         this.updateCraftControls = controls;
         this.craftMode.addEventListener("change", controls); this.craftLoop.addEventListener("change", controls);
+        for (const input of [this.craftTier, this.craftMinimum, this.craftForgeOutput, this.craftKeep]) input.addEventListener("input", controls);
         const outputLimit = () => {
           if (this.craftState.station.kind === 6 || this.craftOutput.value === "normal") return null;
           if (this.craftOutput.value === "all") return 0;
@@ -185,6 +198,13 @@
           this.PostToRuntime("cancel", {});
           this.PostToRuntime("craft-pause", { token: this.craftState.token });
         });
+        this.craftExcess.addEventListener("click", () => {
+          if (!this.craftState.visible) return;
+          controls();
+          if (this.craftExcess.disabled) return;
+          this.PostToRuntime("cancel", {});
+          this.PostToRuntime("craft-sell-excess", { token: this.craftState.token, options: this.craftState.options });
+        });
         for (const event of ["pointerdown", "pointerup", "pointermove", "pointerrawupdate", "pointercancel", "mousedown", "mouseup", "mousemove", "click", "dblclick", "touchstart", "touchend", "touchmove", "touchcancel", "keydown", "keyup", "wheel"]) panel.addEventListener(event, e => e.stopPropagation());
         document.body.appendChild(panel);
       }
@@ -213,7 +233,8 @@
         for (const [id, input] of Object.entries(this.craftRoles)) input.checked = o.roles.includes(id);
       }
       this.updateCraftControls();
-      this.craftInfo.textContent = `${state.message} · ${state.kept} kept · ${state.sold} sold this session`;
+      this.craftInfo.textContent = `${state.message} · ${state.kept} kept · ${state.sold} sold this session` +
+        (state.saleMessage ? `\n${state.saleMessage}` : "");
     }
     studyStatus(state) {
       this.studyState = state;

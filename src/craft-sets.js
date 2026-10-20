@@ -61,17 +61,21 @@
     const bonuses = matchingCraftRoles(item, wp).map(role => role.bonus);
     return bonuses.length ? [...new Set(bonuses)] : ["other:" + [...new Set(item.bonuses.filter(n => n > 0))].sort((a, b) => a - b).join(",")];
   }
-  function planCraftSurplus(inventory, incoming, limit, wp, minimum = 1) {
+  function planCraftSurplus(inventory, incoming, limit, wp, minimum = 1, sweep = false) {
     if (!Number.isSafeInteger(limit) || limit < 1) throw new Error("Invalid equipment keep limit.");
     const pool = inventory.filter(item => item.recipe === incoming.recipe && item.tier === incoming.tier);
     if (pool.some(item => ![item.quality, item.level, item.mainRoll, item.workCritValue, ...item.bonuses, ...item.rolls].every(Number.isFinite))) {
       throw new Error("Equipment stats could not be compared. No items were sold.");
     }
-    const groups = new Map(), keep = new Set(), touched = craftSaleGroups(incoming, wp);
-    for (const item of pool) for (const group of craftSaleGroups(item, wp)) {
-      if (!groups.has(group)) groups.set(group, []);
-      groups.get(group).push(item);
+    const groups = new Map(), memberships = new Map(), keep = new Set(), touched = craftSaleGroups(incoming, wp);
+    for (const item of pool) {
+      memberships.set(item, craftSaleGroups(item, wp));
+      for (const group of memberships.get(item)) {
+        if (!groups.has(group)) groups.set(group, []);
+        groups.get(group).push(item);
+      }
     }
+    const counts = new Map([...groups].map(([group, items]) => [group, items.length])), sales = new Set();
     const bonus = (item, group) => item.bonuses.reduce((sum, id, i) => sum +
       ((typeof group === "string" || id === group) ? item.rolls[i] : 0), 0);
     const workRank = (item, group) => 2 * Number(hasWorkCrit(item)) + Number(item.bonuses.includes(group));
@@ -86,8 +90,16 @@
         (work ? workRank(b, group) - workRank(a, group) || b.workCritValue - a.workCritValue || bonus(b, group) - bonus(a, group) : 0) ||
         (work ? 0 : bonus(b, group) - bonus(a, group) || b.mainRoll - a.mainRoll || b.level - a.level) ||
         Number(a === incoming) - Number(b === incoming) || a.location - b.location || a.row - b.row);
-      for (const item of ranked.slice(0, Math.max(0, limit - protectedItems.length))) keep.add(item);
+      if (sweep) {
+        // A shared piece counts toward every matching role. Remove the weakest
+        // available piece only while all of its roles remain above their quota.
+        for (const item of ranked.reverse()) if (!sales.has(item) && memberships.get(item).every(group => counts.get(group) > limit)) {
+          sales.add(item);
+          for (const group of memberships.get(item)) counts.set(group, counts.get(group) - 1);
+        }
+      } else for (const item of ranked.slice(0, Math.max(0, limit - protectedItems.length))) keep.add(item);
     }
+    if (sweep) return pool.filter(item => sales.has(item));
     // A multi-bonus piece survives if any one of its groups still needs it.
     return pool.filter(item => !keep.has(item) && !item.protected && craftSaleGroups(item, wp).some(group => touched.includes(group)));
   }
