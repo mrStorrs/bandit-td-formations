@@ -18,6 +18,7 @@
         ["inventory-status", state => this.inventoryStatus(state)],
         ["craft-status", state => this.craftStatus(state)],
         ["study-status", state => this.studyStatus(state)],
+        ["shelf-status", state => this.shelfStatus(state)],
       ]);
     }
     Attach() {
@@ -171,6 +172,37 @@
       }
       this.inventorySort.hidden = false;
     }
+    shelfControls(parent, family) {
+      const box = document.createElement("div");
+      box.style.cssText = "margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid #5a676d";
+      const button = document.createElement("button");
+      button.id = `cjs-${family}-fill-shelves`; button.type = "button";
+      button.style.cssText = "font:inherit;cursor:pointer;padding:5px 9px";
+      button.textContent = "Fill empty shelves"; button.disabled = true;
+      button.title = "Use inventory spirits to fill empty shelves within 3 tiles. Shared bonuses prioritize forge > crafting > research > brewery > drill. Existing placements stay in place.";
+      const info = document.createElement("div"); info.setAttribute("role", "status");
+      info.style.cssText = "font-size:12px;color:#c5ced1;margin-top:5px;line-height:1.4";
+      box.appendChild(button); box.appendChild(info); parent.appendChild(box);
+      (this.shelfButtons ||= []).push({ button, info, family });
+      button.addEventListener("click", () => {
+        const panel = family === "craft" ? this.craftState : this.studyState;
+        if (button.disabled || !panel?.visible || !this.shelfState?.visible || this.shelfState.busy ||
+            panel.station.id !== this.shelfState.station.id || panel.station.kind !== this.shelfState.station.kind) return;
+        this.PostToRuntime("cancel", {});
+        this.PostToRuntime("shelf-fill", { token: this.shelfState.token });
+      });
+    }
+    shelfStatus(state = this.shelfState) {
+      this.shelfState = state;
+      for (const { button, info, family } of this.shelfButtons || []) {
+        const station = (family === "craft" ? this.craftState : this.studyState)?.station;
+        const matches = state?.visible && state.station.id === station?.id && state.station.kind === station?.kind;
+        button.disabled = !matches || state.busy || !state.empty;
+        button.textContent = matches && state.busy ? "Waiting for item transfer…" : "Fill empty shelves";
+        info.textContent = !matches ? "Select an available station to fill nearby shelves." :
+          state.message || `${state.empty} empty shelves in range · Uses spirit items from inventory`;
+      }
+    }
     craftStatus(state) {
       this.craftState = state;
       if (!state.visible) { if (this.craftPanel) this.craftPanel.hidden = true; this.craftSelection = null; this.craftSettings = null; this.craftOutputSettings = null; return; }
@@ -188,6 +220,7 @@
         toggle.style.cssText = "background:transparent;color:#fff;border:0;padding:3px;cursor:pointer;font:inherit";
         const body = this.craftBody = make("div", "", panel);
         body.hidden = false; body.style.cssText = "width:330px;max-width:100%;max-height:calc(100vh - 260px);overflow:auto;padding-top:10px";
+        this.shelfControls(body, "craft");
         toggle.addEventListener("click", () => {
           body.hidden = !body.hidden; toggle.textContent = `${this.craftTitle} ${body.hidden ? "▸" : "▾"}`;
           toggle.setAttribute("aria-expanded", String(!body.hidden));
@@ -337,6 +370,7 @@
       this.craftToggle.textContent = `${this.craftTitle} ${this.craftBody.hidden ? "▸" : "▾"}`;
       this.craftToggle.setAttribute("aria-expanded", String(!this.craftBody.hidden));
       this.craftPanel.hidden = false;
+      this.shelfStatus();
       const outputSettings = JSON.stringify([state.token, state.options.keepLimit ?? null]);
       if (outputSettings !== this.craftOutputSettings) {
         this.craftOutputSettings = outputSettings;
@@ -372,6 +406,7 @@
         const body = this.studyBody = document.createElement("div");
         body.hidden = false; body.style.cssText = "width:330px;max-width:100%;max-height:calc(100vh - 260px);overflow:auto;padding-top:10px";
         panel.appendChild(body);
+        this.shelfControls(body, "study");
         toggle.addEventListener("click", () => {
           body.hidden = !body.hidden; toggle.textContent = `${this.studyTitle} ${body.hidden ? "▸" : "▾"}`;
           toggle.setAttribute("aria-expanded", String(!body.hidden));
@@ -389,6 +424,7 @@
       this.studyToggle.textContent = `${this.studyTitle} ${this.studyBody.hidden ? "▸" : "▾"}`;
       this.studyToggle.setAttribute("aria-expanded", String(!this.studyBody.hidden));
       this.studyPanel.hidden = false;
+      this.shelfStatus();
       if (!this.studyInputs) {
         const make = (tag, text, parent = this.studySection) => {
           const element = document.createElement(tag); element.textContent = text;

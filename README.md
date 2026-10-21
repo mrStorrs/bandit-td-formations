@@ -31,6 +31,9 @@ research and drilling mod for Bandit Simulator TD (Steam app 4267800).
 - **Auto brewer:** each brewery can queue **10 crafts** of the lowest-stock
   unlocked pill type and realm, counting all rarities together and checking
   stock again after each full batch.
+- **Fill empty shelves:** a button on each forge, crafting, research, brewery
+  and drill station fills nearby empty shelves with inventory spirits. Shared
+  bonuses prioritize forging → crafting → research → brewery → drilling.
 - **Auto research and drill:** enabled by default, with controls on each selected
   station. Main-tab unlocks come first, then Research Tech to the academy cap.
   Other trees finish each 60-level stage, with Logging, Barracks, Training,
@@ -1324,6 +1327,17 @@ transfers, all 33 STR spears (including upgraded sets), and unchanged item,
 equipment and lock records were verified. The reported complete disappearance
 was not reproduced in that VM; Steam/Proton behavior remains a manual check.
 
+Version 1.29.0 adds **Fill empty shelves** to all five station panels. Tests
+cover priority conflicts, shared-shelf assignments, upgraded shelves, shortages,
+range boundaries, stale selections, occupied shelves, native transfer failures,
+lock preservation and UI input. All 504 release JavaScript tests and four
+installer tests pass. Random small assignments are checked against exhaustive
+search, including native decimal rounding on upgraded shelves. In isolated
+NW.js 0.82.0 with the native worker enabled, a
+copied save verified real button clicks at every station type, exact elemental
+bonus gains at neighboring stations, unchanged paid queues and station settings,
+and conservation of complete spirit records. No live save was modified.
+
 To check the controls in-game:
 
 1. Arrange your characters, choose their jobs and priority work targets, then
@@ -1379,6 +1393,34 @@ To check the controls in-game:
     for other roles are still locked. Verify STR crafts spears, AGI bows and INT
     fans. Restart to check settings and paused/running persistence.
 
+## Fill empty shelves
+
+Select a forge, crafting station, research station, brewery or drill station and
+click **Fill empty shelves** at the top of its automation panel. This is a
+one-time action that also works while paused or with automation disabled.
+
+Only existing, finished, empty shelves within the game's three-tile Manhattan
+range of that bench are filled. Occupied shelves retain their spirits. The
+button uses available inventory spirits, including locked ones, and preserves
+their lock flags and every item attribute. It does not move shelves or take
+spirits from other shelves.
+
+The planner maximizes the combined elemental boosts across those shelves,
+accounting for each shelf's level and every supported station it reaches.
+Priority is **forge (Metal) → crafting (Wood) → research (Water) → brewery
+(Fire) → drill (Earth)**. Higher priorities win conflicts; lower priorities
+break ties. For example, two spirits with equal Metal are assigned so that the
+one with more Wood goes on the shelf shared with a crafting station. Multiple
+stations of the same kind each count toward their role's total boost. Every
+chosen spirit must also benefit the bench whose button you clicked.
+
+Placements are planned together to reserve useful multi-element spirits for
+shared shelves. The actual rolled elements determine strength, rather than
+rarity alone. If there are too few suitable spirits, the button fills what it
+can and reports the number filled. Clicking again checks the remaining empty
+shelves. The normal game save stores the placements; station automation
+settings and queued work stay unchanged.
+
 ## Development
 
 The repository contains only original mod code and tooling, not the game,
@@ -1414,6 +1456,10 @@ rarities, and orders unlocked recipes by total stock for each brewery's next bat
 queue's paid cost in the unused queue field 12 for correct native refunds.
 `src/gathering.js` focuses gatherers on the weakest remaining resources through
 native production turrets, checking work range, remaining harvests and jobs.
+`src/shelves.js` assigns inventory spirits to nearby empty shelves with an exact
+priority-ordered maximum-weight assignment. `src/shelf-runtime.js` validates
+the selected station, transfers spirit records through native storage, refreshes
+shelf graphics and elemental boosts, and reports placement results.
 `src/craft-sets.js` selects role recipes, matches gear, counts separate sets,
 and ranks surplus items independently by their recipe, tier and bonus groups.
 `src/craft-sets-runtime.js` schedules batches of ten, identifies their native

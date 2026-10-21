@@ -425,6 +425,38 @@ test("outfit controls block game input and stale or busy actions and hide outsid
 const craftState = { visible:true,token:"campaign:layout:3",station:{id:3,kind:4,name:"Forge"},enabled:true,running:false,busy:false,message:"Ready",kept:0,sold:0,
   options:{mode:"repeat",loop:"all",roles:["forge","research"],tier:1,minimum:3,multiplier:1,autoSell:true},
   roles:[{id:"forge",name:"Forger",stat:1},{id:"research",name:"Researcher",stat:3},{id:"combat-agi",name:"Combat — AGI",stat:2,combat:true}] };
+test("Fill empty shelves is attached to every station panel and keeps automation drafts", () => {
+  for (const kind of [4, 5, 6, 8, 9]) {
+    const f = fixture(), family = kind < 8 ? "craft" : "study";
+    const state = { ...craftState, station: { id: 3, kind, name: "Station" } };
+    f.handlers[`${family}-status`](state);
+    const control = f.dom.shelfButtons.find(c => c.family === family);
+    assert.equal(control.button.disabled, true);
+    f.handlers["shelf-status"]({ visible: true, token: "shelf-3", station: state.station, empty: 4, busy: false, message: "" });
+    if (family === "craft") f.dom.craftTier.value = "3";
+    control.button.dispatch("click");
+    assert.deepEqual(f.messages, [["cancel", {}], ["shelf-fill", { token: "shelf-3" }]]);
+    f.handlers["shelf-status"]({ visible: true, token: "shelf-3", station: state.station, empty: 2, busy: false, message: "Filled 2/4 empty shelves." });
+    assert.match(control.info.textContent, /Filled 2\/4/);
+    if (family === "craft") assert.equal(f.dom.craftTier.value, "3");
+    const panel = family === "craft" ? f.dom.craftPanel : f.dom.studyPanel;
+    for (const event of ["pointerdown", "pointerup", "pointerrawupdate", "click", "keydown"]) assert.equal(panel.dispatch(event).stopped, true);
+  }
+});
+
+test("shelf actions reject stale, hidden, empty and busy station controls", () => {
+  for (const change of [{ visible: false }, { busy: true }, { empty: 0 }, { station: { id: 4, kind: 4 } }]) {
+    const f = fixture(); f.handlers["craft-status"](craftState);
+    const state = { visible: true, token: "shelf-3", station: craftState.station, empty: 4, busy: false, ...change };
+    f.handlers["shelf-status"](state); f.dom.shelfButtons[0].button.dispatch("click");
+    assert.equal(f.messages.length, 0);
+  }
+  const f = fixture(); f.handlers["craft-status"](craftState);
+  f.handlers["shelf-status"]({ visible: true, token: "shelf-3", station: craftState.station, empty: 1, busy: false });
+  f.handlers["craft-status"]({ visible: false }); f.dom.shelfButtons[0].button.dispatch("click");
+  assert.equal(f.messages.length, 0);
+});
+
 test("crafting controls offer mode, role checkboxes, single-role override, tier, rarity and material multiplier",()=>{
   const f=fixture();f.handlers["craft-status"](craftState);
   assert.equal(f.dom.craftBody.hidden,false);assert.match(f.dom.craftToggle.textContent,/Forge #3/);

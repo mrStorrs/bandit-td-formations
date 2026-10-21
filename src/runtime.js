@@ -163,6 +163,7 @@
     const gathering = globalThis.BanditFormations.attachGathering(runtime, engine, notify);
     const crafting = globalThis.BanditFormations.attachCrafting(runtime, engine, notify, outfits.isProtected);
     const study = globalThis.BanditFormations.attachStudy(runtime, engine, notify);
+    const shelves = globalThis.BanditFormations.attachShelves(runtime, engine, notify, outfits.ready);
     engine.AddDOMComponentMessageHandler(component, "forest", () => { cancelKeys(); forest.toggle(); });
     engine.AddDOMComponentMessageHandler(component, "combat", () => {
       cancelKeys();
@@ -177,9 +178,9 @@
       if (!combat.busy && !hotkeys.busy && outfits.ready()) return buildingHotkeys.key(phase, slot);
     });
     engine.AddDOMComponentMessageHandler(component, "cancel", cancelKeys);
-    runtime.addEventListener("tick", () => { recipeCosts.tick(); gathering.tick(); outfits.tick(); inventory.tick(); recruitment.tick(); crafting.tick(); study.tick(); return hotkeys.tick() || buildingHotkeys.tick() || forest.tick(); });
-    runtime.addEventListener("beforelayoutstart", () => { cancelKeys(); gathering.leave(); forest.leave(); recruitment.leave(); outfits.leave(); inventory.leave(); crafting.leave(); study.leave(); });
-    engine.PostComponentMessageToDOM(component, "ready", { version: "1.28.4" });
-    console.info("[Bandit TD Formations] v1.28.4 ready: hold 1–4 to save positions and jobs, tap to restore; Shift + 1–4 for buildings; C toggles combat; Beast realm loop on, F6 toggles; auto recruit controls on the recruitment screen; crafting, research and drilling controls on each selected station; realm 2 recipes use realm 2 materials; gatherers finish the weakest resource first; inventory Role sort for every work/combat role; Ctrl-click sells inventory gear/cores or decomposes treasures; per-job outfits with blue item locks and owner tooltips.");
+    runtime.addEventListener("tick", () => { recipeCosts.tick(); gathering.tick(); outfits.tick(); inventory.tick(); recruitment.tick(); crafting.tick(); study.tick(); shelves.tick(); return hotkeys.tick() || buildingHotkeys.tick() || forest.tick(); });
+    runtime.addEventListener("beforelayoutstart", () => { cancelKeys(); gathering.leave(); forest.leave(); recruitment.leave(); outfits.leave(); inventory.leave(); crafting.leave(); study.leave(); shelves.leave(); });
+    engine.PostComponentMessageToDOM(component, "ready", { version: "1.29.0" });
+    console.info("[Bandit TD Formations] v1.29.0 ready: hold 1–4 to save positions and jobs, tap to restore; Shift + 1–4 for buildings; C toggles combat; Beast realm loop on, F6 toggles; auto recruit controls on the recruitment screen; crafting, research and drilling controls on each selected station; Fill empty shelves places inventory spirits for prioritized shared boosts; realm 2 recipes use realm 2 materials; gatherers finish the weakest resource first; inventory Role sort for every work/combat role; Ctrl-click sells inventory gear/cores or decomposes treasures; per-job outfits with blue item locks and owner tooltips.");
   });
 })();
