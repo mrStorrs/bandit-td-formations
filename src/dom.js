@@ -96,31 +96,80 @@
     inventoryStatus(state) {
       const previous = this.inventoryState;
       this.inventoryState = state;
-      if (!state.sort) { if (this.inventorySort) this.inventorySort.hidden = true; return; }
-      if (!this.inventorySort) {
-        const select = this.inventorySort = document.createElement("select");
-        select.id = "cjs-inventory-sort";
-        select.setAttribute("aria-label", "Inventory job / combat role sort");
-        select.title = "Role-compatible ordinary and set gear first; actual realm tier first (T3 > T2), then rarity. Work requires rolled bonuses: Crit Rate + job bonus, Crit Rate, job bonus; damage-only gear follows matches in its realm. Combat: all spears for STR, bows for AGI, fans for INT, plus matching-stat combat gear; a combat suffix is not required and breaks rarity ties.";
-        select.style.cssText = "position:fixed;top:12px;left:12px;width:230px;height:32px;z-index:2147483646;box-sizing:border-box;max-width:calc(100vw - 24px);background:#152025;color:#fff;border:1px solid #c0a35b;border-radius:4px;padding:2px 5px;cursor:pointer;font:13px sans-serif";
-        for (const [id, name] of [["", "Role sort: Game order"], ...state.sort.roles.map(role => [role.id, `Role sort: ${role.name}`])]) {
-          const option = document.createElement("option"); option.value = id; option.textContent = name; select.appendChild(option);
-        }
-        select.addEventListener("change", () => {
-          if (!this.inventoryState?.sort) return;
-          this.PostToRuntime("cancel", {});
-          this.PostToRuntime("inventory-sort", { token: this.inventoryState.token, role: select.value });
-        });
-        for (const event of ["pointerdown", "pointerup", "pointermove", "mousedown", "mouseup", "mousemove", "click", "dblclick", "keydown", "keyup", "wheel"]) {
-          select.addEventListener(event, e => e.stopPropagation());
-        }
-        document.body.appendChild(select);
+      if (!state.sort) {
+        if (this.inventorySort) { this.closeInventorySort(); this.inventorySort.hidden = true; }
+        return;
       }
-      const { value } = state.sort, select = this.inventorySort;
-      // Item hover/refresh messages must not reset a choice being browsed in
-      // the open select. Only a new page or an actual sort change replaces it.
-      if (previous?.token !== state.token || previous?.sort?.value !== value) select.value = value;
-      if (select.hidden !== false) select.hidden = false;
+      if (!this.inventorySort) {
+        const panel = this.inventorySort = document.createElement("section");
+        panel.id = "cjs-inventory-sort";
+        panel.setAttribute("aria-label", "Inventory job / combat role sort");
+        panel.style.cssText = "position:fixed;top:12px;left:12px;width:230px;z-index:2147483646;box-sizing:border-box;max-width:calc(100vw - 24px);color:#fff;font:13px sans-serif";
+        const toggle = this.inventorySortToggle = document.createElement("button");
+        toggle.id = "cjs-inventory-sort-toggle"; toggle.type = "button";
+        toggle.setAttribute("aria-haspopup", "menu"); toggle.setAttribute("aria-controls", "cjs-inventory-sort-options");
+        toggle.title = "Role-compatible ordinary and set gear first; actual realm tier first (T3 > T2), then rarity. Work requires rolled bonuses: Crit Rate + job bonus, Crit Rate, job bonus; damage-only gear follows matches in its realm. Combat: all spears for STR, bows for AGI, fans for INT, plus matching-stat combat gear; a combat suffix is not required and breaks rarity ties.";
+        toggle.style.cssText = "width:100%;height:32px;background:#152025;color:#fff;border:1px solid #c0a35b;border-radius:4px;padding:2px 8px;cursor:pointer;font:inherit;text-align:left";
+        panel.appendChild(toggle);
+        const menu = this.inventorySortMenu = document.createElement("div");
+        menu.id = "cjs-inventory-sort-options"; menu.setAttribute("role", "menu");
+        menu.setAttribute("aria-label", "Sort by job or combat role");
+        menu.style.cssText = "margin-top:4px;padding:4px;background:#152025;border:1px solid #c0a35b;border-radius:4px;max-height:calc(100vh - 64px);overflow:auto;box-shadow:0 3px 16px #0008";
+        panel.appendChild(menu);
+        const choices = [];
+        this.closeInventorySort = (focus = false) => {
+          menu.hidden = true; toggle.setAttribute("aria-expanded", "false");
+          if (focus) toggle.focus();
+        };
+        const open = () => {
+          if (!this.inventoryState?.sort) return;
+          menu.hidden = false; toggle.setAttribute("aria-expanded", "true");
+          (choices.find(button => button.value === this.inventoryState.sort.value) || choices[0]).focus();
+        };
+        for (const [id, name] of [["", "Game order"], ...state.sort.roles.map(role => [role.id, role.name])]) {
+          const option = document.createElement("button"); option.type = "button"; option.value = id;
+          option.textContent = name; option.tabIndex = -1; option.setAttribute("role", "menuitemradio");
+          option.style.cssText = "display:block;width:100%;min-height:28px;border:0;border-radius:3px;padding:5px 8px;background:transparent;color:#fff;cursor:pointer;text-align:left;font:inherit";
+          option.addEventListener("click", () => {
+            if (!this.inventoryState?.sort) return;
+            this.PostToRuntime("cancel", {});
+            this.PostToRuntime("inventory-sort", { token: this.inventoryState.token, role: id });
+            this.closeInventorySort(true);
+          });
+          choices.push(option); menu.appendChild(option);
+        }
+        toggle.addEventListener("click", () => menu.hidden ? open() : this.closeInventorySort());
+        panel.addEventListener("keydown", event => {
+          if (event.key === "Escape") { event.preventDefault(); this.closeInventorySort(true); }
+          else if (event.key === "Tab") this.closeInventorySort();
+          else if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
+            event.preventDefault();
+            if (menu.hidden) { open(); return; }
+            const index = choices.indexOf(document.activeElement);
+            choices[event.key === "Home" ? 0 : event.key === "End" ? choices.length - 1 :
+              (index + (event.key === "ArrowUp" ? -1 : 1) + choices.length) % choices.length].focus();
+          }
+        });
+        panel.addEventListener("focusout", event => { if (!panel.contains(event.relatedTarget)) this.closeInventorySort(); });
+        window.addEventListener("pointerdown", event => { if (!panel.contains(event.target)) this.closeInventorySort(); }, true);
+        window.addEventListener("blur", () => this.closeInventorySort());
+        // Worker-mode Construct listens to raw pointer updates instead of move.
+        for (const event of ["pointerdown", "pointerup", "pointermove", "pointerrawupdate", "mousedown", "mouseup", "mousemove", "click", "dblclick", "keydown", "keyup", "wheel"]) {
+          panel.addEventListener(event, e => e.stopPropagation());
+        }
+        this.closeInventorySort();
+        document.body.appendChild(panel);
+      }
+      const { value, roles } = state.sort;
+      if (previous?.token !== state.token) this.closeInventorySort();
+      if (previous?.token !== state.token || previous?.sort?.value !== value) {
+        this.inventorySortToggle.textContent = `Role sort: ${roles.find(role => role.id === value)?.name || "Game order"} ▾`;
+        for (const option of this.inventorySortMenu.children) {
+          option.setAttribute("aria-checked", String(option.value === value));
+          option.style.background = option.value === value ? "#3b5864" : "transparent";
+        }
+      }
+      this.inventorySort.hidden = false;
     }
     craftStatus(state) {
       this.craftState = state;

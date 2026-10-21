@@ -134,7 +134,7 @@ restarts. They are separate from formation slots and are not in Steam Cloud.
 
 ## Inventory sorting and shortcut
 
-Use the **Role sort** dropdown at the **top-left of the window** while the
+Click the **Role sort** button at the **top-left of the window** while the
 inventory, character equipment bag or pawnshop is open. It offers the same nine
 work jobs and three combat roles as crafting automation. **Gear relevant to the
 selected role comes first**, including ordinary and set equipment, using its
@@ -166,13 +166,15 @@ keep their previous game order.
 
 The choice stays active through page changes and inventory refreshes for the
 current game session. Choose **Role sort: Game order**, or any option in the
-game's original sort menu, to return to normal sorting. The role dropdown stays
+game's original sort menu, to return to normal sorting. The role menu stays
 in one fixed position until the inventory page closes, independent of native
 buttons, equipment swaps, dialogs and page fades. Choosing a role during a
 transfer or dialog remembers the choice and refreshes the same inventory page
 when it becomes available; closing the page cancels that pending refresh.
 Choosing a role closes native sort/filter menus when the inventory is available.
-Item hover updates do not move the control or reset a choice being browsed.
+The roles open in a menu drawn inside the game window. Click a role to apply it,
+or use the arrow keys and Enter. Escape, clicking outside or closing the inventory
+closes the list. Item hover updates do not move the control or close the list.
 This only changes the display order: item records, equipped gear, locks and saved
 outfits are unchanged.
 
@@ -1308,6 +1310,19 @@ spears; AGI led with all 36 bows and INT with all 47 fans. Native dropdown input
 visible main-hand order, realm/rarity/bonus ranking, and unchanged inventory,
 equipped items and locks were verified. All 459 native ordinary/set recipes
 were also checked across all twelve role sorts with upgraded set realms.
+
+Version 1.28.4 replaces the native role dropdown with an in-page button and
+menu. The list stays open through item updates, supports mouse and keyboard
+selection, and closes on Escape, outside clicks, focus loss or page closure.
+Raw pointer updates are also blocked over the menu because worker-mode Construct
+uses them for game input. The release passes 487 JavaScript tests and four
+installer tests. In isolated Linux NW.js 0.82.0 with the game's worker enabled,
+all twelve roles and Game order passed on inventory, equipment and pawnshop
+screens. Repeated refreshes, normal V-key reopening, keyboard selection,
+900×650 and 1280×800 windows, NW fullscreen, deferred sorting during equipment
+transfers, all 33 STR spears (including upgraded sets), and unchanged item,
+equipment and lock records were verified. The reported complete disappearance
+was not reproduced in that VM; Steam/Proton behavior remains a manual check.
 
 To check the controls in-game:
 

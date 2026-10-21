@@ -19,6 +19,7 @@ function fixture() {
   const window = Object.assign(target(), { innerWidth: 1280, innerHeight: 800 }), document = target();
   document.createElement = tag => Object.assign(target(), { tagName: tag.toUpperCase(), style: {}, children: [],
     setAttribute(name, value) { this[name] = value; },
+    focus() { document.activeElement = this; },
     appendChild(child) { this.children.push(child); child.parentElement = this; },
     remove() { this.parentElement.children = this.parentElement.children.filter(child => child !== this); },
     getBoundingClientRect() { return { width: 300, height: 130 }; },
@@ -61,18 +62,22 @@ test("inventory role sorting shows the supplied jobs, sends its current page tok
   const f = fixture(), state = { ...inventoryState("page-one"), sort: { value: "forge",
     roles: [{ id: "forge", name: "Forger" }, { id: "combat-str", name: "Combat — STR" }] } };
   f.handlers["inventory-status"](state);
-  const select = f.dom.inventorySort;
-  assert.deepEqual(select.children.map(o => o.value), ["", "forge", "combat-str"]);
-  assert.equal(select.value, "forge"); assert.equal(select.hidden, false);
-  select.value = "combat-str"; select.dispatch("change");
+  const panel = f.dom.inventorySort, toggle = f.dom.inventorySortToggle, menu = f.dom.inventorySortMenu;
+  assert.equal(toggle?.tagName, "BUTTON", "use an in-page button instead of an OS select popup");
+  assert.deepEqual(menu.children.map(o => o.value), ["", "forge", "combat-str"]);
+  assert.match(toggle.textContent, /Forger/); assert.equal(panel.hidden, false);
+  assert.equal(menu.hidden, true); toggle.dispatch("click"); assert.equal(menu.hidden, false);
+  assert.equal(toggle["aria-expanded"], "true");
+  menu.children[2].dispatch("click");
   assert.deepEqual(f.messages.at(-1), ["inventory-sort", { token: "page-one", role: "combat-str" }]);
-  f.document.activeElement = select; f.window.dispatch("keydown", { code: "KeyC" });
+  assert.equal(menu.hidden, true); assert.equal(f.document.activeElement, toggle);
+  f.window.dispatch("keydown", { code: "KeyC" });
   assert.equal(f.messages.at(-1)[0], "cancel");
-  assert.equal(select.dispatch("click").stopped, true);
-  f.handlers["inventory-status"]({ active: false, items: [] }); assert.equal(select.hidden, true);
-  const count = f.messages.length; select.dispatch("change"); assert.equal(f.messages.length, count);
+  assert.equal(panel.dispatch("click").stopped, true);
+  f.handlers["inventory-status"]({ active: false, items: [] }); assert.equal(panel.hidden, true);
+  const count = f.messages.length; menu.children[2].dispatch("click"); assert.equal(f.messages.length, count);
   f.handlers["inventory-status"]({ ...state, token: "page-two", sort: { ...state.sort, value: "" } });
-  assert.equal(select.value, ""); assert.equal(select.hidden, false);
+  assert.match(toggle.textContent, /Game order/); assert.equal(panel.hidden, false);
 });
 
 test("the role selector stays fixed while native anchors, window size and page items change", () => {
@@ -91,18 +96,56 @@ test("the role selector stays fixed while native anchors, window size and page i
 });
 
 test("native filters and item status updates do not hide or reset an open role choice", () => {
-  const f = fixture(), state = { ...inventoryState("page"), sort: { value: "forge", roles: [],
+  const f = fixture(), state = { ...inventoryState("page"), sort: { value: "forge", roles: [{ id: "forge", name: "Forger" }, { id: "building", name: "Builder" }],
     anchor: { left: 100, top: 100, right: 230, bottom: 130 } } };
-  f.handlers["inventory-status"](state); const select = f.dom.inventorySort;
-  select.value = "building";
+  f.handlers["inventory-status"](state);
+  const panel = f.dom.inventorySort, toggle = f.dom.inventorySortToggle, menu = f.dom.inventorySortMenu;
+  toggle.dispatch("click"); menu.children[2].focus();
   f.handlers["inventory-status"]({ ...state, active: false, items: [] });
-  assert.equal(select.hidden, false); assert.equal(select.value, "building");
-  select.dispatch("change");
+  assert.equal(panel.hidden, false); assert.equal(menu.hidden, false); assert.equal(f.document.activeElement, menu.children[2]);
+  menu.children[2].dispatch("click");
   assert.deepEqual(f.messages.at(-1), ["inventory-sort", { token: "page", role: "building" }]);
-  assert.equal(select.dispatch("mousemove").stopped, true);
+  assert.equal(panel.dispatch("mousemove").stopped, true);
+  assert.equal(panel.dispatch("pointerrawupdate", { buttons: 1 }).stopped, true,
+    "worker-mode mouse updates must not reach the game underneath the role menu");
   f.handlers["inventory-status"]({ ...state, sort: { ...state.sort, value: "" } });
-  assert.equal(select.value, "", "a native sort choice still overrides the role");
-  f.handlers["inventory-status"]({ active: false, items: [] }); assert.equal(select.hidden, true);
+  assert.match(toggle.textContent, /Game order/, "a native sort choice still overrides the role");
+  assert.equal(menu.children[0]["aria-checked"], "true");
+  f.handlers["inventory-status"]({ active: false, items: [] }); assert.equal(panel.hidden, true);
+});
+
+test("role menu supports keyboard navigation and dismissal without selecting or activating game hotkeys", () => {
+  const f = fixture(), state = { ...inventoryState("page"), sort: { value: "forge", roles: [{ id: "forge", name: "Forger" }, { id: "building", name: "Builder" }] } };
+  f.handlers["inventory-status"](state);
+  const panel = f.dom.inventorySort, toggle = f.dom.inventorySortToggle, menu = f.dom.inventorySortMenu;
+  assert.ok(toggle, "role menu must have its own toggle");
+  toggle.focus(); panel.dispatch("keydown", { key: "ArrowDown" });
+  assert.equal(menu.hidden, false); assert.equal(f.document.activeElement, menu.children[1]);
+  panel.dispatch("keydown", { key: "End" }); assert.equal(f.document.activeElement, menu.children[2]);
+  panel.dispatch("keydown", { key: "ArrowDown" }); assert.equal(f.document.activeElement, menu.children[0]);
+  panel.dispatch("keydown", { key: "ArrowUp" }); assert.equal(f.document.activeElement, menu.children[2]);
+  panel.dispatch("keydown", { key: "Home" }); assert.equal(f.document.activeElement, menu.children[0]);
+  assert.equal(panel.dispatch("keydown", { key: "Escape" }).prevented, true);
+  assert.equal(menu.hidden, true); assert.equal(f.document.activeElement, toggle);
+  assert.equal(f.messages.filter(([type]) => type === "inventory-sort").length, 0);
+  toggle.dispatch("click"); panel.dispatch("keydown", { key: "Tab" }); assert.equal(menu.hidden, true);
+});
+
+test("role menu closes on outside clicks, focus loss and page changes, and reopens on one click", () => {
+  const f = fixture(), state = { ...inventoryState("page"), sort: { value: "", roles: [] } };
+  f.handlers["inventory-status"](state);
+  const toggle = f.dom.inventorySortToggle, menu = f.dom.inventorySortMenu;
+  assert.ok(toggle, "role menu must have its own toggle");
+  for (const close of [() => f.window.dispatch("pointerdown", { target: f.document.body }),
+    () => f.window.dispatch("blur"), () => f.dom.inventorySort.dispatch("focusout", { relatedTarget: f.document.body }),
+    () => f.handlers["inventory-status"]({ ...state, token: "new-page" }),
+    () => f.handlers["inventory-status"]({ active: false, items: [] })]) {
+    f.handlers["inventory-status"](state); toggle.dispatch("click"); assert.equal(menu.hidden, false);
+    f.window.dispatch("pointerdown", { target: menu.children[0] }); assert.equal(menu.hidden, false);
+    close(); assert.equal(menu.hidden, true); assert.equal(toggle["aria-expanded"], "false");
+  }
+  f.handlers["inventory-status"](state); toggle.dispatch("click"); assert.equal(menu.hidden, false);
+  toggle.dispatch("click"); assert.equal(menu.hidden, true);
 });
 test("Ctrl-click captures the whole native mouse gesture and sends one inventory action on release", () => {
   const f = fixture(); f.handlers["inventory-status"](inventoryState("inventory-1"));
