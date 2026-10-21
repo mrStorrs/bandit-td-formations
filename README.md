@@ -134,9 +134,9 @@ restarts. They are separate from formation slots and are not in Steam Cloud.
 
 ## Inventory sorting and shortcut
 
-Use the **Role sort** dropdown beside the game's sort button in the inventory,
-character equipment bag or pawnshop. It offers the same nine work jobs and
-three combat roles as crafting automation. **Gear relevant to the selected role
+Use the **Role sort** dropdown at the **top-left of the window** while the
+inventory, character equipment bag or pawnshop is open. It offers the same nine
+work jobs and three combat roles as crafting automation. **Gear relevant to the selected role
 comes first**, using the same recipe, stat variant and weapon-family checks as
 automation, plus compatible Work Crit Damage pieces. Unrelated combat/work
 equipment follows that group, even if its realm is higher. Within the relevant
@@ -160,10 +160,14 @@ normal relative order within each realm. Exact ties keep their previous game ord
 The choice stays active through page changes and inventory refreshes for the
 current game session. Choose **Role sort: Game order**, or any option in the
 game's original sort menu, to return to normal sorting. The role dropdown stays
-available while native sort/filter menus are open; choosing a role closes those
-menus. Item hover updates and button replacement during a refresh do not hide
-it or reset a choice being browsed. This only changes the
-display order: item records, equipped gear, locks and saved outfits are unchanged.
+in one fixed position until the inventory page closes, independent of native
+buttons, equipment swaps, dialogs and page fades. Choosing a role during a
+transfer or dialog remembers the choice and refreshes the same inventory page
+when it becomes available; closing the page cancels that pending refresh.
+Choosing a role closes native sort/filter menus when the inventory is available.
+Item hover updates do not move the control or reset a choice being browsed.
+This only changes the display order: item records, equipped gear, locks and saved
+outfits are unchanged.
 
 Hold **Ctrl** and **left-click** an unequipped item in your inventory to discard
 that one piece using the game's normal reward: equipment and cores sell for
@@ -1275,6 +1279,17 @@ Builder work gloves ahead of higher-realm fighter offhands. All twelve roles
 preserved realm ordering within relevant gear. Native inventory, equipment and
 pawnshop menus, filter dismissal, repeated refreshes without mouse movement,
 and dropdown input at 1000×700 with high-DPI scaling preserved item records.
+
+Version 1.28.2 fixes the role dropdown to the top-left while its inventory page
+exists. Equipment transfers, dialogs, fades and missing native sort buttons no
+longer hide it; choices made while busy refresh the same page when available.
+Closing the page cancels deferred refreshes. The release passes 478 JavaScript
+tests and four installer tests, with four targeted regressions failing against
+1.28.1. In isolated build 25975458, the open picker survived equipment-transfer
+flags, hidden/destroyed native buttons and page fades. Native inventory,
+equipment and pawnshop filters, repeated refreshes, deferred selection and
+closure, 1000×700 high-DPI scaling, and fullscreen/windowed transitions were
+checked with real pointer/keyboard input and unchanged item records.
 
 To check the controls in-game:
 

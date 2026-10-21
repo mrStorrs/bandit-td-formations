@@ -58,12 +58,12 @@ function inventoryPointer(f, type, extra = {}) {
     target: { tagName: "CANVAS" }, clientX: 100, clientY: 170, ...extra });
 }
 test("inventory role sorting shows the supplied jobs, sends its current page token and hides with the menu", () => {
-  const f = fixture(), state = { ...inventoryState("page-one"), sort: { value: "forge", anchor: { left: 100, top: 100, right: 230, bottom: 130 },
+  const f = fixture(), state = { ...inventoryState("page-one"), sort: { value: "forge",
     roles: [{ id: "forge", name: "Forger" }, { id: "combat-str", name: "Combat — STR" }] } };
   f.handlers["inventory-status"](state);
   const select = f.dom.inventorySort;
   assert.deepEqual(select.children.map(o => o.value), ["", "forge", "combat-str"]);
-  assert.equal(select.value, "forge"); assert.equal(select.hidden, false); assert.equal(select.style.left, "238px");
+  assert.equal(select.value, "forge"); assert.equal(select.hidden, false);
   select.value = "combat-str"; select.dispatch("change");
   assert.deepEqual(f.messages.at(-1), ["inventory-sort", { token: "page-one", role: "combat-str" }]);
   f.document.activeElement = select; f.window.dispatch("keydown", { code: "KeyC" });
@@ -75,12 +75,17 @@ test("inventory role sorting shows the supplied jobs, sends its current page tok
   assert.equal(select.value, ""); assert.equal(select.hidden, false);
 });
 
-test("the role selector follows native CSS bounds and stays inside a smaller window", () => {
+test("the role selector stays fixed while native anchors, window size and page items change", () => {
   const f = fixture(); f.window.innerWidth = 700;
   f.handlers["inventory-status"]({ ...inventoryState("small"), sort: { value: "", roles: [],
     anchor: { left: 600, top: 80, right: 690, bottom: 100 } } });
-  assert.equal(f.dom.inventorySort.style.left, "462px");
-  assert.equal(f.dom.inventorySort.style.height, "24px");
+  const select = f.dom.inventorySort, styles = { ...select.style };
+  assert.match(select.style.cssText, /position:fixed;top:12px;left:12px/);
+  for (const width of [400, 1600]) {
+    f.window.innerWidth = width;
+    f.handlers["inventory-status"]({ ...inventoryState("small"), items: [], sort: { value: "", roles: [] } });
+    assert.deepEqual(select.style, styles); assert.equal(select.hidden, false);
+  }
   f.handlers["inventory-status"]({ ...inventoryState("modal"), sort: null });
   assert.equal(f.dom.inventorySort.hidden, true);
 });

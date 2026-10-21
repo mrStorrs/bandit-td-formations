@@ -162,16 +162,13 @@ test("choosing a role sorts the display only, persists through refresh, and Game
   assert.equal(f.sales().length, 0); assert.equal(f.save.getAt(1, 22, 7), 0);
 });
 
-test("native sorting overrides the role; malformed, stale, hidden and modal sort requests do nothing", () => {
+test("native sorting overrides the role; malformed, stale and closed-page sort requests do nothing", () => {
   const f = fixture(); f.enableSort(); f.sort("forge");
   f.runtime.globalVars.当前装备排序属性编号 = 51; f.nativeSort.block._RunAndBlock(); f.inventory.tick();
   assert.equal(f.state().sort.value, "");
   for (const role of [null, "bogus", 1, {}]) f.sort(role);
   f.sort("forge", "old page"); assert.equal(f.runtime.globalVars.当前装备排序属性编号, 51);
-  f.objects.装备筛选下拉按钮[0].isVisible = false;
-  f.sort("forge"); assert.equal(f.runtime.globalVars.当前装备排序属性编号, 51);
-  f.objects.装备筛选下拉按钮[0].isVisible = true;
-  f.objects.对话选择框 = [{ isVisible: true }];
+  f.objects.二级页面背景 = [];
   f.sort("forge"); assert.equal(f.runtime.globalVars.当前装备排序属性编号, 51);
 });
 
@@ -188,16 +185,53 @@ test("role sorting stays available over native filters, closes them, and still b
   }
 });
 
-test("role selector survives native button replacement and overlap without leaking to another page", () => {
-  const f = fixture(); f.enableSort(); const button = f.objects.装备筛选下拉按钮[0], anchor = f.state().sort.anchor;
-  f.objects.装备筛选下拉按钮 = []; f.inventory.tick(); assert.deepEqual(f.state().sort.anchor, anchor);
-  f.objects.装备筛选下拉按钮 = [button, { ...button, getBoundingBox: () => ({ left: 200, top: 100, right: 300, bottom: 140 }) }];
-  f.inventory.tick(); assert.equal(f.state().sort.anchor.left, 130);
-  f.objects.装备筛选下拉按钮 = []; f.page.uid++; f.inventory.tick(); assert.equal(f.state().sort, null);
-  f.enableSort(); assert.ok(f.state().sort);
+test("role selector appears without a native button and survives hidden, missing and replaced buttons", () => {
+  const f = fixture(); assert.ok(f.state().sort);
+  f.sort("building"); assert.equal(f.state().sort.value, "building");
+  f.enableSort(); const button = f.objects.装备筛选下拉按钮[0];
+  button.isVisible = false; f.inventory.tick(); assert.ok(f.state().sort);
+  f.objects.装备筛选下拉按钮 = []; f.inventory.tick(); assert.ok(f.state().sort);
+  f.objects.装备筛选下拉按钮 = [button, { ...button, isVisible: true }];
+  f.inventory.tick(); assert.equal(f.state().sort.value, "building");
+  f.objects.装备筛选下拉按钮 = []; f.page.uid++; f.inventory.tick(); assert.ok(f.state().sort);
   f.page.instVars.功能 = "角色丹药"; f.inventory.tick(); assert.equal(f.state().sort, null);
   f.page.instVars.功能 = "装备"; f.inventory.tick(); assert.ok(f.state().sort);
   f.inventory.leave(); assert.equal(f.state().sort, null);
+});
+
+test("equipment transfers, dialogs and fading inventory pages keep the selector; the latest choice refreshes once safe", () => {
+  const blockers = ["转场云", "世界地图", "提示信息", "对话选择框", "黑幕", "数字输入背景"].map(name => f => {
+    f.objects[name] = [{ isVisible: true }]; return () => { f.objects[name] = []; };
+  });
+  blockers.push(f => { f.runtime.globalVars.装备穿戴中 = true; return () => { f.runtime.globalVars.装备穿戴中 = false; }; },
+    f => { f.page.opacity = 0; return () => { f.page.opacity = 1; }; },
+    f => { f.page.isVisible = false; return () => { f.page.isVisible = true; }; });
+  for (const block of blockers) {
+    const f = fixture(); f.pointer("down"); const clear = block(f); f.inventory.tick();
+    assert.equal(f.state().active, false); assert.ok(f.state().sort); assert.equal(f.state().items.length, 0);
+    f.pointer("up"); assert.equal(f.sales().length, 0);
+    f.sort("building"); f.sort("mining"); f.inventory.tick();
+    assert.equal(f.state().sort.value, "mining");
+    assert.equal(f.calls.filter(([name]) => name === "刷新物品").length, 0);
+    clear(); f.inventory.tick(); f.inventory.tick();
+    assert.equal(f.calls.filter(([name]) => name === "刷新物品").length, 1);
+    assert.equal(f.state().sort.value, "mining"); assert.equal(f.state().active, true);
+    f.sort(""); assert.equal(f.runtime.globalVars.当前装备排序属性编号, -1);
+  }
+});
+
+test("deferred refreshes never reopen a closed page or apply to a different inventory session", () => {
+  for (const change of [f => { f.objects.二级页面背景 = []; }, f => { f.page.uid++; },
+    f => { f.runtime.globalVars.当前地图编号++; }, f => { f.inventory.leave(); }]) {
+    const f = fixture(); f.runtime.globalVars.装备穿戴中 = true; f.inventory.tick(); f.sort("building");
+    change(f); f.runtime.globalVars.装备穿戴中 = false; f.inventory.tick();
+    assert.equal(f.calls.filter(([name]) => name === "刷新物品").length, 0);
+  }
+  const f = fixture(); f.runtime.globalVars.装备穿戴中 = true; f.sort("building");
+  f.objects.二级页面背景.push({ ...f.page, uid: 300, instVars: { 功能: "设置" } });
+  f.inventory.tick(); assert.equal(f.state().sort, null);
+  f.objects.二级页面背景.pop(); f.runtime.globalVars.装备穿戴中 = false; f.inventory.tick();
+  assert.equal(f.calls.filter(([name]) => name === "刷新物品").length, 0);
 });
 
 test("sort failures preserve the complete native order; sorting another inventory layer is not overridden", () => {
