@@ -79,9 +79,9 @@ test("combat uses spear / bow / fan, matching stat variants and combat accessori
   }
 });
 
-test("realm tier overrides rarity, role matching and suffix strength for every role and equipment slot", () => {
+test("role-relevant gear precedes nonmatches, with realm above rarity and suffix strength in every slot", () => {
   for (const role of api.craftRoles) for (let slot = 0; slot < 4; slot++) {
-    const f = fixture(), expected = []; f.wp.width = 700;
+    const f = fixture(), matches = [], others = []; f.wp.width = 700;
     for (let tier = 1; tier <= 9; tier++) {
       const offset = 75 * (tier - 1);
       for (let id = 1; id <= 27; id++) f.catalog[id + offset] = { ...f.catalog[id], 3: tier };
@@ -90,10 +90,23 @@ test("realm tier overrides rarity, role matching and suffix strength for every r
       const bonuses = role.combat ? [role.bonus] : [51, role.bonus];
       const match = f.add(recipe, bonuses, { tier, quality: tier % 2 ? 1 : 6, level: 10 - tier,
         rolls: bonuses.map(() => 1000 - tier * 100) });
-      expected.unshift(match, unrelated);
+      matches.unshift(match); others.unshift(unrelated);
     }
-    assert.deepEqual(f.sort(role.id), expected, `${role.id}, slot ${slot + 1}`);
+    assert.deepEqual(f.sort(role.id), [...matches, ...others], `${role.id}, slot ${slot + 1}`);
   }
+});
+
+test("Builder offhands beat higher-realm fighter pieces; wrong stat and wrong job suffixes do not qualify", () => {
+  const f = fixture(); f.wp.width = 300;
+  for (let tier = 2; tier <= 3; tier++) for (let id = 1; id <= 27; id++) {
+    f.catalog[id + 75 * (tier - 1)] = { ...f.catalog[id], 3: tier };
+  }
+  const fighter = f.add(160, [19, 51, 62], { tier: 3 });
+  const wrongStat = f.add(164, [51, 62], { tier: 3 });
+  const wrongJob = f.add(163, [59], { tier: 3 });
+  const redBuilder = f.add(13, [51, 62]);
+  const realm2Crit = f.add(88, [51], { tier: 2, quality: 1 });
+  assert.deepEqual(f.sort("building"), [realm2Crit, redBuilder, fighter, wrongStat, wrongJob]);
 });
 
 test("a higher-realm damage-only piece precedes lower-realm matches, with role priority inside each realm", () => {

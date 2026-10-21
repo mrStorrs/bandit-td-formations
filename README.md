@@ -136,10 +136,13 @@ restarts. They are separate from formation slots and are not in Steam Cloud.
 
 Use the **Role sort** dropdown beside the game's sort button in the inventory,
 character equipment bag or pawnshop. It offers the same nine work jobs and
-three combat roles as crafting automation. **Realm tier is always first:** all
-T3 items precede T2 items, even when the T2 piece has higher rarity or better
-bonuses. Within each realm, matching equipment comes first, using the same
-recipe, stat variant and weapon-family checks as automation.
+three combat roles as crafting automation. **Gear relevant to the selected role
+comes first**, using the same recipe, stat variant and weapon-family checks as
+automation, plus compatible Work Crit Damage pieces. Unrelated combat/work
+equipment follows that group, even if its realm is higher. Within the relevant
+group, **realm tier wins**: a T3 piece precedes T2, even when the T2 piece has
+higher rarity or better bonuses. Within a realm, actual automation matches
+precede damage-only pieces.
 
 Within a realm, higher rarity wins among matching pieces. At the same rarity,
 work gear ranks **Work Crit Rate + the selected job's bonus > Work Crit Rate > the job's
@@ -156,7 +159,10 @@ normal relative order within each realm. Exact ties keep their previous game ord
 
 The choice stays active through page changes and inventory refreshes for the
 current game session. Choose **Role sort: Game order**, or any option in the
-game's original sort menu, to return to normal sorting. This only changes the
+game's original sort menu, to return to normal sorting. The role dropdown stays
+available while native sort/filter menus are open; choosing a role closes those
+menus. Item hover updates and button replacement during a refresh do not hide
+it or reset a choice being browsed. This only changes the
 display order: item records, equipped gear, locks and saved outfits are unchanged.
 
 Hold **Ctrl** and **left-click** an unequipped item in your inventory to discard
@@ -1258,6 +1264,17 @@ invalid stock and separation from equipment sales. In isolated build 25975458,
 native brewing verified mixed-rarity stock selection, realm 2 root costs,
 recalculation after ten crafts, material shortages, manual recipes, Repeat mode,
 reload persistence and popup input at 1000×700 with high-DPI scaling.
+
+Version 1.28.1 puts role-relevant inventory gear before unrelated equipment,
+then applies realm priority within that group. The dropdown stays available over
+native filters and through sort-button replacement, without resetting an open
+choice on item updates. The release passes 476 JavaScript tests and four
+installer tests; five targeted regressions fail against the previous code and
+pass with the fixes. In isolated build 25975458, a copy of the current save put
+Builder work gloves ahead of higher-realm fighter offhands. All twelve roles
+preserved realm ordering within relevant gear. Native inventory, equipment and
+pawnshop menus, filter dismissal, repeated refreshes without mouse movement,
+and dropdown input at 1000×700 with high-DPI scaling preserved item records.
 
 To check the controls in-game:
 

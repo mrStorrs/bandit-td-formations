@@ -84,6 +84,21 @@ test("the role selector follows native CSS bounds and stays inside a smaller win
   f.handlers["inventory-status"]({ ...inventoryState("modal"), sort: null });
   assert.equal(f.dom.inventorySort.hidden, true);
 });
+
+test("native filters and item status updates do not hide or reset an open role choice", () => {
+  const f = fixture(), state = { ...inventoryState("page"), sort: { value: "forge", roles: [],
+    anchor: { left: 100, top: 100, right: 230, bottom: 130 } } };
+  f.handlers["inventory-status"](state); const select = f.dom.inventorySort;
+  select.value = "building";
+  f.handlers["inventory-status"]({ ...state, active: false, items: [] });
+  assert.equal(select.hidden, false); assert.equal(select.value, "building");
+  select.dispatch("change");
+  assert.deepEqual(f.messages.at(-1), ["inventory-sort", { token: "page", role: "building" }]);
+  assert.equal(select.dispatch("mousemove").stopped, true);
+  f.handlers["inventory-status"]({ ...state, sort: { ...state.sort, value: "" } });
+  assert.equal(select.value, "", "a native sort choice still overrides the role");
+  f.handlers["inventory-status"]({ active: false, items: [] }); assert.equal(select.hidden, true);
+});
 test("Ctrl-click captures the whole native mouse gesture and sends one inventory action on release", () => {
   const f = fixture(); f.handlers["inventory-status"](inventoryState("inventory-1"));
   for (const type of ["pointerdown", "mousedown", "pointerup", "mouseup", "click", "dblclick"]) {

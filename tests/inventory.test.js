@@ -31,6 +31,8 @@ function fixture() {
       calls.push([name, ...args]);
       if (["刷新物品", "刷新角色丹药"].includes(name)) nativeSort.block._RunAndBlock();
       if (name === "装备主属性") return args[3] / 10;
+      if (name === "筛选关闭") objects.装备筛选背景 = [];
+      if (name === "筛选关闭3") objects.装备筛选背景3 = [];
       if (["出售物品", "分解宝物"].includes(name)) {
         save.setAt(0, args[0], 1, 7);
         save.setAt(save.getAt(1, name === "出售物品" ? 2 : 3, 0) + 25, 1, name === "出售物品" ? 2 : 3, 0);
@@ -166,10 +168,36 @@ test("native sorting overrides the role; malformed, stale, hidden and modal sort
   assert.equal(f.state().sort.value, "");
   for (const role of [null, "bogus", 1, {}]) f.sort(role);
   f.sort("forge", "old page"); assert.equal(f.runtime.globalVars.当前装备排序属性编号, 51);
-  for (const change of [() => { f.objects.装备筛选下拉按钮[0].isVisible = false; },
-    () => { f.objects.装备筛选背景 = [{ isVisible: true }]; }]) {
-    change(); f.sort("forge"); assert.equal(f.runtime.globalVars.当前装备排序属性编号, 51);
+  f.objects.装备筛选下拉按钮[0].isVisible = false;
+  f.sort("forge"); assert.equal(f.runtime.globalVars.当前装备排序属性编号, 51);
+  f.objects.装备筛选下拉按钮[0].isVisible = true;
+  f.objects.对话选择框 = [{ isVisible: true }];
+  f.sort("forge"); assert.equal(f.runtime.globalVars.当前装备排序属性编号, 51);
+});
+
+test("role sorting stays available over native filters, closes them, and still blocks Ctrl-click underneath", () => {
+  for (const name of ["装备筛选背景", "装备筛选背景3"]) {
+    const f = fixture(); f.enableSort(); const token = f.state().token;
+    f.pointer("down"); f.objects[name] = [{ isVisible: true }]; f.inventory.tick();
+    assert.equal(f.state().active, false); assert.equal(f.state().items.length, 0);
+    assert.equal(f.state().token, token); assert.ok(f.state().sort);
+    f.pointer("up"); assert.equal(f.sales().length, 0);
+    f.sort("building"); assert.equal(f.state().sort.value, "building");
+    assert.equal(f.state().active, true); assert.equal(f.objects[name].length, 0);
+    assert.ok(f.calls.some(([name]) => name === "筛选关闭"));
   }
+});
+
+test("role selector survives native button replacement and overlap without leaking to another page", () => {
+  const f = fixture(); f.enableSort(); const button = f.objects.装备筛选下拉按钮[0], anchor = f.state().sort.anchor;
+  f.objects.装备筛选下拉按钮 = []; f.inventory.tick(); assert.deepEqual(f.state().sort.anchor, anchor);
+  f.objects.装备筛选下拉按钮 = [button, { ...button, getBoundingBox: () => ({ left: 200, top: 100, right: 300, bottom: 140 }) }];
+  f.inventory.tick(); assert.equal(f.state().sort.anchor.left, 130);
+  f.objects.装备筛选下拉按钮 = []; f.page.uid++; f.inventory.tick(); assert.equal(f.state().sort, null);
+  f.enableSort(); assert.ok(f.state().sort);
+  f.page.instVars.功能 = "角色丹药"; f.inventory.tick(); assert.equal(f.state().sort, null);
+  f.page.instVars.功能 = "装备"; f.inventory.tick(); assert.ok(f.state().sort);
+  f.inventory.leave(); assert.equal(f.state().sort, null);
 });
 
 test("sort failures preserve the complete native order; sorting another inventory layer is not overridden", () => {

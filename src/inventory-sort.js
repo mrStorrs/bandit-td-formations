@@ -24,10 +24,11 @@
         if (!Number.isFinite(amount)) throw new Error("An item's suffix value could not be compared.");
         return sum + amount;
       }, 0);
-      const rank = group ? [tier, group, item.quality,
+      // Realm orders useful gear for this role, not unrelated combat/work gear.
+      const rank = group ? [1, tier, group, item.quality,
         ...(!role.combat ? [2 * Number(item.bonuses.includes(51)) + Number(item.bonuses.includes(role.bonus)),
           value(51), value(role.bonus), value(52)] : [value(role.bonus), item.mainRoll]),
-        item.level] : [tier, 0];
+        item.level] : [0, tier];
       if (!rank.every(Number.isFinite)) throw new Error("An item's stats could not be compared.");
       return { row, index, rank };
     });

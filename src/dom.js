@@ -94,34 +94,39 @@
       document.addEventListener("visibilitychange", () => { if (document.hidden) cancelInventory(); });
     }
     inventoryStatus(state) {
+      const previous = this.inventoryState;
       this.inventoryState = state;
-      if (!state.active || !state.sort) { if (this.inventorySort) this.inventorySort.hidden = true; return; }
+      if (!state.sort) { if (this.inventorySort) this.inventorySort.hidden = true; return; }
       if (!this.inventorySort) {
         const select = this.inventorySort = document.createElement("select");
         select.id = "cjs-inventory-sort";
         select.setAttribute("aria-label", "Inventory job / combat role sort");
-        select.title = "Realm tier first (T3 > T2), then matching gear and rarity within each realm. Work: Crit Rate + job bonus, Crit Rate, job bonus; Crit Damage breaks ties. Rolled suffixes only. Damage-only gear follows matches in its realm. Combat uses its role bonus.";
+        select.title = "Gear for this role first; within that group, realm tier first (T3 > T2), then matching gear and rarity. Work: Crit Rate + job bonus, Crit Rate, job bonus; Crit Damage breaks ties. Rolled suffixes only. Damage-only gear follows matches in its realm. Combat uses its role bonus.";
         select.style.cssText = "position:fixed;z-index:2147483646;box-sizing:border-box;max-width:calc(100vw - 16px);background:#152025;color:#fff;border:1px solid #c0a35b;border-radius:4px;padding:2px 5px;cursor:pointer;font:13px sans-serif";
         for (const [id, name] of [["", "Role sort: Game order"], ...state.sort.roles.map(role => [role.id, `Role sort: ${role.name}`])]) {
           const option = document.createElement("option"); option.value = id; option.textContent = name; select.appendChild(option);
         }
         select.addEventListener("change", () => {
-          if (!this.inventoryState?.active || !this.inventoryState.sort) return;
+          if (!this.inventoryState?.sort) return;
           this.PostToRuntime("cancel", {});
           this.PostToRuntime("inventory-sort", { token: this.inventoryState.token, role: select.value });
         });
-        for (const event of ["pointerdown", "pointerup", "pointermove", "mousedown", "mouseup", "click", "dblclick", "keydown", "keyup", "wheel"]) {
+        for (const event of ["pointerdown", "pointerup", "pointermove", "mousedown", "mouseup", "mousemove", "click", "dblclick", "keydown", "keyup", "wheel"]) {
           select.addEventListener(event, e => e.stopPropagation());
         }
         document.body.appendChild(select);
       }
       const { anchor, value } = state.sort, select = this.inventorySort;
       const width = Math.min(230, window.innerWidth - 16), height = Math.max(24, anchor.bottom - anchor.top);
-      select.style.left = `${Math.max(8, Math.min(anchor.right + 8, window.innerWidth - width - 8))}px`;
-      select.style.top = `${Math.max(8, (anchor.top + anchor.bottom - height) / 2)}px`;
-      select.style.width = `${width}px`; select.style.height = `${height}px`;
-      if (select.value !== value) select.value = value;
-      select.hidden = false;
+      const placement = { left: Math.max(8, Math.min(anchor.right + 8, window.innerWidth - width - 8)),
+        top: Math.max(8, Math.min((anchor.top + anchor.bottom - height) / 2, window.innerHeight - height - 8)), width, height };
+      for (const [name, pixels] of Object.entries(placement)) {
+        const css = `${Math.round(pixels)}px`; if (select.style[name] !== css) select.style[name] = css;
+      }
+      // Item hover/refresh messages must not reset a choice being browsed in
+      // the open select. Only a new page or an actual sort change replaces it.
+      if (previous?.token !== state.token || previous?.sort?.value !== value) select.value = value;
+      if (select.hidden !== false) select.hidden = false;
     }
     craftStatus(state) {
       this.craftState = state;

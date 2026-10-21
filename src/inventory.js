@@ -6,7 +6,7 @@
     const first = name => runtime.objects[name]?.getFirstInstance();
     const screens = ["物品", "装备", "角色丹药", "当铺", "宝物分解"];
     const visible = instance => instance.isVisible !== false && instance.opacity !== 0 && instance.layer?.isSelfAndParentsVisible !== false;
-    let pressed = null, lastStatus = "", epoch = 0, sortHooked = false, nativeSort = 0;
+    let pressed = null, lastStatus = "", epoch = 0, sortHooked = false, nativeSort = 0, sortAnchor = null;
     const sortVariable = "当前装备排序属性编号";
     // Native choices are -1 or above; choosing one also clears the role sort.
     const sortRole = () => craftRoles?.[-100 - runtime.globalVars[sortVariable]];
@@ -52,11 +52,12 @@
       sortHooked = true;
     }
 
-    function context() {
+    function context(allowFilters = false) {
       const g = runtime.globalVars, save = first("save"), wp = first("wp");
       if (!engine.GetMainRunningLayout() || runtime.layout.name !== "主界面" || !wp ||
           !Number.isSafeInteger(save?.getAt(0, 1, 0)) || save.getAt(0, 1, 0) < 10000000 || g["装备穿戴中"]) return null;
-      if (["转场云", "世界地图", "提示信息", "对话选择框", "黑幕", "装备筛选背景", "装备筛选背景3", "数字输入背景"].some(name => all(name).some(visible))) return null;
+      if (["转场云", "世界地图", "提示信息", "对话选择框", "黑幕", "数字输入背景"].some(name => all(name).some(visible))) return null;
+      if (!allowFilters && ["装备筛选背景", "装备筛选背景3"].some(name => all(name).some(visible))) return null;
       const pages = all("二级页面背景").filter(visible);
       if (pages.length !== 1 || !screens.includes(pages[0].instVars["功能"])) return null;
       const page = pages[0];
@@ -117,28 +118,37 @@
       catch (error) { pressed = null; console.error("[Bandit TD Formations] Inventory shortcut", error); notify(`Inventory: ${error.message || error}`); }
     });
     function sortControl(current) {
-      if (!current || !sortHooked) return null;
-      const buttons = all("装备筛选下拉按钮").filter(button => visible(button) && button.instVars["功能"] === "装备排序");
-      const anchor = buttons.length === 1 && bounds(buttons[0]);
+      if (!current || !sortHooked || !["物品", "装备", "当铺"].includes(current.page.instVars["功能"])) { sortAnchor = null; return null; }
+      if (sortAnchor?.token !== current.token) sortAnchor = null;
+      const buttons = all("装备筛选下拉按钮").filter(button => button.instVars["功能"] === "装备排序");
+      const button = buttons.filter(visible).at(-1);
+      // Native refreshes replace the sort button. Keep its last position on
+      // this page while it is absent, and prefer the new button during overlap.
+      if (button) sortAnchor = { token: current.token, anchor: bounds(button) };
+      else if (buttons.length) sortAnchor = null;
+      const anchor = sortAnchor?.anchor;
       return anchor ? { value: sortRole()?.id || "", anchor, roles: craftRoles.map(({ id, name }) => ({ id, name })) } : null;
     }
     engine.AddDOMComponentMessageHandler("cjs-formations", "inventory-sort", payload => {
-      const current = context();
+      const current = context(true);
       if (!current || payload?.token !== current.token || !sortControl(current) ||
           (payload.role !== "" && !craftRoles.some(role => role.id === payload.role))) return;
       if (!sortRole()) nativeSort = runtime.globalVars[sortVariable];
       runtime.globalVars[sortVariable] = payload.role === "" ? nativeSort : -100 - craftRoles.findIndex(role => role.id === payload.role);
       pressed = null;
+      if (["装备筛选背景", "装备筛选背景3"].some(name => all(name).some(visible))) {
+        runtime.callFunction("筛选关闭"); runtime.callFunction("筛选关闭3");
+      }
       runtime.callFunction("关闭tips");
       refresh(current);
       publish(context());
     });
-    function publish(current) {
-      const state = { active: !!current, token: current?.token || "", items: current ? items(current) : [], sort: sortControl(current) }, text = JSON.stringify(state);
+    function publish(current, sortCurrent = current) {
+      const state = { active: !!current, token: (sortCurrent || current)?.token || "", items: current ? items(current) : [], sort: sortControl(sortCurrent) }, text = JSON.stringify(state);
       if (text !== lastStatus) { lastStatus = text; engine.PostComponentMessageToDOM("cjs-formations", "inventory-status", state); }
     }
     return {
-      tick() { const current = context(); if (current) installSort(); if (pressed?.token !== current?.token) pressed = null; publish(current); },
+      tick() { const current = context(), sortCurrent = current || context(true); if (sortCurrent) installSort(); if (pressed?.token !== current?.token) pressed = null; publish(current, sortCurrent); },
       leave() { epoch++; pressed = null; publish(null); },
     };
   }
