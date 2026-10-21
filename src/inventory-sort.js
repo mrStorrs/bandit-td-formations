@@ -1,22 +1,27 @@
 (() => {
   "use strict";
   function sortInventoryRows(rows, save, wp, roleId, suffixValue) {
-    const { craftRoles, craftRecipes, matchesCraftItem } = globalThis.BanditFormations;
+    const { craftRoles } = globalThis.BanditFormations;
     const role = craftRoles.find(role => role.id === roleId);
     if (!role) return [...rows];
-    const targets = new Map();
     const ranked = rows.map((row, index) => {
       const recipe = save.getAt(row, 1, 7), tier = save.getAt(row, 3, 7);
       const item = { recipe, tier, slot: wp.getAt(recipe, 6), quality: save.getAt(row, 5, 7),
         level: save.getAt(row, 6, 7), mainRoll: save.getAt(row, 8, 7),
         bonuses: Array.from({ length: 6 }, (_, i) => save.getAt(row, 9 + i, 7)),
         rolls: Array.from({ length: 6 }, (_, i) => save.getAt(row, 15 + i, 7)) };
-      if (!targets.has(tier)) targets.set(tier, { ...role, recipes: craftRecipes(wp, role, tier) });
-      const target = targets.get(tier), matched = matchesCraftItem(item, target, { tier, minimum: 1 });
+      // Set pieces can retain a lower-realm recipe ID after upgrading. Sort by
+      // their equipment family/stat and actual realm, not a craftable recipe ID.
+      const compatible = item.slot >= 1 && item.slot <= 4 && item.quality >= 1 && item.quality <= 6 &&
+        wp.getAt(recipe, 5) === "装备" && ["普通", "套装"].includes(wp.getAt(recipe, 4)) &&
+        wp.getAt(recipe, 10) === role.stat && (item.slot === 1 ? wp.getAt(recipe, 9) === role.power :
+          wp.getAt(recipe, 23) === (role.combat ? "战斗" : "生产"));
+      // Every preferred combat weapon belongs ahead of other weapon families,
+      // even without a combat suffix. Work sorting still requires useful rolls.
+      const matched = compatible && (role.combat || item.bonuses.includes(role.bonus) || item.bonuses.includes(51));
       // Damage-only work pieces are useful to inspect, but do not meet the
       // automation's keeper rule. Within a realm, keep them behind matches.
-      const damageOnly = !role.combat && item.slot >= 1 && item.slot <= 4 &&
-        recipe === target.recipes[item.slot - 1] && item.bonuses.includes(52);
+      const damageOnly = compatible && !role.combat && item.bonuses.includes(52);
       const group = matched ? 2 : damageOnly ? 1 : 0;
       const value = bonus => item.bonuses.reduce((sum, id, i) => {
         if (id !== bonus) return sum;

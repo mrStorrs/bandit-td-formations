@@ -1,6 +1,6 @@
 {
   "name": "bandit-td-formations",
-  "version": "1.28.2",
+  "version": "1.28.3",
   "private": true,
   "description": "Saved formations, job outfits, combat hotkeys, recruitment, crafting, research and drilling automation for Bandit Simulator TD",
   "scripts": { "test": "node --test tests/*.test.js" },

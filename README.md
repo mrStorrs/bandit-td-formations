@@ -136,26 +136,33 @@ restarts. They are separate from formation slots and are not in Steam Cloud.
 
 Use the **Role sort** dropdown at the **top-left of the window** while the
 inventory, character equipment bag or pawnshop is open. It offers the same nine
-work jobs and three combat roles as crafting automation. **Gear relevant to the selected role
-comes first**, using the same recipe, stat variant and weapon-family checks as
-automation, plus compatible Work Crit Damage pieces. Unrelated combat/work
-equipment follows that group, even if its realm is higher. Within the relevant
-group, **realm tier wins**: a T3 piece precedes T2, even when the T2 piece has
-higher rarity or better bonuses. Within a realm, actual automation matches
-precede damage-only pieces.
+work jobs and three combat roles as crafting automation. **Gear relevant to the
+selected role comes first**, including ordinary and set equipment, using its
+stat variant, weapon family and combat/work purpose. Upgraded set pieces use
+their actual realm, even when their recipe ID still belongs to a lower realm.
+Unrelated equipment follows that group, even if its realm is higher. Within the
+relevant group, **realm tier wins**: a T3 piece precedes T2, even when the T2 piece
+has higher rarity or better bonuses.
 
 Within a realm, higher rarity wins among matching pieces. At the same rarity,
 work gear ranks **Work Crit Rate + the selected job's bonus > Work Crit Rate > the job's
 bonus**. Equal combinations compare total suffix Work Crit Rate first, then the
 job bonus, then Work Crit Damage. Only rolled suffixes count; innate stats do
 not. Duplicate suffixes add together, using the game's values for that item's
-recipe tier and rarity. No worker's stats are used.
+actual realm and rarity. No worker's stats are used.
 
 Compatible work gear with only a Work Crit Damage suffix follows actual
-automation matches in its realm, ahead of unrelated items from that realm.
-This does not change what automation keeps or sells. Combat sorting uses the selected combat bonus;
-STR weapons are spears, AGI bows and INT fans. Other items stay visible in their
-normal relative order within each realm. Exact ties keep their previous game order.
+work-crit/job matches in its realm, ahead of unrelated items from that realm.
+Work gear still needs a useful rolled suffix; innate stats and set bonuses do
+not count as suffixes. This does not change what automation keeps or sells.
+
+Combat sorting puts **all spears first for STR, all bows first for AGI, and all
+fans first for INT** when comparing weapons, including set pieces and weapons
+without a combat-bonus suffix. Offhands, armor and accessories qualify by their
+combat purpose and matching stat. Within this group, sort by actual realm,
+rarity, the selected combat-bonus suffix total, main roll, then level. Other
+items stay visible in their normal relative order within each realm. Exact ties
+keep their previous game order.
 
 The choice stays active through page changes and inventory refreshes for the
 current game session. Choose **Role sort: Game order**, or any option in the
@@ -1290,6 +1297,17 @@ flags, hidden/destroyed native buttons and page fades. Native inventory,
 equipment and pawnshop filters, repeated refreshes, deferred selection and
 closure, 1000×700 high-DPI scaling, and fullscreen/windowed transitions were
 checked with real pointer/keyboard input and unchanged item records.
+
+Version 1.28.3 includes set equipment in role sorting and groups all preferred
+combat weapons first, even without a combat suffix. Upgraded sets use their
+actual realm instead of requiring the current realm's ordinary recipe ID.
+The release passes 485 JavaScript tests and four installer tests; six regression
+cases fail against 1.28.2. In isolated build 25975458, the latest-save copy put
+all 33 spears before other weapons for STR, including both upgraded realm-3 set
+spears; AGI led with all 36 bows and INT with all 47 fans. Native dropdown input,
+visible main-hand order, realm/rarity/bonus ranking, and unchanged inventory,
+equipped items and locks were verified. All 459 native ordinary/set recipes
+were also checked across all twelve role sorts with upgraded set realms.
 
 To check the controls in-game:
 

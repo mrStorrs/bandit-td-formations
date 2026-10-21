@@ -79,6 +79,74 @@ test("combat uses spear / bow / fan, matching stat variants and combat accessori
   }
 });
 
+for (const role of api.craftRoles.filter(role => role.combat)) test(`${role.name} groups every preferred weapon, including upgraded sets and pieces without its suffix`, () => {
+  const f = fixture(), recipe = api.craftRecipes(f.wp, role, 1)[0];
+  const other = { "combat-str": 5, "combat-agi": 6, "combat-int": 8 }[role.id];
+  f.catalog[40] = { ...f.catalog[recipe], 4: "套装", 23: "生产" };
+  f.catalog[41] = { ...f.catalog[other], 4: "套装", 23: "战斗" };
+  const wrongSet = f.add(41, [role.bonus], { tier: 9, rolls: [999] });
+  const wrongNormal = f.add(other, [role.bonus], { tier: 9, rolls: [999] });
+  const lowMatch = f.add(recipe, [role.bonus], { rolls: [999] });
+  const lowBare = f.add(recipe, []);
+  const highSet = f.add(40, [], { tier: 3, quality: 1 });
+  const highNormal = f.add(recipe, [51], { tier: 3, quality: 2 });
+  assert.deepEqual(f.sort(role.id), [highNormal, highSet, lowMatch, lowBare, wrongSet, wrongNormal]);
+});
+
+test("combat set pieces use actual realm, rarity, combat suffix and main roll in that order", () => {
+  const f = fixture(); f.catalog[40] = { ...f.catalog[2], 4: "套装", 23: "战斗" };
+  const lowerRealm = f.add(2, [19], { rolls: [999] });
+  const lowerRarity = f.add(40, [19], { tier: 3, quality: 5, rolls: [999] });
+  const noBonus = f.add(40, [], { tier: 3, mainRoll: 999 });
+  const bonus = f.add(2, [19], { tier: 3, rolls: [20], mainRoll: 100 });
+  const main = f.add(40, [19], { tier: 3, rolls: [20], mainRoll: 101 });
+  const double = f.add(40, [19, 19], { tier: 3, rolls: [11, 10], mainRoll: 1 });
+  assert.deepEqual(f.sort("combat-str"), [double, main, bonus, noBonus, lowerRarity, lowerRealm]);
+});
+
+test("combat set armor, offhands and accessories qualify by stat and purpose without a required suffix", () => {
+  for (const role of api.craftRoles.filter(role => role.combat)) for (let slot = 1; slot < 4; slot++) {
+    const f = fixture(), recipe = api.craftRecipes(f.wp, role, 1)[slot];
+    f.catalog[40] = { ...f.catalog[recipe], 4: "套装" };
+    f.catalog[41] = { ...f.catalog[40], 10: role.stat % 3 + 1 };
+    f.catalog[42] = { ...f.catalog[40], 23: "生产" };
+    const wrongStat = f.add(41, [role.bonus], { tier: 9 });
+    const work = f.add(42, [role.bonus], { tier: 9 });
+    const normal = f.add(recipe, [role.bonus]);
+    const set = f.add(40, [], { tier: 3, quality: 1 });
+    assert.deepEqual(f.sort(role.id), [set, normal, wrongStat, work], `${role.id}, slot ${slot + 1}`);
+  }
+});
+
+test("work sets participate in all job sorts using rolled suffixes and the correct family, stat and purpose", () => {
+  for (const role of api.craftRoles.filter(role => !role.combat)) for (let slot = 0; slot < 4; slot++) {
+    const f = fixture(), recipe = api.craftRecipes(f.wp, role, 1)[slot];
+    f.catalog[40] = { ...f.catalog[recipe], 4: "套装" };
+    if (slot >= 2) f.catalog[40][9] = slot === 2 ? 51 : 52;
+    f.catalog[41] = { ...f.catalog[40], ...(slot === 0 ? { 9: role.power + 100 } : { 23: "战斗" }) };
+    f.catalog[42] = { ...f.catalog[40], 10: role.stat % 3 + 1 };
+    const wrongFamily = f.add(41, [51, role.bonus], { tier: 9 });
+    const wrongStat = f.add(42, [51, role.bonus], { tier: 9 });
+    const innate = f.add(40, [], { tier: 9, mainRoll: 999 });
+    const lower = f.add(recipe, [51, role.bonus]);
+    const job = f.add(40, [role.bonus], { tier: 3 });
+    const crit = f.add(40, [51], { tier: 3 });
+    const combo = f.add(40, [51, role.bonus], { tier: 3 });
+    const damage = f.add(40, [52], { tier: 3 });
+    assert.deepEqual(f.sort(role.id), [combo, crit, job, damage, lower, wrongFamily, wrongStat, innate], `${role.id}, slot ${slot + 1}`);
+  }
+});
+
+test("treasures and cores never qualify as ordinary or set equipment through their stat fields", () => {
+  const f = fixture();
+  f.catalog[40] = { ...f.catalog[2], 4: "宝物", 6: 6 };
+  f.catalog[41] = { ...f.catalog[2], 4: "内丹", 5: "内丹", 6: 5 };
+  const treasure = f.add(40, [19, 51, 59], { tier: 9 });
+  const core = f.add(41, [19, 51, 59], { tier: 9 });
+  const weapon = f.add(2, [19, 51, 59]);
+  for (const role of ["combat-str", "forge"]) assert.deepEqual(f.sort(role), [weapon, treasure, core]);
+});
+
 test("role-relevant gear precedes nonmatches, with realm above rarity and suffix strength in every slot", () => {
   for (const role of api.craftRoles) for (let slot = 0; slot < 4; slot++) {
     const f = fixture(), matches = [], others = []; f.wp.width = 700;
@@ -86,7 +154,9 @@ test("role-relevant gear precedes nonmatches, with realm above rarity and suffix
       const offset = 75 * (tier - 1);
       for (let id = 1; id <= 27; id++) f.catalog[id + offset] = { ...f.catalog[id], 3: tier };
       const recipe = api.craftRecipes(f.wp, role, tier)[slot];
-      const unrelated = f.add(recipe, [72], { tier, quality: 6, level: 999, rolls: [999] });
+      const otherRole = api.craftRoles.find(r => r.combat && r.stat === role.stat % 3 + 1);
+      const unrelatedRecipe = role.combat ? api.craftRecipes(f.wp, otherRole, tier)[slot] : recipe;
+      const unrelated = f.add(unrelatedRecipe, [72], { tier, quality: 6, level: 999, rolls: [999] });
       const bonuses = role.combat ? [role.bonus] : [51, role.bonus];
       const match = f.add(recipe, bonuses, { tier, quality: tier % 2 ? 1 : 6, level: 10 - tier,
         rolls: bonuses.map(() => 1000 - tier * 100) });
