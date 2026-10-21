@@ -1,11 +1,56 @@
 (() => {
   "use strict";
   function attachInventory(runtime, engine, notify, outfits) {
+    const { craftRoles, sortInventoryRows } = globalThis.BanditFormations;
     const all = name => runtime.objects[name]?.getAllInstances() || [];
     const first = name => runtime.objects[name]?.getFirstInstance();
     const screens = ["物品", "装备", "角色丹药", "当铺", "宝物分解"];
     const visible = instance => instance.isVisible !== false && instance.opacity !== 0 && instance.layer?.isSelfAndParentsVisible !== false;
-    let pressed = null, lastStatus = "", epoch = 0;
+    let pressed = null, lastStatus = "", epoch = 0, sortHooked = false, nativeSort = 0;
+    const sortVariable = "当前装备排序属性编号";
+    // Native choices are -1 or above; choosing one also clears the role sort.
+    const sortRole = () => craftRoles?.[-100 - runtime.globalVars[sortVariable]];
+    function bounds(instance) {
+      const box = instance.getBoundingBox();
+      const [left, top] = instance.layer.layerToCssPx(box.left, box.top);
+      const [right, bottom] = instance.layer.layerToCssPx(box.right, box.bottom);
+      return [left, top, right, bottom].every(Number.isFinite) && left < right && top < bottom ? { left, top, right, bottom } : null;
+    }
+    function installSort() {
+      if (sortHooked) return;
+      const fn = engine.GetEventSheetManager?.().GetFunctionBlockByName("装备排序"), block = fn?.GetEventBlock();
+      if (typeof block?._RunAndBlock !== "function" || typeof fn.CaptureFunctionParameters !== "function") return;
+      const run = block._RunAndBlock;
+      block._RunAndBlock = function (...args) {
+        const role = sortRole(), [location] = fn.CaptureFunctionParameters();
+        if (!role) return run.apply(this, args);
+        const selected = runtime.globalVars[sortVariable];
+        let result;
+        try {
+          runtime.globalVars[sortVariable] = nativeSort;
+          result = run.apply(this, args);
+        } finally { runtime.globalVars[sortVariable] = selected; }
+        if (location > 0 && location !== 7) return result;
+        pressed = null;
+        try {
+          const save = first("save"), wp = first("wp"), display = first("装备临时");
+          const rows = Array.from({ length: display.width }, (_, i) => display.getAt(i, 1)).filter(row => row > 0);
+          const sorted = sortInventoryRows(rows, save, wp, role.id, (item, id, roll) =>
+            runtime.callFunction("装备主属性", 0, item.tier, id, roll, 100, "副词条", 0, item.quality));
+          // This is the game's display index, never the inventory/save rows.
+          for (let i = 0; i < display.width; i++) {
+            display.setAt(sorted[i] || 0, i, 1);
+            display.setAt(i < sorted.length ? sorted.length - i : 0, i, 0);
+          }
+        } catch (error) {
+          runtime.globalVars[sortVariable] = nativeSort;
+          console.error("[Bandit TD Formations] Inventory sort", error);
+          notify("Inventory sort unavailable: the game's normal order was kept.");
+        }
+        return result;
+      };
+      sortHooked = true;
+    }
 
     function context() {
       const g = runtime.globalVars, save = first("save"), wp = first("wp");
@@ -26,13 +71,11 @@
             !Number.isSafeInteger(row) || row <= 0 || row >= current.save.width || !(type > 0) ||
             current.save.getAt(row, 1, 7) !== type ||
             !["装备", "内丹"].includes(current.wp.getAt(type, 5))) continue;
-        const box = icon.getBoundingBox();
-        const [left, top] = icon.layer.layerToCssPx(box.left, box.top);
-        const [right, bottom] = icon.layer.layerToCssPx(box.right, box.bottom);
-        if (![left, top, right, bottom].every(Number.isFinite) || left >= right || top >= bottom) continue;
+        const box = bounds(icon);
+        if (!box) continue;
         // Hover can clear the new-item marker without changing the clicked piece.
         const key = JSON.stringify(Array.from({ length: 50 }, (_, field) => field === 24 ? 0 : current.save.getAt(row, field, 7)));
-        result.push({ uid: icon.uid, row, type, key, left, top, right, bottom });
+        result.push({ uid: icon.uid, row, type, key, ...box });
       }
       return result;
     }
@@ -60,6 +103,9 @@
       const action = current.wp.getAt(piece.type, 4) === "宝物" ? "分解宝物" : "出售物品";
       runtime.callFunction("关闭tips");
       runtime.callFunction(action, piece.row, true, false);
+      refresh(current);
+    }
+    function refresh(current) {
       const screen = current.page.instVars["功能"];
       if (screen === "角色丹药") runtime.callFunction("刷新角色丹药", 8, screen, "二级页面", 0, 0, 0, "内丹", true);
       else runtime.callFunction("刷新物品", 8, screen, "二级页面", 0, 0, 0);
@@ -70,12 +116,29 @@
       try { click(payload); }
       catch (error) { pressed = null; console.error("[Bandit TD Formations] Inventory shortcut", error); notify(`Inventory: ${error.message || error}`); }
     });
+    function sortControl(current) {
+      if (!current || !sortHooked) return null;
+      const buttons = all("装备筛选下拉按钮").filter(button => visible(button) && button.instVars["功能"] === "装备排序");
+      const anchor = buttons.length === 1 && bounds(buttons[0]);
+      return anchor ? { value: sortRole()?.id || "", anchor, roles: craftRoles.map(({ id, name }) => ({ id, name })) } : null;
+    }
+    engine.AddDOMComponentMessageHandler("cjs-formations", "inventory-sort", payload => {
+      const current = context();
+      if (!current || payload?.token !== current.token || !sortControl(current) ||
+          (payload.role !== "" && !craftRoles.some(role => role.id === payload.role))) return;
+      if (!sortRole()) nativeSort = runtime.globalVars[sortVariable];
+      runtime.globalVars[sortVariable] = payload.role === "" ? nativeSort : -100 - craftRoles.findIndex(role => role.id === payload.role);
+      pressed = null;
+      runtime.callFunction("关闭tips");
+      refresh(current);
+      publish(context());
+    });
     function publish(current) {
-      const state = { active: !!current, token: current?.token || "", items: current ? items(current) : [] }, text = JSON.stringify(state);
+      const state = { active: !!current, token: current?.token || "", items: current ? items(current) : [], sort: sortControl(current) }, text = JSON.stringify(state);
       if (text !== lastStatus) { lastStatus = text; engine.PostComponentMessageToDOM("cjs-formations", "inventory-status", state); }
     }
     return {
-      tick() { const current = context(); if (pressed?.token !== current?.token) pressed = null; publish(current); },
+      tick() { const current = context(); if (current) installSort(); if (pressed?.token !== current?.token) pressed = null; publish(current); },
       leave() { epoch++; pressed = null; publish(null); },
     };
   }

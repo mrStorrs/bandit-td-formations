@@ -129,7 +129,30 @@ AI activity changes under **Automatic** do not switch between work outfits.
 Outfits persist locally per campaign and character across maps and game
 restarts. They are separate from formation slots and are not in Steam Cloud.
 
-## Inventory shortcut
+## Inventory sorting and shortcut
+
+Use the **Role sort** dropdown beside the game's sort button in the inventory,
+character equipment bag or pawnshop. It offers the same nine work jobs and
+three combat roles as crafting automation. Matching equipment comes first,
+using the same recipe, stat variant and weapon-family checks as automation.
+
+Higher rarity wins among matching pieces. Within the same rarity, work gear
+ranks **Work Crit Rate + the selected job's bonus > Work Crit Rate > the job's
+bonus**. Equal combinations compare total suffix Work Crit Rate first, then the
+job bonus, then Work Crit Damage. Only rolled suffixes count; innate stats do
+not. Duplicate suffixes add together, using the game's values for that item's
+recipe tier and rarity. No worker's stats are used.
+
+Compatible work gear with only a Work Crit Damage suffix follows actual
+automation matches, ahead of unrelated items. This does not change what
+automation keeps or sells. Combat sorting uses the selected combat bonus;
+STR weapons are spears, AGI bows and INT fans. Other items stay visible in their
+normal relative order. Exact ties keep their previous game order.
+
+The choice stays active through page changes and inventory refreshes for the
+current game session. Choose **Role sort: Game order**, or any option in the
+game's original sort menu, to return to normal sorting. This only changes the
+display order: item records, equipped gear, locks and saved outfits are unchanged.
 
 Hold **Ctrl** and **left-click** an unequipped item in your inventory to discard
 that one piece using the game's normal reward: equipment and cores sell for
@@ -729,7 +752,7 @@ python3 manage.py install --game-dir "/path/to/Steam/steamapps/common/塔防山�
 
 On Windows, use `py -3` in place of `python3` if appropriate. Restart the game
 after installing. Look for the “Formations ready” message on startup.
-The startup message includes the installed version number (currently 1.26.0).
+The startup message includes the installed version number (currently 1.27.0).
 
 The installer backs up the input archive in `cjs-formations-backups/` beside the
 game, verifies the result, then replaces `package.nw` atomically. It does not
@@ -1177,6 +1200,15 @@ core, pawnshop and treasure screens at 1000×700 and 1600×1000 with high-DPI sc
 Saved weapon/core/treasure protection, swapped-out gear and paused play were
 also checked against the native game.
 
+Version 1.27.0 adds inventory sorting for all twelve crafting roles. The release
+passes 455 JavaScript tests and four installer tests. Sorting tests cover all
+roles and equipment slots, combat weapon families through all nine recipe tiers,
+rarity, suffix combinations and amounts, innate-stat exclusion, stable ties,
+stale requests, native-order fallback and Ctrl-click cancellation during sorting.
+In isolated build 25975458, native inventory display order and unchanged item
+records were verified alongside the role dropdown, equipment/pawnshop refreshes,
+smaller windows, high-DPI scaling, normal sort selection and Ctrl-click selling.
+
 To check the controls in-game:
 
 1. Arrange your characters, choose their jobs and priority work targets, then
@@ -1282,7 +1314,9 @@ native Repeat preference.
 `src/outfits.js` validates outfit snapshots and matches equipment records.
 `src/outfit-runtime.js` observes native job changes, serializes equipment swaps,
 checks inventory and equip eligibility, and manages the outfit panel and storage.
-`src/inventory.js` validates Ctrl-click gestures against the visible item and its
+`src/inventory-sort.js` ranks inventory display rows using crafting role matches
+and suffix values. `src/inventory.js` applies that order to the native display
+index and validates Ctrl-click gestures against the visible item and its
 identity, checks normal/outfit locks, and invokes native sale or decomposition.
 `src/runtime.js` adapts character/tile APIs, native movement/mode/summon functions,
 the victory callback, and the native auto-summon event group.

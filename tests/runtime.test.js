@@ -64,7 +64,7 @@ function fixture() {
     runOnStartup: f => { sandbox.start = f; }, C3_CreateRuntime: () => engine };
   sandbox.self = sandbox;
   vm.createContext(sandbox);
-  for (const file of ["formations.js", "buildings.js", "building-runtime.js", "combat.js", "forest.js", "recruit.js", "recruit-runtime.js", "craft-sets.js", "craft-sets-runtime.js", "crafting.js", "study.js", "study-runtime.js", "outfits.js", "outfit-runtime.js", "inventory.js", "recipe-costs.js", "gathering.js", "runtime.js"]) vm.runInContext(fs.readFileSync(`${__dirname}/../src/${file}`, "utf8"), sandbox);
+  for (const file of ["formations.js", "buildings.js", "building-runtime.js", "combat.js", "forest.js", "recruit.js", "recruit-runtime.js", "craft-sets.js", "craft-sets-runtime.js", "crafting.js", "study.js", "study-runtime.js", "outfits.js", "outfit-runtime.js", "inventory-sort.js", "inventory.js", "recipe-costs.js", "gathering.js", "runtime.js"]) vm.runInContext(fs.readFileSync(`${__dirname}/../src/${file}`, "utf8"), sandbox);
   sandbox.C3_CreateRuntime(); sandbox.start(runtime);
   return { runtime, engine, save, cores, tiles, events, handlers, messages, calls, stored, objects, auto, victory,
     async tick() { clock += 250; await events.tick(); },

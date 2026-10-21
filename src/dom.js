@@ -15,13 +15,13 @@
         ["recruit-status", state => this.recruitStatus(state)],
         ["outfit-status", state => this.outfitStatus(state)],
         ["outfit-locks", state => this.outfitLocks(state)],
-        ["inventory-status", state => { this.inventoryState = state; }],
+        ["inventory-status", state => this.inventoryStatus(state)],
         ["craft-status", state => this.craftStatus(state)],
         ["study-status", state => this.studyStatus(state)],
       ]);
     }
     Attach() {
-      const editable = element => element?.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(element?.tagName) || this.recruitPanel?.contains(element) || this.outfitPanel?.contains(element) || this.outfitLockLayer?.contains(element) || this.craftPanel?.contains(element) || this.studyPanel?.contains(element);
+      const editable = element => element?.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(element?.tagName) || this.recruitPanel?.contains(element) || this.outfitPanel?.contains(element) || this.outfitLockLayer?.contains(element) || this.craftPanel?.contains(element) || this.studyPanel?.contains(element) || this.inventorySort?.contains(element);
       const cancel = () => {
         this.held.clear();
         if (this.ready) this.PostToRuntime("cancel", {});
@@ -92,6 +92,36 @@
       }, true);
       window.addEventListener("blur", () => { cancelInventory(); suppressInventoryMouse = false; });
       document.addEventListener("visibilitychange", () => { if (document.hidden) cancelInventory(); });
+    }
+    inventoryStatus(state) {
+      this.inventoryState = state;
+      if (!state.active || !state.sort) { if (this.inventorySort) this.inventorySort.hidden = true; return; }
+      if (!this.inventorySort) {
+        const select = this.inventorySort = document.createElement("select");
+        select.id = "cjs-inventory-sort";
+        select.setAttribute("aria-label", "Inventory job / combat role sort");
+        select.title = "Matching gear first, higher rarity first. Work: Crit Rate + job bonus, Crit Rate, job bonus; Crit Damage breaks ties. Rolled suffixes only. Damage-only gear follows matches. Combat uses its role bonus.";
+        select.style.cssText = "position:fixed;z-index:2147483646;box-sizing:border-box;max-width:calc(100vw - 16px);background:#152025;color:#fff;border:1px solid #c0a35b;border-radius:4px;padding:2px 5px;cursor:pointer;font:13px sans-serif";
+        for (const [id, name] of [["", "Role sort: Game order"], ...state.sort.roles.map(role => [role.id, `Role sort: ${role.name}`])]) {
+          const option = document.createElement("option"); option.value = id; option.textContent = name; select.appendChild(option);
+        }
+        select.addEventListener("change", () => {
+          if (!this.inventoryState?.active || !this.inventoryState.sort) return;
+          this.PostToRuntime("cancel", {});
+          this.PostToRuntime("inventory-sort", { token: this.inventoryState.token, role: select.value });
+        });
+        for (const event of ["pointerdown", "pointerup", "pointermove", "mousedown", "mouseup", "click", "dblclick", "keydown", "keyup", "wheel"]) {
+          select.addEventListener(event, e => e.stopPropagation());
+        }
+        document.body.appendChild(select);
+      }
+      const { anchor, value } = state.sort, select = this.inventorySort;
+      const width = Math.min(230, window.innerWidth - 16), height = Math.max(24, anchor.bottom - anchor.top);
+      select.style.left = `${Math.max(8, Math.min(anchor.right + 8, window.innerWidth - width - 8))}px`;
+      select.style.top = `${Math.max(8, (anchor.top + anchor.bottom - height) / 2)}px`;
+      select.style.width = `${width}px`; select.style.height = `${height}px`;
+      if (select.value !== value) select.value = value;
+      select.hidden = false;
     }
     craftStatus(state) {
       this.craftState = state;

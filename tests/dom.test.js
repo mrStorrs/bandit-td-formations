@@ -57,6 +57,33 @@ function inventoryPointer(f, type, extra = {}) {
   return f.window.dispatch(type, { button: 0, detail: 1, pointerId: 1, pointerType: "mouse", ctrlKey: true,
     target: { tagName: "CANVAS" }, clientX: 100, clientY: 170, ...extra });
 }
+test("inventory role sorting shows the supplied jobs, sends its current page token and hides with the menu", () => {
+  const f = fixture(), state = { ...inventoryState("page-one"), sort: { value: "forge", anchor: { left: 100, top: 100, right: 230, bottom: 130 },
+    roles: [{ id: "forge", name: "Forger" }, { id: "combat-str", name: "Combat — STR" }] } };
+  f.handlers["inventory-status"](state);
+  const select = f.dom.inventorySort;
+  assert.deepEqual(select.children.map(o => o.value), ["", "forge", "combat-str"]);
+  assert.equal(select.value, "forge"); assert.equal(select.hidden, false); assert.equal(select.style.left, "238px");
+  select.value = "combat-str"; select.dispatch("change");
+  assert.deepEqual(f.messages.at(-1), ["inventory-sort", { token: "page-one", role: "combat-str" }]);
+  f.document.activeElement = select; f.window.dispatch("keydown", { code: "KeyC" });
+  assert.equal(f.messages.at(-1)[0], "cancel");
+  assert.equal(select.dispatch("click").stopped, true);
+  f.handlers["inventory-status"]({ active: false, items: [] }); assert.equal(select.hidden, true);
+  const count = f.messages.length; select.dispatch("change"); assert.equal(f.messages.length, count);
+  f.handlers["inventory-status"]({ ...state, token: "page-two", sort: { ...state.sort, value: "" } });
+  assert.equal(select.value, ""); assert.equal(select.hidden, false);
+});
+
+test("the role selector follows native CSS bounds and stays inside a smaller window", () => {
+  const f = fixture(); f.window.innerWidth = 700;
+  f.handlers["inventory-status"]({ ...inventoryState("small"), sort: { value: "", roles: [],
+    anchor: { left: 600, top: 80, right: 690, bottom: 100 } } });
+  assert.equal(f.dom.inventorySort.style.left, "462px");
+  assert.equal(f.dom.inventorySort.style.height, "24px");
+  f.handlers["inventory-status"]({ ...inventoryState("modal"), sort: null });
+  assert.equal(f.dom.inventorySort.hidden, true);
+});
 test("Ctrl-click captures the whole native mouse gesture and sends one inventory action on release", () => {
   const f = fixture(); f.handlers["inventory-status"](inventoryState("inventory-1"));
   for (const type of ["pointerdown", "mousedown", "pointerup", "mouseup", "click", "dblclick"]) {
