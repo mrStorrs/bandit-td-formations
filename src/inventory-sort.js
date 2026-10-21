@@ -14,7 +14,7 @@
       if (!targets.has(tier)) targets.set(tier, { ...role, recipes: craftRecipes(wp, role, tier) });
       const target = targets.get(tier), matched = matchesCraftItem(item, target, { tier, minimum: 1 });
       // Damage-only work pieces are useful to inspect, but do not meet the
-      // automation's keeper rule. Keep them behind actual matching pieces.
+      // automation's keeper rule. Within a realm, keep them behind matches.
       const damageOnly = !role.combat && item.slot >= 1 && item.slot <= 4 &&
         recipe === target.recipes[item.slot - 1] && item.bonuses.includes(52);
       const group = matched ? 2 : damageOnly ? 1 : 0;
@@ -24,10 +24,10 @@
         if (!Number.isFinite(amount)) throw new Error("An item's suffix value could not be compared.");
         return sum + amount;
       }, 0);
-      const rank = group ? [group, item.quality,
+      const rank = group ? [tier, group, item.quality,
         ...(!role.combat ? [2 * Number(item.bonuses.includes(51)) + Number(item.bonuses.includes(role.bonus)),
           value(51), value(role.bonus), value(52)] : [value(role.bonus), item.mainRoll]),
-        tier, item.level] : [0];
+        item.level] : [tier, 0];
       if (!rank.every(Number.isFinite)) throw new Error("An item's stats could not be compared.");
       return { row, index, rank };
     });

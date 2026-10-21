@@ -39,7 +39,7 @@ test("work combinations rank crit + selected job, crit, job, damage-only, then n
   assert.deepEqual(f.sort("forge"), [combo, crit, job, damage, wrong]);
 });
 
-test("rarity outranks suffix strength among matches; damage-only gear never jumps ahead of a match", () => {
+test("within a realm, rarity outranks suffix strength and damage-only gear follows matches", () => {
   const f = fixture();
   const orange = f.add(2, [51, 59, 52], { quality: 5, rolls: [999, 999, 999] });
   const red = f.add(2, [59], { rolls: [1] });
@@ -79,12 +79,38 @@ test("combat uses spear / bow / fan, matching stat variants and combat accessori
   }
 });
 
-test("native converted suffix values, rather than raw rolls, compare items across recipe tiers", () => {
+test("realm tier overrides rarity, role matching and suffix strength for every role and equipment slot", () => {
+  for (const role of api.craftRoles) for (let slot = 0; slot < 4; slot++) {
+    const f = fixture(), expected = []; f.wp.width = 700;
+    for (let tier = 1; tier <= 9; tier++) {
+      const offset = 75 * (tier - 1);
+      for (let id = 1; id <= 27; id++) f.catalog[id + offset] = { ...f.catalog[id], 3: tier };
+      const recipe = api.craftRecipes(f.wp, role, tier)[slot];
+      const unrelated = f.add(recipe, [72], { tier, quality: 6, level: 999, rolls: [999] });
+      const bonuses = role.combat ? [role.bonus] : [51, role.bonus];
+      const match = f.add(recipe, bonuses, { tier, quality: tier % 2 ? 1 : 6, level: 10 - tier,
+        rolls: bonuses.map(() => 1000 - tier * 100) });
+      expected.unshift(match, unrelated);
+    }
+    assert.deepEqual(f.sort(role.id), expected, `${role.id}, slot ${slot + 1}`);
+  }
+});
+
+test("a higher-realm damage-only piece precedes lower-realm matches, with role priority inside each realm", () => {
+  const f = fixture(); f.wp.width = 200;
+  f.catalog[77] = { ...f.catalog[2], 3: 2 }; f.catalog[152] = { ...f.catalog[2], 3: 3 };
+  const lower = f.add(77, [51, 59, 52], { tier: 2, rolls: [999, 999, 999] });
+  const higherDamage = f.add(152, [52], { tier: 3, quality: 1, rolls: [1] });
+  const higherMatch = f.add(152, [59], { tier: 3, quality: 1, rolls: [1] });
+  assert.deepEqual(f.sort("forge"), [higherMatch, higherDamage, lower]);
+});
+
+test("native suffix values are still read, but even much stronger values cannot override realm tier", () => {
   const f = fixture(); f.wp.width = 100; f.catalog[77] = { ...f.catalog[2], 3: 2 };
-  const low = f.add(2, [51], { rolls: [50] }), high = f.add(77, [51], { tier: 2, rolls: [30] });
+  const low = f.add(2, [51], { rolls: [999] }), high = f.add(77, [51], { tier: 2, rolls: [1] });
   const calls = [];
   assert.deepEqual(f.sort("forge", [low, high], (item, id, roll) => { calls.push([item.tier, id, roll]); return roll * item.tier; }), [high, low]);
-  assert.deepEqual(calls, [[1, 51, 50], [2, 51, 30]]);
+  assert.deepEqual(calls, [[1, 51, 999], [2, 51, 1]]);
 });
 
 test("sorting is stable, does not mutate item records or locks, and leaves nonmatches in game order", () => {

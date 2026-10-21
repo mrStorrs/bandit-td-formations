@@ -100,7 +100,7 @@
         const select = this.inventorySort = document.createElement("select");
         select.id = "cjs-inventory-sort";
         select.setAttribute("aria-label", "Inventory job / combat role sort");
-        select.title = "Matching gear first, higher rarity first. Work: Crit Rate + job bonus, Crit Rate, job bonus; Crit Damage breaks ties. Rolled suffixes only. Damage-only gear follows matches. Combat uses its role bonus.";
+        select.title = "Realm tier first (T3 > T2), then matching gear and rarity within each realm. Work: Crit Rate + job bonus, Crit Rate, job bonus; Crit Damage breaks ties. Rolled suffixes only. Damage-only gear follows matches in its realm. Combat uses its role bonus.";
         select.style.cssText = "position:fixed;z-index:2147483646;box-sizing:border-box;max-width:calc(100vw - 16px);background:#152025;color:#fff;border:1px solid #c0a35b;border-radius:4px;padding:2px 5px;cursor:pointer;font:13px sans-serif";
         for (const [id, name] of [["", "Role sort: Game order"], ...state.sort.roles.map(role => [role.id, `Role sort: ${role.name}`])]) {
           const option = document.createElement("option"); option.value = id; option.textContent = name; select.appendChild(option);

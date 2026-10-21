@@ -133,21 +133,23 @@ restarts. They are separate from formation slots and are not in Steam Cloud.
 
 Use the **Role sort** dropdown beside the game's sort button in the inventory,
 character equipment bag or pawnshop. It offers the same nine work jobs and
-three combat roles as crafting automation. Matching equipment comes first,
-using the same recipe, stat variant and weapon-family checks as automation.
+three combat roles as crafting automation. **Realm tier is always first:** all
+T3 items precede T2 items, even when the T2 piece has higher rarity or better
+bonuses. Within each realm, matching equipment comes first, using the same
+recipe, stat variant and weapon-family checks as automation.
 
-Higher rarity wins among matching pieces. Within the same rarity, work gear
-ranks **Work Crit Rate + the selected job's bonus > Work Crit Rate > the job's
+Within a realm, higher rarity wins among matching pieces. At the same rarity,
+work gear ranks **Work Crit Rate + the selected job's bonus > Work Crit Rate > the job's
 bonus**. Equal combinations compare total suffix Work Crit Rate first, then the
 job bonus, then Work Crit Damage. Only rolled suffixes count; innate stats do
 not. Duplicate suffixes add together, using the game's values for that item's
 recipe tier and rarity. No worker's stats are used.
 
 Compatible work gear with only a Work Crit Damage suffix follows actual
-automation matches, ahead of unrelated items. This does not change what
-automation keeps or sells. Combat sorting uses the selected combat bonus;
+automation matches in its realm, ahead of unrelated items from that realm.
+This does not change what automation keeps or sells. Combat sorting uses the selected combat bonus;
 STR weapons are spears, AGI bows and INT fans. Other items stay visible in their
-normal relative order. Exact ties keep their previous game order.
+normal relative order within each realm. Exact ties keep their previous game order.
 
 The choice stays active through page changes and inventory refreshes for the
 current game session. Choose **Role sort: Game order**, or any option in the
@@ -752,7 +754,7 @@ python3 manage.py install --game-dir "/path/to/Steam/steamapps/common/塔防山�
 
 On Windows, use `py -3` in place of `python3` if appropriate. Restart the game
 after installing. Look for the “Formations ready” message on startup.
-The startup message includes the installed version number (currently 1.27.0).
+The startup message includes the installed version number (currently 1.27.1).
 
 The installer backs up the input archive in `cjs-formations-backups/` beside the
 game, verifies the result, then replaces `package.nw` atomically. It does not
@@ -1208,6 +1210,13 @@ stale requests, native-order fallback and Ctrl-click cancellation during sorting
 In isolated build 25975458, native inventory display order and unchanged item
 records were verified alongside the role dropdown, equipment/pawnshop refreshes,
 smaller windows, high-DPI scaling, normal sort selection and Ctrl-click selling.
+
+Version 1.27.1 makes realm tier the first inventory sorting priority, ahead of
+role matches, rarity and suffixes. The release passes 457 JavaScript tests and
+four installer tests. Regression coverage checks all twelve roles, all four
+equipment slots and all nine tiers. In isolated build 25975458, white T3 gear
+preceded perfectly rolled red T2 gear for Forger, Researcher and all three
+combat roles, with existing ordering within each realm and item records preserved.
 
 To check the controls in-game:
 
