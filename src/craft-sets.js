@@ -11,7 +11,7 @@
   ].map(([id, name, stat, power, bonus]) => ({ id, name, stat, power, bonus, combat: id.startsWith("combat-") }));
   const craftDefaults = { mode: "repeat", loop: "all", roles: craftRoles.map(r => r.id), tier: 1, minimum: 3, multiplier: 1, autoSell: true, keepLimit: null, forgeOutput: "all" };
   function validateCraftOptions(value) {
-    if (!value || !["repeat", "sets"].includes(value.mode) ||
+    if (!value || !["repeat", "sets", "brew"].includes(value.mode) ||
         !["all", ...craftRoles.map(r => r.id)].includes(value.loop) ||
         !Array.isArray(value.roles) || value.roles.length > craftRoles.length ||
         new Set(value.roles).size !== value.roles.length || value.roles.some(id => !craftRoles.some(r => r.id === id)) ||

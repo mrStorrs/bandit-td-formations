@@ -28,6 +28,9 @@ research and drilling mod for Bandit Simulator TD (Steam app 4267800).
   Equipment stations cycle checked work/combat gear in an initial lowest-stock order or loop one role, with
   their own tier, minimum rarity, material multiplier and auto-sell setting.
   They keep and lock useful gear and craft in batches of **10**.
+- **Auto brewer:** each brewery can queue **10 crafts** of the lowest-stock
+  unlocked pill type and realm, counting all rarities together and checking
+  stock again after each full batch.
 - **Auto research and drill:** enabled by default, with controls on each selected
   station. Main-tab unlocks come first, then Research Tech to the academy cap.
   Other trees finish each 60-level stage, with Logging, Barracks, Training,
@@ -331,20 +334,48 @@ stations displays that station's saved settings; closing the native station
 panel hides the popup. Unapplied edits are discarded when switching stations.
 
 Each physical station has independent settings, even two forges beside each
-other. Choose **Repeat current ×10** or, for equipment stations, **Auto-all sets**.
+other. Choose **Repeat current ×10**, **Auto-all sets** at equipment stations, or
+**Auto brewer · lowest stock** at a brewery.
 Click **Apply / Start** to save and enable that station. **Pause** stops its new
 orders and mod sales while its paid queue finishes. You can change settings and
 apply them while running; new recipes start after the current queue finishes.
 Closing or collapsing the popup does not stop automation.
 Benches that remain usable in the game also keep refilling while their parent
-building upgrades. This applies to both Repeat and Auto-all at forges, crafting
-stations and breweries.
+building upgrades. This applies to Repeat, Auto-all and Auto brewer.
 
 On the first update, existing global crafting settings are copied to each built
 equipment station, including paused/running status. Breweries keep repeating
 normally. Newly built stations default to Repeat current ×10 and wait for a
 remembered recipe. Settings survive moving stations, changing maps and restarting;
 demolition clears them. They are saved locally per campaign, outside Steam Cloud.
+
+## Auto brewing
+
+Select a brewery, choose **Auto brewer · lowest stock** in its Automation popup,
+set **Materials per craft**, then click **Apply / Start**. Each time its entire
+queue finishes, the brewery checks all unlocked ordinary STR, AGI and INT pill
+recipes and queues **10 crafts** of the type and realm with the lowest stock.
+It recalculates after every full batch, so newly unlocked recipes and pills you
+consume affect the next choice.
+
+Stock sums all six rarities equally within each **type + realm**. For example,
+4 white plus 6 red Realm 1 STR pills count as 10; Realm 1 AGI and Realm 2 STR
+have their own totals. Equal totals use realm order, then STR, AGI, INT. Only
+finished pills count. Each brewery chooses independently, so two breweries may
+choose the same recipe; neither reserves stock nor waits for the other's queue.
+
+The mode pays the normal full ten-craft material cost at the chosen multiplier
+and waits if the lowest-stock unlocked recipe lacks materials. It also waits
+while paused, during menus/transitions, or when the station cannot work. Workers
+brew normally; pill rarity, output amounts and effects follow the game.
+
+**Pause**, a manual recipe order, or the station's native **Cancel** stops new
+automatic batches at that brewery. **Apply / Start** resumes, allowing existing
+paid work to finish first. Switching to **Repeat current ×10** returns to the
+remembered manual recipe. New stations retain Repeat as their default; Auto
+brewer is opt-in and saves its mode, multiplier and pause state per station.
+Moving, changing maps and restarting preserve these settings; demolition clears
+them. Brewing does not lock or sell pills.
 
 ## Repeat crafting
 
@@ -639,7 +670,8 @@ finishes. Manual equipment recipe changes or cancellations also pause only that
 station's set loop. Changing targets preserves useful results from the old queue
 and stops mod sales of its rejects. Switching back to **Repeat current ×10**
 restores that station's remembered manual recipe. Breweries have their own
-repeat/pause controls; the Alchemist target makes equipment for that worker.
+Repeat, Auto brewer and Pause controls; the Alchemist target makes equipment for
+that worker.
 
 The loop waits for materials, unlocked recipes, usable stations and inventory
 space, and while gameplay is paused or menus/transitions are open. It also
@@ -1218,6 +1250,15 @@ equipment slots and all nine tiers. In isolated build 25975458, white T3 gear
 preceded perfectly rolled red T2 gear for Forger, Researcher and all three
 combat roles, with existing ordering within each realm and item records preserved.
 
+Version 1.28.0 adds per-brewery lowest-stock automation. The release passes
+472 JavaScript tests and four installer tests. Coverage checks pill totals across
+all nine realms and six rarities, unlocks, full batches, material costs, independent
+breweries, pause/manual overrides, settings persistence, relocation, demolition,
+invalid stock and separation from equipment sales. In isolated build 25975458,
+native brewing verified mixed-rarity stock selection, realm 2 root costs,
+recalculation after ten crafts, material shortages, manual recipes, Repeat mode,
+reload persistence and popup input at 1000×700 with high-DPI scaling.
+
 To check the controls in-game:
 
 1. Arrange your characters, choose their jobs and priority work targets, then
@@ -1302,6 +1343,8 @@ relocation and flushes pending object creation/destruction between moves.
 locks, and event groups.
 `src/crafting.js` observes native queue creation and cancellation, remembers
 station recipes, and refills empty queues through the native crafting functions.
+`src/brewing.js` groups native pill material stacks by type and realm, sums all
+rarities, and orders unlocked recipes by total stock for each brewery's next batch.
 `src/recipe-costs.js` adjusts realm 2 recipe ingredients and records each new
 queue's paid cost in the unused queue field 12 for correct native refunds.
 `src/gathering.js` focuses gatherers on the weakest remaining resources through

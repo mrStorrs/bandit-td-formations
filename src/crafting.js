@@ -113,7 +113,7 @@
               try {
                 if (index === 0) {
                   observe(current, station, variables[2].GetValue());
-                  if (station.kind !== 6) sets.cancel(current, station, true);
+                  sets.cancel(current, station, true);
                 }
                 if (index !== 0) sets.cancel(current, station, !moving &&
                   (index === 1 ? !!params[1] : index === 2 || index === 3),

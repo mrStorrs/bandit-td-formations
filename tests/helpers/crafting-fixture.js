@@ -83,7 +83,7 @@ function fixture(stored = new Map(), extended = false, outfitProtection = () => 
     if (f.refuseQueue) return;
     values[2] = 0;
     for (let id = 1; id < save.width; id++) if (save.getAt(id, 0, 13) <= 0) {
-      [id, g.选中地块X, g.选中地块Y, g.锻造物品编号, 0, 1, values[1], 0, values[0], 0, 1000, 0]
+      [id, g.选中地块X, g.选中地块Y, g.锻造物品编号, 0, wp.getAt(g.锻造物品编号, 3), values[1], 0, values[0], 0, 1000, 0]
         .forEach((value, field) => save.setAt(value, id, field, 13));
       values[2] = id; break;
     }
@@ -114,7 +114,7 @@ function fixture(stored = new Map(), extended = false, outfitProtection = () => 
     FlushPendingInstances: () => { f.flushes++; } };
   const sandbox = { BanditFormations: {}, performance: { now: () => clock }, console: { error() {} } };
   vm.createContext(sandbox);
-  for (const name of ["craft-sets.js", "craft-sets-runtime.js", "crafting.js"]) vm.runInContext(fs.readFileSync(`${__dirname}/../../src/${name}`, "utf8"), sandbox);
+  for (const name of ["craft-sets.js", "brewing.js", "craft-sets-runtime.js", "crafting.js"]) vm.runInContext(fs.readFileSync(`${__dirname}/../../src/${name}`, "utf8"), sandbox);
   const loop = sandbox.BanditFormations.attachCrafting(runtime, engine, text => notifications.push(text), outfitProtection);
   save.setAt(12345678, 0, 1, 0);
   for (const id of Object.keys(recipes)) save.setAt(1, Number(id), 19, 0);

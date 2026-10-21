@@ -1,14 +1,14 @@
 (() => {
   "use strict";
   function attachCraftSets(runtime, engine, notify, bridge) {
-    const { craftRoles, craftDefaults, validateCraftOptions, craftTargets, isCraftKeeper, planCraftSurplus, planCraftSets } = globalThis.BanditFormations;
+    const { craftRoles, craftDefaults, validateCraftOptions, craftTargets, isCraftKeeper, planCraftSurplus, planCraftSets, brewingTargets } = globalThis.BanditFormations;
     const prefix = "cjs-formations:craft-stations:v1:", legacyPrefix = "cjs-formations:craft-sets:v1:";
     const batchSize = 10, campaigns = new Map(), tickets = new Map();
     let hooked = false, activeWork = null, creating = null, epoch = 0, lastStatus = "";
     const token = current => `${current.saveId}:${current.save.uid}:${epoch}`;
     const stationToken = (current, station) => `${token(current)}:${station.id}:${station.type}:${station.owner}:${station.x}:${station.y}`;
     const active = state => state && !state.error && !state.busy && state.enabled;
-    const running = state => active(state) && state.options.mode === "sets";
+    const running = state => active(state) && state.options.mode !== "repeat";
     const identity = (state, station) => state && state.type === station.type && state.owner === station.owner;
     function fail(state, error) {
       if (state.error) return;
@@ -58,7 +58,7 @@
         for (const [id, change] of campaign.pending) {
           const state = campaign.stations.get(id);
           if (change.removed) campaign.stations.delete(id);
-          else if (identity(state, change.station) && state.options.mode === "sets") state.enabled = false;
+          else if (identity(state, change.station) && state.options.mode !== "repeat") state.enabled = false;
         }
         campaign.ready = true;
         if (campaign.pending.size && !campaign.error) persist(campaign).catch(error => fail(campaign, error));
@@ -242,7 +242,7 @@
             const previous = activeWork, current = bridge.context();
             const tile = runtime.objects["地面"]?.getAllInstances().find(t => t.uid === params[1]);
             const station = tile && current?.stations.find(st => st.x === tile.instVars["X坐标"] && st.y === tile.instVars["Y坐标"]);
-            let ticket = station && owns(current, station);
+            let ticket = station && [4, 5].includes(station.kind) && owns(current, station);
             if (station && [4, 5].includes(station.kind) && station.queue > 0) {
               const state = stateFor(current, station), s = current.save;
               const output = !load(current).error && state?.enabled && !state.error && state.options.keepLimit !== null;
@@ -309,7 +309,8 @@
       try {
         if (action === "configure") {
           const options = validateCraftOptions(payload.options);
-          if (options.mode === "sets" && station.kind === 6) throw new Error("Breweries support Repeat current ×10 only.");
+          if (options.mode === "sets" && station.kind === 6) throw new Error("Breweries support Repeat current ×10 or Auto brewer.");
+          if (options.mode === "brew" && station.kind !== 6) throw new Error("Auto brewer requires a brewery.");
           if (options.keepLimit !== null && station.kind === 6) throw new Error("Equipment sales require a forge or crafting station.");
           if (options.mode === "sets" && !craftTargets(current.wp, options).length) throw new Error("Check at least one role, or choose a single role to loop.");
           if (options.mode === "sets" || options.keepLimit !== null) installHooks();
@@ -370,6 +371,26 @@
         state.message = state.enabled ? "Repeating this station’s last recipe ×10." : "Paused. Existing queue can finish.";
         return;
       }
+      if (state.options.mode === "brew") {
+        if (station.kind !== 6) throw new Error("Auto brewer requires a brewery.");
+        if (!running(state)) { state.message = "Auto brewer paused. Existing queue can finish."; return; }
+        if (current.blocked) { state.message = "Waiting for gameplay to resume…"; return; }
+        const target = brewingTargets(current.save, current.wp, runtime.objects.cl?.getFirstInstance())[0];
+        if (!target) { state.message = "Waiting for an unlocked pill recipe."; return; }
+        const queue = current.save.getAt(station.id, 3, 21);
+        if (queue > 0) {
+          state.message = `Finishing current batch · ${current.save.getAt(queue, 8, 13)} crafts left.\nStock will be checked again when this queue finishes.`;
+          return;
+        }
+        state.message = `${target.name} · Realm ${target.realm} · Stock ${target.stock} (all rarities)\nBatches of ${batchSize}`;
+        if (!station.usable) { state.message += " · Waiting for station"; return; }
+        const added = bridge.enqueue(current, station, { recipe: target.recipe, multiplier: state.options.multiplier }, batchSize);
+        if (added) tickets.set(station.id, { owned: true, id: station.id, token: token(current), type: station.type, owner: station.owner,
+          x: station.x, y: station.y, queue: added, recipe: target.recipe, count: batchSize,
+          options: { ...state.options, tier: target.realm } });
+        else state.message += " · Waiting for materials or station";
+        return;
+      }
       if (!running(state)) { state.message = "Auto-all paused. Existing queue can finish."; return; }
       if (station.kind === 6) throw new Error("Auto-all requires an equipment station.");
       installHooks();
@@ -405,7 +426,7 @@
       owns,
       controls(current, station) {
         const state = stateFor(current, station);
-        return !state || !!state.error || state.busy || !state.enabled || state.options.mode === "sets";
+        return !state || !!state.error || state.busy || !state.enabled || state.options.mode !== "repeat";
       },
       cancel(current, station, manual, removed = false) {
         const ticket = tickets.get(station.id);
@@ -423,7 +444,7 @@
         if (removed) {
           campaign.stations.delete(station.id);
           if (campaign.ready) persist(campaign).catch(error => fail(campaign, error));
-        } else if (manual && state && (state.busy || state.options.mode === "sets" && state.enabled)) {
+        } else if (manual && state && (state.busy || state.options.mode !== "repeat" && state.enabled)) {
           state.enabled = false; state.message = "Paused by a manual station change. Apply / Start to resume.";
           persist(campaign).catch(error => fail(state, error));
         }
@@ -438,7 +459,7 @@
             const state = stateFor(current, station);
             if (!state || state.error || state.busy) continue;
             try {
-              if (running(state) || state.managed.size) inventory ||= items(current);
+              if (running(state) && state.options.mode === "sets" || state.managed.size) inventory ||= items(current);
               if (state.managed.size && !runtime.globalVars["装备穿戴中"]) {
                 const present = new Map();
                 for (const item of inventory) {

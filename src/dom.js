@@ -151,7 +151,10 @@
           return input;
         };
         make("div", "Settings apply only to this station.", body).style.cssText = "margin-bottom:10px;color:#c5ced1";
-        this.craftMode = select("Mode", "cjs-craft-mode", [["repeat", "Repeat current ×10"], ["sets", "Auto-all sets"]]);
+        this.craftMode = select("Mode", "cjs-craft-mode", [["repeat", "Repeat current ×10"], ["sets", "Auto-all sets"], ["brew", "Auto brewer · lowest stock"]]);
+        this.craftBrew = make("div", "", body);
+        make("div", "Queue 10 of the lowest-stock unlocked pill type and realm. All rarities count together: Realm 1 STR is separate from Realm 1 AGI and Realm 2 STR. Recheck after each full batch. Ties use realm, then STR / AGI / INT. Other stations' queues do not affect this choice. Wait for materials if the lowest-stock recipe cannot be made. Manual orders or Cancel pause automation; Apply / Start resumes it.", this.craftBrew).style.cssText = "margin-bottom:10px;color:#c5ced1;font-size:12px;line-height:1.4";
+        this.craftBrewMultiplier = select("Materials per craft", "cjs-brew-multiplier", [1, 10, 100].map(n => [n, `×${n}`]), this.craftBrew);
         this.craftOutputBox = make("div", "", body);
         this.craftOutput = select("Sell output", "cjs-craft-output", [["normal", "Normal"], ["all", "Sell all"], ["surplus", "Sell over limit"]], this.craftOutputBox);
         this.craftKeepLabel = make("label", "Keep per item / bonus ", this.craftOutputBox);
@@ -199,8 +202,14 @@
         const controls = () => {
           const busy = this.craftState.busy || this.craftState.error, gear = this.craftState.station.kind !== 6;
           const sets = gear && this.craftMode.value === "sets";
+          const brew = !gear && this.craftMode.value === "brew";
           const surplus = gear && this.craftOutput.value === "surplus";
-          this.craftMode.disabled = this.craftState.busy || !gear;
+          this.craftMode.disabled = this.craftState.busy;
+          for (const option of this.craftMode.children) {
+            option.hidden = option.disabled = option.value === "sets" ? !gear : option.value === "brew" ? gear : false;
+          }
+          this.craftBrew.hidden = !brew;
+          this.craftBrewMultiplier.disabled = this.craftState.busy || !brew;
           this.craftOutputBox.hidden = !gear;
           this.craftOutput.disabled = busy || !gear;
           this.craftKeepLabel.hidden = !surplus;
@@ -214,7 +223,7 @@
           for (const input of Object.values(this.craftRoles)) input.disabled = this.craftState.busy || !sets || this.craftLoop.value !== "all";
           this.craftSell.disabled = busy || !(sets || surplus) || this.craftOutput.value === "all";
           this.craftButton.disabled = this.craftState.busy;
-          this.craftButton.textContent = sets ? "Apply / Start" : "Apply repeat ×10";
+          this.craftButton.textContent = sets || brew ? "Apply / Start" : "Apply repeat ×10";
           this.craftPause.disabled = busy || !this.craftState.enabled;
           const saved = this.craftState.options;
           this.craftExcess.hidden = this.craftExcessHelp.hidden = !gear;
@@ -252,7 +261,8 @@
           this.PostToRuntime("cancel", {});
           this.PostToRuntime("craft-configure", { token: this.craftState.token, options: {
             mode: this.craftMode.value, loop: this.craftLoop.value, roles: Object.keys(this.craftRoles).filter(id => this.craftRoles[id].checked),
-            tier: Number(this.craftTier.value), minimum: Number(this.craftMinimum.value), multiplier: Number(this.craftMultiplier.value), autoSell: this.craftSell.checked, keepLimit,
+            tier: Number(this.craftTier.value), minimum: Number(this.craftMinimum.value),
+            multiplier: Number(this.craftState.station.kind === 6 ? this.craftBrewMultiplier.value : this.craftMultiplier.value), autoSell: this.craftSell.checked, keepLimit,
             forgeOutput: this.craftState.station.kind === 4 ? this.craftForgeOutput.value : "all",
           } });
         });
@@ -292,11 +302,12 @@
         const o = state.options;
         this.craftMode.value = o.mode; this.craftLoop.value = o.loop; this.craftTier.value = String(o.tier);
         this.craftMinimum.value = String(o.minimum); this.craftMultiplier.value = String(o.multiplier); this.craftSell.checked = o.autoSell;
+        this.craftBrewMultiplier.value = String(o.multiplier);
         this.craftForgeOutput.value = o.forgeOutput || "all";
         for (const [id, input] of Object.entries(this.craftRoles)) input.checked = o.roles.includes(id);
       }
       this.updateCraftControls();
-      this.craftInfo.textContent = `${state.message} · ${state.kept} kept · ${state.sold} sold this session` +
+      this.craftInfo.textContent = state.message + (state.station.kind === 6 ? "" : ` · ${state.kept} kept · ${state.sold} sold this session`) +
         (state.saleMessage ? `\n${state.saleMessage}` : "");
     }
     studyStatus(state) {

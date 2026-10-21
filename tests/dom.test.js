@@ -491,12 +491,23 @@ test("selecting another station opens its own settings and discards unapplied ed
   f.dom.craftTier.value="7";f.handlers["craft-status"]({visible:false});f.handlers["craft-status"](second);
   assert.equal(f.dom.craftTier.value,"2");assert.equal(f.dom.craftBody.hidden,false);
 });
-test("breweries show repeat and pause without irrelevant equipment controls",()=>{
+test("breweries offer repeat or lowest-stock automation with their own multiplier and pause",()=>{
   const f=fixture();f.handlers["craft-status"]({...craftState,station:{id:5,kind:6,name:"Brewery"}});
-  assert.equal(f.dom.craftGear.hidden,true);assert.equal(f.dom.craftMode.disabled,true);assert.equal(f.dom.craftPause.disabled,false);
+  assert.equal(f.dom.craftGear.hidden,true);assert.equal(f.dom.craftMode.disabled,false);assert.equal(f.dom.craftPause.disabled,false);
+  assert.deepEqual(f.dom.craftMode.children.filter(o=>!o.hidden).map(o=>o.value),["repeat","brew"]);
+  f.dom.craftMode.value="brew";f.dom.craftMode.dispatch("change");
+  assert.equal(f.dom.craftBrew.hidden,false);assert.equal(f.dom.craftBrewMultiplier.disabled,false);
+  assert.equal(f.dom.craftButton.textContent,"Apply / Start");
+  f.dom.craftBrewMultiplier.value="10";f.dom.craftButton.dispatch("click");
+  assert.equal(f.messages.at(-1)[0],"craft-configure");assert.equal(f.messages.at(-1)[1].options.mode,"brew");
+  assert.equal(f.messages.at(-1)[1].options.multiplier,10);assert.equal(f.messages.at(-1)[1].options.keepLimit,null);
+  f.handlers["craft-status"]({...craftState,station:{id:5,kind:6,name:"Brewery"},message:"Still waiting"});
+  assert.equal(f.dom.craftMode.value,"brew");assert.equal(f.dom.craftBrewMultiplier.value,"10");
+  assert.equal(f.dom.craftInfo.textContent,"Still waiting");
   f.dom.craftPause.dispatch("click");assert.equal(f.messages.at(-1)[0],"craft-pause");
-  f.handlers["craft-status"]({...craftState,station:{id:3,kind:4,name:"Forge"}});
+  f.handlers["craft-status"]({...craftState,token:"forge",station:{id:3,kind:4,name:"Forge"}});
   assert.equal(f.dom.craftGear.hidden,false);assert.equal(f.dom.craftMode.disabled,false);
+  assert.equal(f.dom.craftBrew.hidden,true);assert.deepEqual(f.dom.craftMode.children.filter(o=>!o.hidden).map(o=>o.value),["repeat","sets"]);
 });
 test("forge output offers All, Weapon only and No weapon, and is saved only for forges",()=>{
   const f=fixture();f.handlers["craft-status"](craftState);
